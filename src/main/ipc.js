@@ -156,26 +156,83 @@ function setLoginItemEnabled(enabled) {
 /**
  * 备份导出核心（可直调；对话框由 IPC handler 包装）。
  * 方案：VACUUM INTO 生成紧凑完整快照（天然合并 WAL）→ base64，连同偏好打包成单文件 JSON。
- * 接受大库下 base64 体积开销（纯本地操作）；单引号路径按 SQL 规则转义。
+ * 重管线整体在 utilityProcess 内执行（workers/backup-worker.js：源库只读连接跑
+ * VACUUM INTO + 3MB 分片流式 base64）——此前主进程内「同步 VACUUM INTO 数分钟 +
+ * readFileSync 整读 + base64/stringify 双份大字符串」曾把启动后的主进程冻结数分钟、
+ * 堆峰值冲到 GB 级，进程被杀还留 .tmp.db 垃圾（连续多日备份静默失败即此因）。
+ * utilityProcess 不可用时回退主进程内同款流式实现：仍无内存炸弹，仅 VACUUM INTO 占主线程。
  */
+const BACKUP_WORKER_PATH = path.join(__dirname, 'workers', 'backup-worker.js');
+const BACKUP_WORKER_TIMEOUT_MS = 15 * 60 * 1000; // 大库 VACUUM INTO 在慢盘上可能数分钟
+
+/** 主进程内回退路径：VACUUM INTO（主线程）+ 流式 base64（与 worker 同构）。 */
+function backupExportInProcess(store, tmpSnapshot, outPath, version, exportedAt, preferencesJSON) {
+  const escaped = String(tmpSnapshot).replace(/'/g, "''");
+  store.database.exec(`VACUUM INTO '${escaped}'`);
+  return new Promise((resolve, reject) => {
+    const header = `{"version":${JSON.stringify(String(version))},`
+      + `"exportedAt":${JSON.stringify(String(exportedAt))},"dbBase64":"`;
+    const footer = `","preferences":${preferencesJSON}}`;
+    const read = fs.createReadStream(tmpSnapshot, { highWaterMark: 3 * 1024 * 1024 });
+    const write = fs.createWriteStream(outPath, { encoding: 'utf8' });
+    const fail = (err) => {
+      try { read.destroy(); } catch (_) { /* 已销毁 */ }
+      try { write.destroy(); } catch (_) { /* 已销毁 */ }
+      reject(err);
+    };
+    read.on('error', fail);
+    write.on('error', fail);
+    write.on('finish', () => resolve());
+    write.write(header);
+    read.on('data', (chunk) => write.write(chunk.toString('base64')));
+    read.on('end', () => write.end(footer));
+  });
+}
+
 async function backupExportTo(store, filePath) {
   const tmpSnapshot = `${filePath}.vacuum-snapshot.tmp.db`;
   try { fs.rmSync(tmpSnapshot, { force: true }); } catch (_) { /* 目标不存在 */ }
-  try {
-    const escaped = String(tmpSnapshot).replace(/'/g, "''");
-    store.database.exec(`VACUUM INTO '${escaped}'`);
-    const dbBase64 = fs.readFileSync(tmpSnapshot).toString('base64');
-    const payload = {
-      version: app.getVersion(),
-      exportedAt: new Date().toISOString(),
-      dbBase64,
-      preferences: JSON.parse(JSON.stringify(store.preferences.values)),
+  const version = app.getVersion();
+  const exportedAt = new Date().toISOString();
+  const preferencesJSON = JSON.stringify(store.preferences.values ?? {});
+
+  const runInWorker = () => new Promise((resolve, reject) => {
+    const electron = require('electron');
+    if (!electron || typeof electron.utilityProcess?.fork !== 'function') {
+      return reject(new Error('utilityProcess 不可用'));
+    }
+    let child;
+    try { child = electron.utilityProcess.fork(BACKUP_WORKER_PATH); } catch (err) { return reject(err); }
+    const timer = setTimeout(() => {
+      try { child.kill(); } catch (_) { /* 已退出 */ }
+      reject(new Error('备份超时'));
+    }, BACKUP_WORKER_TIMEOUT_MS);
+    const settle = (fn) => {
+      clearTimeout(timer);
+      try { child.kill(); } catch (_) { /* 已退出 */ }
+      fn();
     };
-    fs.writeFileSync(filePath, JSON.stringify(payload), 'utf8');
-    return { path: filePath, bytes: fs.statSync(filePath).size, exportedAt: payload.exportedAt };
+    child.on('message', (m) => {
+      if (!m || m.type !== 'result') return;
+      if (m.ok) settle(() => resolve(m.bytes));
+      else settle(() => reject(new Error(m.error || '备份失败')));
+    });
+    child.on('exit', () => settle(() => reject(new Error('备份进程提前退出'))));
+    child.postMessage({
+      type: 'backup', id: 1,
+      sourcePath: store.database.filePath, tmpPath: tmpSnapshot, outPath: filePath,
+      version, exportedAt, preferencesJSON,
+    });
+  });
+
+  try {
+    await runInWorker();
+  } catch (_) {
+    await backupExportInProcess(store, tmpSnapshot, filePath, version, exportedAt, preferencesJSON);
   } finally {
     try { fs.rmSync(tmpSnapshot, { force: true }); } catch (_) { /* 临时快照清理 */ }
   }
+  return { path: filePath, bytes: fs.statSync(filePath).size, exportedAt };
 }
 
 /**
@@ -1069,7 +1126,8 @@ function autoBackupEnabled() {
 function autoBackupDue() {
   try {
     const dir = AUTO_BACKUP_DIR();
-    const files = fs.readdirSync(dir).filter((f) => f.startsWith('RobinRead-auto-backup-'));
+    // 只认完整 .json 成品——中途被杀留下的 .tmp.db 快照不算备份（曾导致当天永不重试）
+    const files = fs.readdirSync(dir).filter((f) => /^RobinRead-auto-backup-\d{8}\.json$/.test(f));
     if (files.length === 0) return true;
     const latest = files.sort().at(-1);
     const stamp = latest.match(/(\d{8})/);
@@ -1080,8 +1138,21 @@ function autoBackupDue() {
   }
 }
 
+/** 清掉历史失败备份留下的临时快照（进程被杀时 finally 清理不会执行，会无限堆积）。 */
+function purgeStaleBackupTmps() {
+  try {
+    const dir = AUTO_BACKUP_DIR();
+    for (const f of fs.readdirSync(dir)) {
+      if (f.endsWith('.tmp.db')) {
+        try { fs.rmSync(path.join(dir, f), { force: true }); } catch (_) { /* 尽力而为 */ }
+      }
+    }
+  } catch (_) { /* 目录不存在等 */ }
+}
+
 /** 每日自动备份：到期才写；写完按保留份数滚动删除。返回备份路径，未到期返回 null。 */
 async function autoBackupIfDue(force = false) {
+  purgeStaleBackupTmps();
   if (!autoBackupEnabled() && !force) return null;
   if (!force && !autoBackupDue()) return null;
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -1098,7 +1169,7 @@ function pruneAutoBackups(dir) {
   try {
     const keep = autoBackupKeep();
     const files = fs.readdirSync(dir)
-      .filter((f) => f.startsWith('RobinRead-auto-backup-'))
+      .filter((f) => /^RobinRead-auto-backup-\d{8}\.json$/.test(f))
       .sort()
       .reverse();
     for (const f of files.slice(keep)) fs.rmSync(path.join(dir, f), { force: true });

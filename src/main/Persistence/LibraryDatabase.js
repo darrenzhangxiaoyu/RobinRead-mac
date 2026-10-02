@@ -18,7 +18,14 @@ class LibraryDatabase {
     fs.mkdirSync(directory, { recursive: true });
     this.db = new DatabaseSync(filePath);
     this.db.exec('PRAGMA journal_mode = WAL;');
+    // synchronous=NORMAL 是 WAL 推荐档：提交不再逐次 fsync（批量灌文时差距数百倍），
+    // 崩溃最多丢最后一次 checkpoint 后的事务，不会损坏库
+    this.db.exec('PRAGMA synchronous = NORMAL;');
+    // 默认页缓存仅 ~2MB，大库热路径反复换页；提到 16MB（负数 = KB）
+    this.db.exec('PRAGMA cache_size = -16000;');
+    this.db.exec('PRAGMA temp_store = MEMORY;');
     this.db.exec('PRAGMA foreign_keys = ON;');
+    this._txDepth = 0;
     runMigrations(this.db);
   }
 
@@ -30,8 +37,28 @@ class LibraryDatabase {
     this.db.exec(sql);
   }
 
+  /**
+   * 事务（可嵌套：内层自动降级为 SAVEPOINT）。
+   * 批量灌文路径（AppStore._applyParsedEntries）在外层事务里逐篇调 upsertEntry——
+   * 裸 BEGIN 遇内层会抛「within a transaction」；SAVEPOINT 语义下各层可独立回滚。
+   */
   transaction(fn) {
+    if (this._txDepth > 0) {
+      const sp = `rr_sp_${this._txDepth}`;
+      this.db.exec(`SAVEPOINT ${sp}`);
+      this._txDepth += 1;
+      try {
+        return fn();
+      } catch (err) {
+        try { this.db.exec(`ROLLBACK TO ${sp}`); } catch (_) { /* 外层会继续回滚 */ }
+        throw err;
+      } finally {
+        this._txDepth -= 1;
+        try { this.db.exec(`RELEASE ${sp}`); } catch (_) { /* 已回滚 */ }
+      }
+    }
     this.db.exec('BEGIN');
+    this._txDepth = 1;
     try {
       const result = fn();
       this.db.exec('COMMIT');
@@ -39,6 +66,8 @@ class LibraryDatabase {
     } catch (err) {
       try { this.db.exec('ROLLBACK'); } catch (_) { /* 已回滚 */ }
       throw err;
+    } finally {
+      this._txDepth = 0;
     }
   }
 

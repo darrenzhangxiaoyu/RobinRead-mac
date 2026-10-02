@@ -12,6 +12,7 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 
 const OFFLINE = [
+  { file: 'scripts/diag-db-health.js', runner: 'electron', desc: 'FTS 行映射 + 嵌套事务 + 灌文性能（离线）' },
   { file: 'scripts/diag-needs-extraction.js', runner: 'node', desc: 'needsExtraction 判定（离线单元）' },
   { file: 'scripts/diag-phase8-gate.js', runner: 'electron', desc: '会员全量释放 + 默认刷新间隔（离线）' },
   { file: 'scripts/diag-phase9-typography.js', runner: 'node', desc: '排版引擎 v2：盘古之白 + 设置链路（离线）' },

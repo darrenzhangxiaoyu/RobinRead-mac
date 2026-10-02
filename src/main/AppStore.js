@@ -759,38 +759,48 @@ class AppStore extends EventEmitter {
     let newUnread = [];
     const toPrefetch = [];
     // 存储治理墓碑：被保留期限淘汰过的文章，源站刷新时不再灌回来
+    // 整批单事务：逐篇独立事务曾导致每篇一次 WAL fsync + FTS 重排（灌文高峰堵死主进程），
+    // 合批后一个 feed 一次落盘，中途失败整批回滚（下次刷新按无此批处理，安全重灌）
     const tombstoneQuery = this.database.prepare('SELECT 1 FROM pruned_articles WHERE item_id = ?');
-    for (const parsed of parsedEntries) {
-      const publishedAt = parsed.publishedAt ?? nowSeconds();
-      if (publishedAt < cutoff) continue;
-      const entryID = `local:${feed.id}:${stableDigest(parsed.id)}`;
-      if (tombstoneQuery.get(entryID)) continue;
-      const existing = this.articlesRepo.entry(entryID);
-      if (existing) continue;
-      // 按规范化 url 兜底去重：wechat2rss 等源无稳定 guid（stable 落到 url），
-      // url 实体解码前后（&amp; vs &）会生成不同 digest → 同一篇重复入库。
-      if (parsed.url && this._entryExistsByURL(feed.id, parsed.url)) continue;
-      this.articlesRepo.upsertEntry({
-        id: entryID,
-        accountID: feed.accountID,
-        externalID: entryID,
-        feedID: feed.id,
-        title: parsed.title,
-        author: parsed.author,
-        url: parsed.url,
-        publishedAt,
-        summary: parsed.summary,
-        contentHTML: parsed.contentHTML,
-        dateArrived: nowSeconds(),
-      });
-      // 自动打标签（喂给兴趣画像，零 LLM 成本）
-      try { this.knowledge.autoTagEntry(entryID, parsed.title, parsed.summary); } catch (_) { /* 忽略 */ }
-      newUnread.push(entryID);
-      // AIHOT 聚合站：标记待预抓 item 页完整内容（打开时秒出，不用等抓取）
-      if (parsed.url && /^https?:\/\/aihot\.virxact\.com\/items\//i.test(parsed.url)) {
-        toPrefetch.push(entryID);
+    this.database.transaction(() => {
+      for (const parsed of parsedEntries) {
+        const publishedAt = parsed.publishedAt ?? nowSeconds();
+        if (publishedAt < cutoff) continue;
+        const entryID = `local:${feed.id}:${stableDigest(parsed.id)}`;
+        if (tombstoneQuery.get(entryID)) continue;
+        const existing = this.articlesRepo.entry(entryID);
+        if (existing) continue;
+        // 按规范化 url 兜底去重：wechat2rss 等源无稳定 guid（stable 落到 url），
+        // url 实体解码前后（&amp; vs &）会生成不同 digest → 同一篇重复入库。
+        if (parsed.url && this._entryExistsByURL(feed.id, parsed.url)) continue;
+        try {
+          this.articlesRepo.upsertEntry({
+            id: entryID,
+            accountID: feed.accountID,
+            externalID: entryID,
+            feedID: feed.id,
+            title: parsed.title,
+            author: parsed.author,
+            url: parsed.url,
+            publishedAt,
+            summary: parsed.summary,
+            contentHTML: parsed.contentHTML,
+            dateArrived: nowSeconds(),
+          });
+        } catch (err) {
+          // 单篇异常只回滚自身（upsertEntry 内层 SAVEPOINT），不拖死整源批次
+          console.warn(`[RobinRead] 文章入库失败（跳过）：${entryID}`, err.message);
+          continue;
+        }
+        // 自动打标签（喂给兴趣画像，零 LLM 成本）
+        try { this.knowledge.autoTagEntry(entryID, parsed.title, parsed.summary); } catch (_) { /* 忽略 */ }
+        newUnread.push(entryID);
+        // AIHOT 聚合站：标记待预抓 item 页完整内容（打开时秒出，不用等抓取）
+        if (parsed.url && /^https?:\/\/aihot\.virxact\.com\/items\//i.test(parsed.url)) {
+          toPrefetch.push(entryID);
+        }
       }
-    }
+    });
     if (newUnread.length > 200) newUnread = newUnread.slice(0, 200);
     if (newUnread.length) this._bumpListSet();
     // 后台预抓 AIHOT item 页（异步串行，不阻塞刷新；失败静默）
@@ -1388,18 +1398,13 @@ class AppStore extends EventEmitter {
         if (!batch.length) break;
         lastRowid = batch[batch.length - 1].rid;
         this.database.transaction(() => {
-          // 幂等：回填期间实时索引可能已写入同一行，先清后插
-          const placeholders = batch.map(() => '?').join(',');
-          this.database.prepare(
-            `DELETE FROM articles_fts WHERE item_id IN (${placeholders})`
-          ).run(...batch.map((r) => r.item_id));
-          const insert = this.database.prepare(
-            'INSERT INTO articles_fts (item_id, title, author, summary, body) VALUES (?, ?, ?, ?, ?)'
-          );
+          // 幂等：回填期间实时索引可能已写入同一行，先清后插（删除走 FTS 映射，避免语句级全扫）
+          SearchIndex.removeMany(this.database, batch.map((r) => r.item_id));
           for (const r of batch) {
-            // 无提取缓存时索引 RSS 正文（去标签纯文本），正文搜索才有完整覆盖
+            // 无提取缓存时索引 RSS 正文（去标签纯文本），正文搜索才有完整覆盖；
+            // 统一走 syncEntry：插入的同时维护 rowid 映射（绕过会留无映射行→重复索引）
             const body = r.body_source.startsWith('<') ? plainText(r.body_source) : r.body_source;
-            insert.run(r.item_id, r.title, r.author, r.summary, body);
+            SearchIndex.syncEntry(this.database, r.item_id, r.title, r.author, r.summary, body);
           }
         });
         total += batch.length;

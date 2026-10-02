@@ -353,6 +353,32 @@ const MIGRATIONS = [
       `);
     },
   },
+
+  {
+    id: 'v8-fts-rowid-map',
+    up: (db) => {
+      // FTS 行定位映射：item_id 在 articles_fts 里是 UNINDEXED 列，按它查/删都是
+      // 全表扫描——灌文高峰（每天数百篇 × 数百 MB 索引）曾把主进程堵死数分钟。
+      // 映射表提供 O(log n) 的 rowid 定位；此处回填一次全扫，此后增删改全走映射。
+      // 注意：VACUUM / FTS 'rebuild' 可能重排 rowid，执行后须调 SearchIndex.rebuildMap。
+      try {
+        const hasFts = db.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='articles_fts'"
+        ).get();
+        if (!hasFts) return;
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS articles_fts_map (
+              item_id   TEXT PRIMARY KEY NOT NULL,
+              fts_rowid INTEGER NOT NULL
+          );
+        `);
+        db.exec(`
+          INSERT OR IGNORE INTO articles_fts_map (item_id, fts_rowid)
+          SELECT item_id, rowid FROM articles_fts WHERE item_id IS NOT NULL;
+        `);
+      } catch (_) { /* FTS 不可用：SearchIndex 全程空操作 */ }
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */
