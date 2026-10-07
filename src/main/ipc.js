@@ -705,7 +705,11 @@ function registerIPCHandlers(store, window) {
   handle('sync:now', () => (store.sync ? SY().syncNow({ origin: 'manual' }) : null));
 
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
-  handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
+  handle('prefs:setTitleZh', (on) => {
+    store.preferences.set('RobinRead.list.titleZh', on === true);
+    store.sync?.notePrefsChanged(); // F7：titleZh 在漫游白名单内——变更须抬上行基准
+    return on === true;
+  });
 
   // MARK: 图片字节抓取（深色纸面插图反相的像素分析）
   handle('net:fetchImage', (url) => store.fetchImageBytes(url));

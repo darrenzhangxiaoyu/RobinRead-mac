@@ -683,7 +683,16 @@ class SyncService {
     } catch (err) {
       const kind = err instanceof DAVError ? err.kind
         : (err instanceof SyncError ? err.kind : 'server');
-      const message = err instanceof DAVError ? this._davErrorText(err) : String((err && err.message) || err);
+      // SyncError（invalid/tooLarge/config 等）的 message 在纯函数层生成（英文技术串），
+      // 在此统一映射为本地化文案；DAVError 走 _davErrorText；未知兜底原文。
+      let message;
+      if (err instanceof DAVError) message = this._davErrorText(err);
+      else if (err instanceof SyncError) {
+        message = err.kind === 'invalid' ? i18n.localized('远端同步快照已损坏或版本不兼容，已拒绝合并（本机数据不受影响）。')
+          : err.kind === 'tooLarge' ? i18n.localized('同步快照超过大小上限，已拒绝上传。')
+          : err.kind === 'config' ? err.message
+          : String(err.message || err);
+      } else message = String((err && err.message) || err);
       const wrapped = new SyncError(kind, message);
       this._lastResult = { ok: false, at: nowSeconds(), origin, error: message, kind };
       throw wrapped;
