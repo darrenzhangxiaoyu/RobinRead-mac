@@ -124,6 +124,16 @@ contextBridge.exposeInMainWorld('robin', {
   mailAddSender: (payload) => invoke('mail:addSender', payload),
   mailRemoveSender: (feedID) => invoke('mail:removeSender', feedID),
 
+  // WebDAV 多设备同步（F7：配置 / 测试连接 / 立即同步 / 自动开关 / 阅读位置）
+  syncGetConfig: () => data('sync:getConfig'),
+  syncSaveConfig: (patch) => invoke('sync:saveConfig', patch),
+  syncDisconnect: () => invoke('sync:disconnect'),
+  syncTest: (payload) => invoke('sync:test', payload),
+  syncSetAuto: (enabled) => invoke('sync:setAuto', enabled),
+  syncNow: () => invoke('sync:now'),
+  reportSyncProgress: (entries) => ipcRenderer.send('sync:reportProgress', entries),
+  onSyncProgress: (listener) => subscribe('sync:progress', listener),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

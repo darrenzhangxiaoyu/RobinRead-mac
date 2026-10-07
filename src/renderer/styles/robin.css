@@ -1844,18 +1844,6 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 .live-preview h4 { font-family: var(--font-serif); font-weight: 700; margin-bottom: 8px; }
 .live-preview p { color: var(--text-secondary); line-height: 1.7; }
 
-/* 同步未上线提示卡 */
-.sync-unavailable {
-  display: flex; gap: 12px; padding: 16px;
-  border-radius: var(--radius-xl);
-  background: rgba(232, 145, 45, 0.09);
-  border: 1px solid rgba(232, 145, 45, 0.28);
-  color: var(--text-primary);
-}
-.sync-unavailable svg { color: #e8912d; flex: 0 0 auto; margin-top: 2px; }
-.sync-unavailable .title { font-weight: 600; margin-bottom: 4px; }
-.sync-unavailable .desc { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
-
 /* 快捷键帮助 */
 .shortcut-row { display: flex; align-items: center; gap: 18px; padding: 11px 18px; }
 .shortcut-row + .shortcut-row { border-top: 1px solid var(--separator); }

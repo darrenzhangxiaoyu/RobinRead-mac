@@ -85,6 +85,19 @@ class CredentialStore {
     this._write(`mail-password-${accountID}`, null);
   }
 
+  /** WebDAV 多设备同步（F7）：应用专用密码，DPAPI 落盘，不落库不进快照。 */
+  webDAVPassword() {
+    return this._read('webdav-password');
+  }
+
+  setWebDAVPassword(password) {
+    this._write('webdav-password', password);
+  }
+
+  deleteWebDAVPassword() {
+    this._write('webdav-password', null);
+  }
+
   /** 账号登录 JWT（会员服务），同样只存本机。 */
   authToken() {
     return this._read('auth-token') || '';

@@ -35,6 +35,7 @@ import { MediaView } from './views/media-view.js';
 import { MediaMiniPlayer } from './views/media-player.js';
 import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
+import { syncPaletteCommand } from './views/sync-command.js';
 
 let customThemeTokens = null; // null = 使用内置纸感默认
 const state = {
@@ -644,6 +645,7 @@ function buildPaletteCommands() {
     { label: t('从链接精读…'), keywords: 'url link 链接 精读 extract openUrl', icon: 'globe', action: () => readFromUrlPrompt() },
     { label: t('设置'), keywords: 'settings 设置 preference open', icon: 'gear', action: () => showSettings('appearance') },
     { label: t('刷新全部订阅'), keywords: 'refresh 刷新 订阅', icon: 'refresh', action: () => window.robin.refresh() },
+    syncPaletteCommand({ notify: (message) => showToast(message), silentError: false }),
     { label: t('增大字号'), keywords: 'font size larger 字号 增大', icon: 'textLarger', action: () => adjustFontSize(1) },
     { label: t('减小字号'), keywords: 'font size smaller 字号 减小', icon: 'textSmaller', action: () => adjustFontSize(-1) },
   ];

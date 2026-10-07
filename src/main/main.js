@@ -216,6 +216,7 @@ if (!IS_PROBE) {
       };
       FeedService.useNetFetch(netFetchWithFallback);
       require('./FeedDiscovery').useNetFetch(netFetchWithFallback);
+      require('./Sync/WebDAVClient').useNetFetch(netFetchWithFallback); // F7 WebDAV 同步：同享系统代理通路
       store.explore.setNetFetch(netFetchWithFallback);
       require('./ArticleExtractor').setNetFetch(netFetchWithFallback); // 全文提取主进程预抓同享回退
       require('./UpdateCheckService').setFetch(netFetchWithFallback); // 更新检查（官网+GitHub 兜底）同享回退
@@ -248,6 +249,9 @@ if (!IS_PROBE) {
     } catch (_) { /* 退出路径不抛错 */ }
     try {
       store.media?.dispose(); // F3：中止在途媒体下载（.part 由下载路径自行清理）
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
+      store.sync?.dispose(); // F7：阅读位置/pending 批注冲刷落盘
     } catch (_) { /* 退出路径不抛错 */ }
     try {
       store.preferences.flushSync();

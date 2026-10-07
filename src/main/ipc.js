@@ -687,6 +687,23 @@ function registerIPCHandlers(store, window) {
   handle('mail:addSender', (payload) => ML().addSender(payload || {}));
   handle('mail:removeSender', (feedID) => ML().removeSender(feedID));
 
+  // MARK: WebDAV 多设备同步（F7：配置 / 测试 / 立即同步 / 自动开关 / 阅读位置上报）
+  const SY = () => store.sync;
+  if (store.sync) {
+    // 合并后的远端阅读位置回推 renderer（reader 并入续读表）
+    store.sync.setProgressForwarder((payload) => send('sync:progress', payload));
+    // 渲染层阅读位置上报走 fire-and-forget（ipcMain.on，不占 invoke 往返）
+    ipcMain.on('sync:reportProgress', (_event, entries) => {
+      try { store.sync.reportProgress(Array.isArray(entries) ? entries : []); } catch (_) { /* 上报失败静默 */ }
+    });
+  }
+  handle('sync:getConfig', () => (store.sync ? SY().getConfig() : null));
+  handle('sync:saveConfig', (patch) => (store.sync ? SY().saveConfig(patch || {}) : null));
+  handle('sync:disconnect', () => (store.sync ? SY().disconnect() : null));
+  handle('sync:test', (payload) => (store.sync ? SY().testConnection(payload || {}) : null));
+  handle('sync:setAuto', (enabled) => (store.sync ? SY().setAutoEnabled(enabled === true) : null));
+  handle('sync:now', () => (store.sync ? SY().syncNow({ origin: 'manual' }) : null));
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
 

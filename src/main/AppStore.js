@@ -35,6 +35,7 @@ const { MediaService } = require('./MediaService');
 const { TopicService } = require('./TopicService');
 const { PlatformService } = require('./PlatformService');
 const { MailService } = require('./MailService');
+const { SyncService } = require('./SyncService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -150,6 +151,7 @@ class AppStore extends EventEmitter {
     this.topics = new TopicService(this); // 话题盯梢（F4）：关键词三路聚合专属信息流
     this.platforms = new PlatformService(this); // 中文平台适配器（F5）：B 站 UP 主 / 微博用户 → 平台源
     this.mail = new MailService(this); // Newsletter 收件（F6）：IMAP 邮箱 + 发件人白名单 → 平台源同构合成 feed
+    this.sync = new SyncService(this, userDataPath); // WebDAV 多设备同步（F7）：本地优先快照合并
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -2102,6 +2104,8 @@ class AppStore extends EventEmitter {
     this.fulltext.kick(); // 全文抓取（F1）：灌文全部落地、状态推送之后再异步起队列
     // 话题盯梢（F4）：同样在刷新落地后异步聚合（按话题频率过滤；逐话题独立容错）
     this.topics.aggregateDue().catch(() => { /* 聚合失败不影响刷新 */ });
+    // WebDAV 多设备同步（F7）：刷新完成后异步 kick（默认开，≥10 分钟节流；绝不阻塞刷新路径）
+    if (this.sync) this.sync.kick('refresh');
     this._emitState();
   }
 
@@ -3250,6 +3254,7 @@ class AppStore extends EventEmitter {
 
   setAppTheme(theme) {
     this.preferences.set(PreferenceKey.appTheme, ['system', 'light', 'dark'].includes(theme) ? theme : 'system');
+    this.sync?.notePrefsChanged(); // F7：白名单偏好变更（跨设备漫游「新者胜」基准）
     this._emitState();
   }
 
@@ -3343,6 +3348,7 @@ class AppStore extends EventEmitter {
   setDailyGoal(n) {
     const v = Math.min(99, Math.max(1, Number(n) || 5));
     this.preferences.set('RobinRead.stats.dailyGoal', v);
+    this.sync?.notePrefsChanged(); // F7：白名单偏好变更
     return this.dailyGoal();
   }
 
@@ -3378,6 +3384,7 @@ class AppStore extends EventEmitter {
         this.preferences.set(`RobinRead.${key === 'fontFamily' ? 'readerFontFamily' : key === 'pageWidth' ? 'readerPageWidth' : key === 'lineHeight' ? 'readerLineHeight' : key}`, value);
       }
     }
+    this.sync?.notePrefsChanged(); // F7：排版类白名单偏好变更
     this._emitState();
     return this.readerLayout();
   }
@@ -3385,12 +3392,14 @@ class AppStore extends EventEmitter {
   setArticleFontSize(size) {
     const clamped = Math.min(26, Math.max(12, Number(size) || 17));
     this.preferences.set(PreferenceKey.articleFontSize, clamped);
+    this.sync?.notePrefsChanged(); // F7：字号跨设备漫游
     this._emitState();
   }
 
   setAppLanguage(language) {
     const normalized = language === 'en' ? 'en' : 'zh';
     this.preferences.set(PreferenceKey.appLanguage, normalized);
+    this.sync?.notePrefsChanged(); // F7：语言跨设备漫游
     i18n.setLanguage(normalized);
     this._emitState();
   }

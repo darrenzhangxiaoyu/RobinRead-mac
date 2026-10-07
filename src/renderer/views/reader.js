@@ -105,6 +105,8 @@ export class ReaderView {
 
     this.scrollEl.addEventListener('scroll', () => this._onScroll(), { passive: true });
     document.addEventListener('selectionchange', () => this._onSelectionChange());
+    // F7 WebDAV 同步：合并回来的远端阅读位置并入续读表（仅更新者生效）
+    window.robin?.onSyncProgress?.((payload) => this._applySyncedProgress(payload));
     this.progressEl = document.getElementById('reading-progress');
     // 阅读进度线：轨道满宽，填充宽度写在子元素上（端点气泡 data-pct 仍挂轨道）
     this.progressFill = this.progressEl ? this.progressEl.querySelector('.reading-progress-fill') : null;
@@ -510,7 +512,29 @@ export class ReaderView {
       if (pct >= 3 && pct < 97) map[id] = { pct, at: Date.now(), title: this.entry?.title || '', feed: this.feed?.title || '' };
       else delete map[id]; // 未开始或已读完：移出续读
       localStorage.setItem('robinread.resume', JSON.stringify(map));
+      // F7 WebDAV 同步：阅读位置（pct）按 entryURL 上报主进程（fire-and-forget，
+      // 随快照跨设备漫游；无 URL 的条目（邮件等）自然跳过）
+      const url = this.entry?.url;
+      if (url) window.robin?.reportSyncProgress?.([{ entryID: id, url, pct, at: Date.now() }]);
     } catch (_) { /* 隐私模式：放弃持久化 */ }
+  }
+
+  /** F7：主进程合并回来的远端阅读位置（仅接受更新的时间戳；并入续读表跨会话可见）。 */
+  _applySyncedProgress({ entries } = {}) {
+    if (!Array.isArray(entries)) return;
+    let touched = false;
+    try {
+      const map = JSON.parse(localStorage.getItem('robinread.resume') || '{}');
+      for (const item of entries) {
+        if (!item || !item.entryID || typeof item.pct !== 'number') continue;
+        if (!(item.pct >= 3 && item.pct < 97)) continue;
+        const existing = map[item.entryID];
+        if (existing && Number(existing.at) >= Number(item.at)) continue; // 本地更新者胜
+        map[item.entryID] = { pct: item.pct, at: Number(item.at) || Date.now(), title: existing?.title || '', feed: existing?.feed || '' };
+        touched = true;
+      }
+      if (touched) localStorage.setItem('robinread.resume', JSON.stringify(map));
+    } catch (_) { /* 隐私模式：忽略 */ }
   }
 
   /** 最近一条未读完（3%–97%）的阅读位置，供「继续阅读」卡片。 */

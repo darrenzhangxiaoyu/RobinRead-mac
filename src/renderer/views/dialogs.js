@@ -9,6 +9,7 @@ import { icon } from '../icons.js';
 import { FEED_REFRESH_INTERVALS_META } from '../refresh-intervals.js';
 import { promptBox, confirmBox, alertBox } from '../ui-prompt.js';
 import { TYPOGRAPHY_PRESETS } from '../data/typography-presets.js';
+import { syncResultText } from './sync-command.js';
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -1521,17 +1522,136 @@ export class SettingsView {
     ]));
   }
 
-  _sync(container) {
-    const notice = document.createElement('div');
-    notice.className = 'sync-unavailable';
-    notice.innerHTML = `
-      ${icon('clock')}
-      <div><div class="title">${escapeHTML(t('同步功能暂未上线'))}</div>
-      <div class="desc">${escapeHTML(t('同步功能正在完善中，正式上线前请继续使用本机数据与 FreshRSS 账号。'))}</div></div>`;
-    container.appendChild(notice);
+  // MARK: 同步（F7 WebDAV 多设备同步：本地优先快照合并）
+
+  async _sync(container) {
+    const cfg = (await window.robin.syncGetConfig?.().catch(() => null)) || {};
+
+    // ── WebDAV 服务器（凭据 DPAPI 只存本机）──
+    const connGroup = group(t('WebDAV 服务器'), t('订阅、阅读进度、批注与偏好经你自己的 WebDAV 网盘（坚果云等）跨设备漫游。WebDAV 只是快照交换点：本机数据始终完整，任何设备都可以离线，重连后自动合并、互不覆盖。'), []);
+    container.appendChild(connGroup);
+    const connHost = connGroup.querySelector('.group-rows');
+
+    const formInput = (type, value, placeholder, onChange) => {
+      const input = document.createElement('input');
+      input.type = type;
+      input.className = 'nj-css-input';
+      input.style.minHeight = '32px';
+      input.style.maxWidth = '240px';
+      input.value = value || '';
+      input.placeholder = placeholder || '';
+      input.addEventListener('change', () => onChange(input.value.trim()));
+      return input;
+    };
+    const currentForm = () => ({
+      serverURL: serverInput.value.trim(),
+      username: userInput.value.trim(),
+      password: passInput.value.trim() || undefined,
+    });
+
+    const serverInput = formInput('text', cfg.serverURL, 'https://dav.jianguoyun.com/dav/', async (v) => {
+      const result = await window.robin.syncSaveConfig({ serverURL: v }).catch(() => null);
+      if (!result || !result.ok) {
+        await alertBox(t('保存失败'), String((result && result.error) || t('同步服务器地址必须以 http:// 或 https:// 开头。')));
+        serverInput.value = cfg.serverURL || '';
+      }
+    });
+    const userInput = formInput('text', cfg.username, t('WebDAV 账户名'), (v) => window.robin.syncSaveConfig({ username: v }));
+    const passInput = formInput('password', '', cfg.hasPassword ? t('已保存，输入新值可覆盖') : t('应用专用密码'),
+      async (v) => { if (v) await window.robin.syncSaveConfig({ password: v }); showToast(t('密码已保存到本机')); });
+
+    connHost.appendChild(row(t('服务器地址'), t('到目录级即可，例如 https://dav.jianguoyun.com/dav/。'), serverInput));
+    connHost.appendChild(row(t('用户名'), null, userInput));
+    connHost.appendChild(row(t('密码'), t('建议使用网盘的「应用专用密码」。只保存在本机（系统加密），不参与同步、不上传。'), passInput));
+    connHost.appendChild(row(t('测试连接'), t('对服务器根目录发起一次真实探测，验证地址与凭据。'), (() => {
+      const wrap = document.createElement('div');
+      wrap.className = 'setting-control';
+      wrap.style.gap = '8px';
+      const button = document.createElement('button');
+      button.className = 'btn-text bordered';
+      button.textContent = t('测试连接');
+      const status = document.createElement('span');
+      status.style.cssText = 'font-size:12px;color:var(--text-secondary);';
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        status.textContent = t('正在测试…');
+        try {
+          const result = await window.robin.syncTest(currentForm());
+          status.textContent = result?.ok
+            ? tf('连接正常 · %lldms', result.data?.elapsedMs ?? 0)
+            : t('连接失败');
+          if (!result?.ok) await alertBox(t('连接失败'), String(result.error || ''));
+        } catch (err) {
+          status.textContent = t('连接失败');
+          await alertBox(t('连接失败'), String(err?.message || err));
+        }
+        button.disabled = false;
+      });
+      wrap.append(button, status);
+      return wrap;
+    })()));
+
+    // ── 同步行为（自动同步 / 立即同步 / 状态）──
+    const behaviorGroup = group(t('同步行为'), t('「立即同步」先下行合并远端快照，本机有新变更时再把合并结果上行。合并规则：订阅并集、批注并集（永不删除）、阅读位置与偏好新者胜。'), []);
+    container.appendChild(behaviorGroup);
+    const behaviorHost = behaviorGroup.querySelector('.group-rows');
+
+    behaviorHost.appendChild(toggleRow(t('自动同步'), t('每次刷新完成后自动同步一次（至少间隔 10 分钟，避免频繁占用网盘）。'), cfg.autoEnabled !== false,
+      (v) => window.robin.syncSetAuto(v === true)));
+
+    behaviorHost.appendChild(row(t('立即同步'), t('手动触发一次完整同步，完成后提示上行/下行与合并统计。'), (() => {
+      const button = document.createElement('button');
+      button.className = 'btn-text primary';
+      button.textContent = t('立即同步');
+      button.addEventListener('click', async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+        button.textContent = t('正在同步…');
+        try {
+          const result = await window.robin.syncNow();
+          if (result?.ok) showToast(syncResultText(result.data));
+          else await alertBox(t('同步失败'), String(result.error || ''));
+        } catch (err) {
+          await alertBox(t('同步失败'), String(err?.message || err));
+        }
+        button.disabled = false;
+        button.textContent = t('立即同步');
+        if (this.overlay) this.render();
+      });
+      return button;
+    })()));
+
+    behaviorHost.appendChild(row(t('上次同步'), t('最近一次成功完成同步的时间。'), staticText(cfg.lastSyncAt
+      ? tf('上次同步：%@', new Date(cfg.lastSyncAt * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+      : t('尚未同步'))));
+
+    if (cfg.deviceId) {
+      behaviorHost.appendChild(row(t('本机设备标识'), t('每台设备有独立标识，快照按设备合并而不是整份覆盖。'), staticText(String(cfg.deviceId).slice(0, 8))));
+    }
+
+    if (cfg.serverURL) {
+      behaviorHost.appendChild(row(t('断开同步'), t('清除本机保存的服务器配置与密码。本机订阅、批注与阅读进度不受影响。'), (() => {
+        const button = document.createElement('button');
+        button.className = 'btn-text danger';
+        button.textContent = t('断开并清除');
+        button.addEventListener('click', async () => {
+          const ok = await confirmBox(t('断开 WebDAV 同步？'), {
+            message: t('将删除本机保存的服务器地址与密码。已合并到本机的数据全部保留，其他设备也不受影响。'),
+            okLabel: t('断开'),
+            danger: true,
+          });
+          if (!ok) return;
+          await window.robin.syncDisconnect();
+          showToast(t('已断开同步'));
+          this.render();
+        });
+        return button;
+      })()));
+    }
 
     container.appendChild(group(t('隐私'), null, [
       row(t('API Key'), null, staticText(t('仅存于本机，不参与同步'))),
+      row(t('WebDAV 密码'), null, staticText(t('仅存于本机（系统加密），不参与同步'))),
     ]));
   }
 
