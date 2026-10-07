@@ -5447,7 +5447,7 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 /* 侧栏媒体行复用 .sidebar-row 样式，无额外规则 */
 
 /* 媒体视图浮层 */
-.nj-media-overlay { z-index: 60; }
+.nj-media-overlay { z-index: 800; }
 .nj-media-modal {
   width: min(720px, calc(100vw - 96px));
   max-height: calc(100vh - 120px);
@@ -5538,7 +5538,7 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
   position: fixed;
   left: 50%; bottom: 14px;
   transform: translate(-50%, 16px);
-  z-index: 70;
+  z-index: 850;
   display: flex; align-items: center; gap: 2px;
   padding: 6px 10px;
   background: var(--note-background);

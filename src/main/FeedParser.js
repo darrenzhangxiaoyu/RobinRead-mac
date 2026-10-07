@@ -88,7 +88,7 @@ function parseDurationSeconds(raw) {
   return seconds > 0 ? seconds : null;
 }
 
-/** 采集到的候选（enclosure 优先，media:content 兜底）→ 规范媒体对象；非媒体返回 null。 */
+/** 采集到的候选（文档序 first-wins：RSS 实践中 enclosure 通常在前）→ 规范媒体对象；非媒体返回 null。 */
 function normalizeEnclosure(candidate) {
   if (!candidate || !candidate.url) return null;
   const kind = enclosureKind(candidate.type, candidate.url);
@@ -125,7 +125,7 @@ function parseJSON(text) {
         url: att.url,
         type: att.mime_type || att.mimeType || null,
         length: att.size_in_bytes ?? att.length,
-        duration: att.duration_seconds ?? att.duration,
+        duration: att.duration_in_seconds ?? att.duration_seconds ?? att.duration, // JSON Feed 1.1 规范字段在前
       });
       if (enclosure) break;
     }

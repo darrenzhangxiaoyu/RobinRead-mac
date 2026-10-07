@@ -1311,6 +1311,14 @@ class AppStore extends EventEmitter {
 
   _deleteWithTombstones(rows) {
     if (!rows || !rows.length) return 0;
+    // 先收走离线媒体文件（FK 级联只删 media_items 行，文件会变孤儿）
+    const ids = rows.map((row) => row.id);
+    try {
+      const files = this.database.prepare(
+        `SELECT local_path AS p FROM media_items WHERE item_id IN (${ids.map(() => '?').join(',')}) AND local_path IS NOT NULL`
+      ).all(...ids);
+      this.media?.deleteLocalFiles(files.map((f) => f.p));
+    } catch (_) { /* 文件清理失败不阻断条目删除 */ }
     const writeTomb = this.database.prepare(
       'INSERT OR IGNORE INTO pruned_articles (item_id, feed_id, pruned_at) VALUES (?, ?, ?)'
     );
@@ -1318,7 +1326,7 @@ class AppStore extends EventEmitter {
     this.database.transaction(() => {
       for (const row of rows) {
         writeTomb.run(row.id, row.feed_id, nowSeconds());
-        deleteItem.run(row.id); // FK 级联清 articles/states/caches/highlights/notes
+        deleteItem.run(row.id); // FK 级联清 articles/states/caches/highlights/notes/media_items
       }
     });
     return rows.length;

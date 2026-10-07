@@ -174,6 +174,7 @@ export class MediaView {
     const result = await window.robin.mediaList(this.filter, { limit: PAGE_SIZE, offset: 0 });
     if (!this.overlay) return;
     this.items = Array.isArray(result) ? result : [];
+    await this._syncQueueSet();
     this._renderRows();
     if (!silent) {
       const counts = await window.robin.mediaCounts();
@@ -182,6 +183,42 @@ export class MediaView {
         this._syncFilterButtons();
       }
     }
+  }
+
+  /** 队列归属缓存（行内队列按钮回显用）；增删后调用一次即可。 */
+  async _syncQueueSet() {
+    try {
+      const queue = await window.robin.mediaQueueList();
+      this._queueIDs = new Set((Array.isArray(queue) ? queue : []).map((m) => m.itemID));
+    } catch (_) {
+      this._queueIDs = new Set();
+    }
+  }
+
+  /** 队列按钮（在 refreshState 重建的动作区内创建——否则下载进度补丁会把它冲掉）。 */
+  _appendQueueBtn(stateWrap, item) {
+    const sync = () => {
+      const inQueue = this._queueIDs?.has(item.itemID);
+      queueBtn.textContent = inQueue ? t('移出队列') : t('加入队列');
+      queueBtn.title = inQueue ? t('移出播放队列') : t('加入播放队列，自动连播');
+      queueBtn.classList.toggle('in-queue', !!inQueue);
+    };
+    const queueBtn = el('button', 'btn-text nj-media-queue');
+    queueBtn.type = 'button';
+    queueBtn.addEventListener('click', async () => {
+      if (this._queueIDs?.has(item.itemID)) {
+        await window.robin.mediaQueueRemove(item.itemID);
+        this._queueIDs.delete(item.itemID);
+        this.deps.toast?.(t('已移出队列'));
+      } else {
+        await window.robin.mediaQueueAdd(item.itemID);
+        this._queueIDs.add(item.itemID);
+        this.deps.toast?.(t('已加入队列'));
+      }
+      sync();
+    });
+    sync();
+    stateWrap.appendChild(queueBtn);
   }
 
   async _loadMore() {
@@ -316,6 +353,7 @@ export class MediaView {
           });
           stateWrap.appendChild(dlBtn);
         }
+        this._appendQueueBtn(stateWrap, item);
       }
     };
     row.__refreshState = refreshState;
@@ -324,20 +362,6 @@ export class MediaView {
     // closest 守卫失效）→ 不拦住的话 row 级点击会把「下载」误判成「播放」
     stateWrap.addEventListener('click', (event) => event.stopPropagation());
     row.appendChild(stateWrap);
-
-    // 队列按钮
-    const queueBtn = el('button', 'btn-text nj-media-queue');
-    queueBtn.type = 'button';
-    queueBtn.textContent = t('加入队列');
-    queueBtn.title = t('加入播放队列，自动连播');
-    queueBtn.addEventListener('click', async () => {
-      await window.robin.mediaQueueAdd(item.itemID);
-      queueBtn.textContent = t('移出队列');
-      queueBtn.title = t('移出播放队列');
-      queueBtn.classList.add('in-queue');
-      this.deps.toast?.(t('已加入队列'));
-    });
-    stateWrap.appendChild(queueBtn);
 
     // 播放按钮
     const play = el('button', 'btn-text primary nj-media-play');

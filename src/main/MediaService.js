@@ -369,6 +369,10 @@ class MediaService {
   async download(itemID) {
     const media = this.forItem(itemID);
     if (!media) throw new Error(i18n.localized('媒体不存在或已被删除。'));
+    // 只允许远程 http(s) 源：恶意 feed 可构造 file:// 等 URL 诱导主进程拷贝本机文件
+    if (!/^https?:\/\//i.test(String(media.url || ''))) {
+      throw new Error(i18n.localized('仅支持下载 http(s) 链接的媒体。'));
+    }
     if (media.downloadState === 'done' && media.hasLocal) {
       return { started: false, ok: true, item: media };
     }
@@ -388,7 +392,7 @@ class MediaService {
         this.mediaDir,
         `${stableDigest(itemID)}${downloadExtension(media.mime, media.url)}`
       );
-      await this._downloadToFile(media, filePath, controller.signal);
+      await this._downloadToFile(media, filePath, controller);
       const bytes = fs.statSync(filePath).size;
       if (bytes <= 0) throw new Error(i18n.localized('下载内容为空。'));
       this.store.database.prepare(`
@@ -412,31 +416,52 @@ class MediaService {
     }
   }
 
-  async _downloadToFile(media, filePath, signal) {
+  async _downloadToFile(media, filePath, controller) {
+    const signal = controller.signal;
+    const STALL_MS = 45000; // inactivity 看门狗：45s 无新字节视为流停摆（对照 fetchFeed 30s 超时口径）
     const attempt = async () => {
       const partPath = `${filePath}.part`;
       let received = 0;
       let lastPushAt = 0;
-      const source = await httpStream(media.url, {
-        headers: { 'User-Agent': APP_UA, Accept: '*/*' },
-        signal,
-      });
+      // 建连/出 header 阶段超时：30s 拿不到响应头即中止底层连接（避免永久挂起占用下载槽）
+      let headerTimer = null;
+      const source = await Promise.race([
+        httpStream(media.url, {
+          headers: { 'User-Agent': APP_UA, Accept: '*/*' },
+          signal,
+        }),
+        new Promise((_, reject) => {
+          headerTimer = setTimeout(() => {
+            try { controller.abort(); } catch (_) { /* 已中止 */ }
+            reject(Object.assign(new Error(i18n.localized('下载连接超时。')), { permanent: true }));
+          }, 30000);
+        }),
+      ]).finally(() => headerTimer && clearTimeout(headerTimer));
       if (source.status >= 400) {
         try { await source.webStream?.cancel?.(); } catch (_) { /* 已关闭 */ }
-        throw new Error(`HTTP ${source.status}`);
+        // 4xx/5xx 是永久性失败：重试只会再打一次服务器（客户端错误不可能自愈）
+        throw Object.assign(new Error(`HTTP ${source.status}`), { permanent: source.status < 500 || source.status === 501 });
       }
       const totalHeader = Number(source.headers?.get?.('content-length'));
       const total = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : (media.sizeBytes ?? null);
       if (total && total > MAX_DOWNLOAD_BYTES) {
         try { await source.webStream?.cancel?.(); } catch (_) { /* 已关闭 */ }
-        throw new Error(i18n.localized('文件超过 500MB 上限，已取消下载。'));
+        throw Object.assign(new Error(i18n.localized('文件超过 500MB 上限，已取消下载。')), { permanent: true });
       }
+      let stallTimer = null;
+      let lastDataAt = Date.now();
       try {
         const nodeStream = Readable.fromWeb(source.webStream);
         const fileStream = fs.createWriteStream(partPath);
+        stallTimer = setInterval(() => {
+          if (Date.now() - lastDataAt > STALL_MS) {
+            nodeStream.destroy(Object.assign(new Error(i18n.localized('下载连接超时。')), { permanent: false })); // 停摆属瞬时故障，可重试
+          }
+        }, 10000);
         nodeStream.on('data', (chunk) => {
+          lastDataAt = Date.now();
           received += chunk.length;
-          if (received > MAX_DOWNLOAD_BYTES) nodeStream.destroy(new Error(i18n.localized('文件超过 500MB 上限，已取消下载。')));
+          if (received > MAX_DOWNLOAD_BYTES) nodeStream.destroy(Object.assign(new Error(i18n.localized('文件超过 500MB 上限，已取消下载。')), { permanent: true }));
           const now = Date.now();
           if (now - lastPushAt > 250) { // 4 次/秒封顶的进度推送（IPC 频率护栏）
             lastPushAt = now;
@@ -448,13 +473,15 @@ class MediaService {
       } catch (err) {
         try { fs.rmSync(partPath, { force: true }); } catch (_) { /* 清理失败可忽略 */ }
         throw err;
+      } finally {
+        if (stallTimer) clearInterval(stallTimer);
       }
     };
-    // 失败重试 1 次（网络抖动 / 短暂 5xx）；用户中止（abort）不重试
+    // 失败重试 1 次（网络抖动 / 短暂 5xx）；用户中止（abort）与永久性失败（4xx/超限/超时）不重试
     try {
       await attempt();
     } catch (err) {
-      if (signal.aborted) throw err;
+      if (signal.aborted || err?.permanent) throw err;
       await attempt();
     }
   }
@@ -474,6 +501,15 @@ class MediaService {
     `).run(itemID);
     this._invalidateCounts();
     return this.forItem(itemID);
+  }
+
+  /** 批量删除离线文件（条目淘汰/清理路径用）：只删 media 目录内的文件，防误删。 */
+  deleteLocalFiles(paths) {
+    for (const p of Array.isArray(paths) ? paths : []) {
+      try {
+        if (p && path.resolve(p).startsWith(this.mediaDir + path.sep)) fs.rmSync(p, { force: true });
+      } catch (_) { /* 尽力而为 */ }
+    }
   }
 
   /** 应用退出：中止在途下载（.part 由 attempt 的 catch 清理）。 */
