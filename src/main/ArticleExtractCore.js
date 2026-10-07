@@ -351,6 +351,12 @@ function sanitizedAttributes(source, tag, baseURL, eagerImage = false) {
         const resolved = safeRemoteURL(cleaned, baseURL);
         if (!resolved) continue;
         cleaned = resolved;
+      } else if (name === 'srcset') {
+        // srcset 是候选 URL 列表：逐候选走 safeRemoteURL 白名单（javascript:/data: 等伪协议
+        // 与非 http(s) 源一律剥除；全部非法则整个属性丢弃）
+        const sanitized = sanitizeSrcset(cleaned, baseURL);
+        if (!sanitized) continue;
+        cleaned = sanitized;
       } else if (['width', 'height', 'colspan', 'rowspan'].includes(name)) {
         const number = Number.parseInt(cleaned, 10);
         if (!(number > 0 && number <= 10000)) continue;
@@ -358,6 +364,8 @@ function sanitizedAttributes(source, tag, baseURL, eagerImage = false) {
       }
       attributes.push(` ${name}="${escapeAttribute(cleaned)}"`);
     } else {
+      // 布尔属性：srcset 不可能有值布尔形态（无值 srcset 无意义），直接丢弃
+      if (name === 'srcset') continue;
       attributes.push(` ${name}`);
     }
   }
