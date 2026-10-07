@@ -1510,7 +1510,7 @@ class AppStore extends EventEmitter {
 
   /** LIKE 回退路径（FTS 不可用 / 短查询）：与 FTS 路径同构的返回结构。 */
   _likeSearch(trimmed, limit) {
-    const pattern = `%${trimmed.replace(/[%_]/g, (c) => '\\' + c)}%`;
+    const pattern = `%${trimmed.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
     const rows = this.database.prepare(`
       SELECT
           i.id AS entry_id, i.feed_id AS feed_id, i.account_id AS account_id,
@@ -1599,7 +1599,7 @@ class AppStore extends EventEmitter {
   searchEntries(query, { limit = 80 } = {}) {
     const trimmed = String(query || '').trim();
     if (!trimmed) return [];
-    const pattern = `%${trimmed.replace(/[%_]/g, (c) => '\\' + c)}%`;
+    const pattern = `%${trimmed.replace(/[%_\\]/g, (c) => '\\' + c)}%`;
     const rows = this.database.prepare(`
       SELECT
           i.id AS entry_id, i.feed_id AS feed_id, i.account_id AS account_id,
