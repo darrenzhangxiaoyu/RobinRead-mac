@@ -201,11 +201,12 @@ const hasIFrame = (html) => /<iframe\b/i.test(html);
     const r = ADAPTERS.weibo.parse(mk([{ card_type: 9, mblog: { text: '幽灵', user: { screen_name: 'u' } } }, { card_type: 9, mblog: { id: 'w3', text: '正常', user: { screen_name: 'u' } } }]), '2002');
     ok(r.entries.length === 1 && r.entries[0].id === 'weibo:w3', 'B4 无 id mblog → 跳过', 'n=' + r.entries.length);
   }
-  // page_info javascript: page_url（对抗：href 会在消毒时再被剥，此处验证 escape 不越界）
+  // page_info javascript: page_url（对抗：适配器层直接拒绝非 http(s)——比消毒层兜底更早一步）
   {
     const r = ADAPTERS.weibo.parse(mk([{ card_type: 9, mblog: { id: 'w4', text: 't', user: { screen_name: 'u' }, page_info: { type: 'video', page_url: 'javascript:alert(1)' } } }]), '2002');
-    ok(/href="javascript:alert\(1\)"/.test(r.entries[0].contentHTML), 'B4 原始内容含 javascript href（消毒层负责剥除）');
-    ok(!/javascript:/i.test(sanitizedHTML(r.entries[0].contentHTML)), 'B4 消毒后 javascript href 剥除 ✓（纵深成立）');
+    ok(!/javascript:/i.test(r.entries[0].contentHTML), 'B4 javascript page_url 在适配器层即被拒（不发链接）');
+    const rGood = ADAPTERS.weibo.parse(mk([{ card_type: 9, mblog: { id: 'w5', text: 't', user: { screen_name: 'u' }, page_info: { type: 'video', page_url: 'https://weibo.com/tv/v/x' } } }]), '2002');
+    ok(/href="https:\/\/weibo\.com\/tv\/v\/x"/.test(rGood.entries[0].contentHTML), 'B4 合法 https page_url 正常发链接');
   }
   // 极深嵌套 cards
   {
