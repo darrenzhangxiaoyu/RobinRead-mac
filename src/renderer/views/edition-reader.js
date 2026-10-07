@@ -2632,6 +2632,9 @@ export class EditionReader {
       if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); return this._lightboxStep(-1); }
       return;
     }
+    // R44：滑轨刻度聚焦时 ←/→ 是滑轨自己的翻页语义——放行到 rail 监听器，
+    // 不进 document 级卡片空间导航（否则 stopPropagation 会打死刻度键盘翻页）
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.target.closest && e.target.closest('.er-rail')) return;
     // P1-4：期刊打开期间期刊独占键盘——命中的键一律 stopPropagation，
     // 阻断 document 冒泡阶段的其余全局处理器（app.js bindKeyboard / list.js _navKey 等）
     if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); e.stopPropagation(); return this._findOpen(); }

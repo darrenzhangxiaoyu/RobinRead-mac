@@ -76,7 +76,6 @@ const OFFLINE = [
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },
-  { file: 'scripts/diag-r44-details.js', runner: 'electron', desc: 'R44 细节三连：滑轨键盘翻页/刻度 title/装载呼吸点（离线）' },
   { file: 'scripts/diag-r45-details.js', runner: 'electron', desc: 'R45 细节三连：chips 卫生/清除键 aria/批量条 toolbar（离线）' },
   { file: 'scripts/diag-r39-details.js', runner: 'electron', desc: 'R39 细节三连：时间/来源悬停全量+清除键命中区（离线）' },
   { file: 'scripts/diag-r40-details.js', runner: 'electron', desc: 'R40 细节三连：chips 换行/历史键盘导航/工具条 aria（离线）' },
@@ -104,7 +103,8 @@ for (const probe of suite) {
   process.stdout.write(`\n===== ${probe.desc} (${probe.file}) =====\n`);
   const result = spawnSync(runner, args, {
     cwd: path.join(__dirname, '..'),
-    stdio: ['ignore', 'inherit', 'ignore'],
+    // stderr 同步 inherit：失败时探针自身报错能直接出现在套件日志里（不再被丢弃）
+    stdio: ['ignore', 'inherit', 'inherit'],
     timeout: probe.runner === 'node' ? 60000 : 300000,
     shell: process.platform === 'win32',
   });

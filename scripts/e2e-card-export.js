@@ -50,7 +50,9 @@ app.whenReady().then(async () => {
   const watchdog = setTimeout(() => { console.error('FAIL  E2E 超时（60s）'); app.exit(2); }, 60000);
   const savePath = path.join(app.getPath('temp'), `robin-e2e-card-${Date.now()}.png`);
   try {
-    const { registerIPCHandlers } = require(path.join(ROOT, 'src', 'main', 'ipc'));
+    const ipcAPI = require(path.join(ROOT, 'src', 'main', 'ipc'));
+    // 新安全契约（2026-10 修复 P2-11）：写盘路径须经主进程登记授权（模拟 pickSavePath）
+    ipcAPI.registerSavedPath(savePath);
     console.log('[e2e] register handlers');
     const win = new BrowserWindow({
       show: false, width: 1280, height: 820,
@@ -59,7 +61,7 @@ app.whenReady().then(async () => {
         contextIsolation: true,
       },
     });
-    registerIPCHandlers(fakeStore, win);
+    ipcAPI.registerIPCHandlers(fakeStore, win);
     win.webContents.on('console-message', (_e, _level, message) => {
       if (String(message).startsWith('[e2e-page]')) console.log(message);
     });
