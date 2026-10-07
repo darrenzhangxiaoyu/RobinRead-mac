@@ -27,7 +27,8 @@ function isIPLiteral(host) {
 
 const CONNECT_TIMEOUT_MS = 15 * 1000;
 const COMMAND_TIMEOUT_MS = 30 * 1000;
-const MAX_LINE_BYTES = 16 * 1024;          // 命令行（非 literal 部分）上限
+const MAX_LINE_BYTES = 16 * 1024;          // 命令行（非 literal 部分）上限；超限连同缓冲一起断连
+const MAX_SESSION_BYTES = 64 * 1024 * 1024; // 单连接累计收字节上限（恶意服务器洪泛/巨 literal 的内存闸）
 const CRLF = '\r\n';
 
 /** TLS 证书类错误特征码：rejectUnauthorized 时归为 tls 类（提示可开自签名开关）。 */
@@ -204,7 +205,7 @@ class ImapClient {
     }
     const tag = `A${String(++this._tagCounter).padStart(3, '0')}`;
     const units = [];
-    if (process.env.ROBIN_IMAP_DEBUG) console.error(`[imap-debug] >> ${tag} ${body.slice(0, 60)}`);
+    if (process.env.ROBIN_IMAP_DEBUG) console.error(`[imap-debug] >> ${tag} ${body.startsWith('LOGIN') ? 'LOGIN [redacted]' : body.slice(0, 60)}`);
     const result = await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this._destroy();
@@ -353,6 +354,14 @@ class ImapClient {
 
   _onData(chunk) {
     if (!this.socket) return;
+    // 会话级字节闸：恶意服务器洪泛（无 CRLF 巨行 / 巨 literal / 2 万行 OK 洪泛）的
+    // 总内存上限——超限即断连（worker 看门狗之外的第二道内存防线）。
+    this._sessionBytes = (this._sessionBytes || 0) + chunk.length;
+    if (this._sessionBytes > MAX_SESSION_BYTES) {
+      this._failAll(new MailError('protocol', i18n.localized('邮箱响应数据量异常，已断开连接。')));
+      this._destroy();
+      return;
+    }
     this.buffer = this.buffer.length ? Buffer.concat([this.buffer, chunk]) : chunk;
     this._drain();
   }
@@ -367,12 +376,16 @@ class ImapClient {
       guard += 1;
       if (process.env.ROBIN_IMAP_DEBUG && guard > 500) {
         console.error(`[imap-debug] drain loop guard=${guard} bufLen=${this.buffer.length}`);
-        if (guard > 1000) throw new Error('drain runaway loop');
+        if (guard > 1000) return; // 调试观察用上限：停本轮 drain（不 throw，避免调试模式未捕获异常）
       }
       if (this.buffer.length === 0) return;
       const idx = this.buffer.indexOf(CRLF, 0, 'latin1');
       if (idx < 0) {
-        if (this.buffer.length > MAX_LINE_BYTES * 16) this._failAll(new MailError('protocol', i18n.localized('邮箱响应解析失败（行过长）。')));
+        if (this.buffer.length > MAX_LINE_BYTES * 16) {
+          // 行过长 = 恶意/坏服务器：拒绝命令并连缓冲一起断连（不清 buffer 会持续累积）
+          this._failAll(new MailError('protocol', i18n.localized('邮箱响应解析失败（行过长）。')));
+          this._destroy();
+        }
         return; // 等更多数据
       }
       const lineText = this.buffer.subarray(0, idx).toString('latin1');

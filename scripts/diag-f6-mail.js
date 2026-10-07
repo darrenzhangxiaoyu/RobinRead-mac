@@ -315,6 +315,7 @@ app.whenReady().then(async () => {
     }
     // MESSAGE-ID 幂等：重置增量游标为空（回到 30 天首刷窗）再刷 → 全窗重搜但零新增
     store.database.prepare('UPDATE mail_accounts SET last_sync = NULL WHERE id = ?').run(account.id);
+    store.database.prepare('UPDATE feeds SET last_refreshed_at = NULL WHERE id = ?').run(mailFeed.id); // feed 级游标一并归零（F6 验证：新发件人首刷窗按 feed 游标）
     await mockReset();
     const refreshIdem = await store.refreshFeed(mailFeed.id);
     const stIdem = await mockStats();

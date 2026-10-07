@@ -47,6 +47,8 @@ const STRINGS = {
   "连接失败": { zh: "连接失败", en: "Connection failed" },
   "连接正常 · 收件箱 %lld 封 · %lldms": { zh: "连接正常 · 收件箱 %lld 封 · %lldms", en: "Connected · %lld messages · %lldms" },
   "添加发件人…": { zh: "添加发件人…", en: "Add Sender…" },
+  "添加发件人": { zh: "添加发件人", en: "Add Sender" },
+  "完整地址 name@example.com 或域名后缀 @example.com": { zh: "完整地址 name@example.com 或域名后缀 @example.com", en: "Full address name@example.com or domain suffix @example.com" },
   "删除邮箱": { zh: "删除邮箱", en: "Delete Mailbox" },
   "确认删除邮箱账户？": { zh: "确认删除邮箱账户？", en: "Delete this mailbox account?" },
   "将删除该邮箱的所有白名单发件人订阅与已收文章，并清除本机保存的密码。邮箱本身不受影响。": { zh: "将删除该邮箱的所有白名单发件人订阅与已收文章，并清除本机保存的密码。邮箱本身不受影响。", en: "This removes all sender feeds and downloaded articles for the mailbox and clears the stored password. The mailbox itself is unaffected." },

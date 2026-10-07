@@ -156,8 +156,11 @@ class MailService {
       password = stored;
     }
     const startedAt = Date.now();
-    // 测试连接同样走 worker（与抓取同一条楔死规避通路）
-    const { exists } = await this._workerRequest({
+    // 测试连接同样过闸口（单账户链 + 全局 ≤2）：probe 也占一条真实连接，不 设 特权
+    const chainKey = payload.accountID
+      ? payload.accountID
+      : `probe:${String(username || '').trim().toLowerCase()}@${String(host || '').trim()}`;
+    const { exists } = await this._runAccountSession(chainKey, async () => this._workerRequest({
       type: 'probe',
       config: {
         host: String(host || '').trim(),
@@ -166,7 +169,7 @@ class MailService {
         password: String(password || ''),
         allowSelfSigned: Boolean(allowSelfSigned),
       },
-    });
+    }));
     return {
       elapsedMs: Date.now() - startedAt,
       messageCount: exists,
@@ -331,7 +334,11 @@ class MailService {
   async _fetchViaWorker({ account, sender, feed }) {
     const password = this.store.credentials.mailPassword(account.id);
     if (!password) throw new MailError('auth', i18n.localized('邮箱密码缺失，请删除账户后重新添加。'));
-    const since = (account.lastSync || (nowSeconds() - FIRST_SYNC_WINDOW_SECONDS)) - SINCE_OVERLAP_SECONDS;
+    // 增量游标用 feed 级（feeds.last_refreshed_at）优先：账户级 lastSync 会把
+    // 「已同步账户上新添加的发件人」的首刷窗错误收窄到 1 天（丢历史邮件）。
+    // 新发件人 feed 无 last_refreshed_at → 回落账户游标 → 全新账户回落 30 天首刷窗。
+    const feedCursor = this.store.feedsRepo.feed(feed.id)?.lastRefreshedAt || null;
+    const since = (feedCursor || account.lastSync || (nowSeconds() - FIRST_SYNC_WINDOW_SECONDS)) - SINCE_OVERLAP_SECONDS;
     // 已入库 entryID 集（local:<feedID>:<digest(messageID)>）：worker 按 messageID 做批内去重，
     // 与库内幂等键的精确比对留在主进程（键形如 local:<feedID>:<digest>，含 feedID 前缀）
     const existingEntryIDs = new Set(
