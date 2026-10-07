@@ -527,7 +527,6 @@ const STRINGS = {
   "未启用": { zh: "未启用", en: "Disabled" },
   "未知错误": { zh: "未知错误", en: "Unknown error" },
   "未读": { zh: "未读", en: "Unread" },
-  "标为已读": { zh: "标为已读", en: "Mark as Read" },
   "标为未读": { zh: "标为未读", en: "Mark as Unread" },
   "标准 (17pt)": { zh: "标准 (17pt)", en: "Default (17 pt)" },
   "标记选中源全部已读 (%lld)": { zh: "标记选中源全部已读 (%lld)", en: "Mark Selected Feeds as Read (%lld)" },

@@ -51,14 +51,18 @@ function ruleFromRow(row) {
   try { scope = JSON.parse(row.scope_json || '{}'); } catch (_) { /* 兜底全局 */ }
   try { conditionsEnvelope = JSON.parse(row.conditions_json || '{}'); } catch (_) { /* 兜底空 */ }
   try { actions = JSON.parse(row.actions_json || '[]'); } catch (_) { /* 兜底空 */ }
+  const conditions = Array.isArray(conditionsEnvelope.list) ? conditionsEnvelope.list : [];
+  // 正常路径 conditions ≥1（saveRule 强制）；空列表只可能来自坏 JSON——
+  // 按「惰性规则」处理（all 空条件会命中一切，批量自动已读是最坏的失败形态）
+  const inert = conditions.length === 0;
   return {
     id: row.id,
     name: row.name,
     scope: scope && scope.kind === 'feeds' ? { kind: 'feeds', ids: Array.isArray(scope.ids) ? scope.ids : [] } : { kind: 'all' },
     match: conditionsEnvelope.mode === 'any' ? 'any' : 'all',
-    conditions: Array.isArray(conditionsEnvelope.list) ? conditionsEnvelope.list : [],
+    conditions,
     actions: Array.isArray(actions) ? actions : [],
-    enabled: Number(row.enabled) === 1,
+    enabled: Number(row.enabled) === 1 && !inert,
     priority: Number(row.priority) || 0,
     hitCount: Number(row.hit_count) || 0,
     createdAt: row.created_at,
@@ -532,9 +536,12 @@ class RulesEngine {
         }
       });
       // 状态修订（事务提交后）：计数缓存失效 + 逐条目增量 + 行集变更（later/标签影响视野）
+      // star 通知的 isRead 用「本批 read 规则写入后」的值——entry.isRead 是事务前快照，
+      // 同批 read+star 双规则命中同条目时，陈旧 false 会覆盖先前的 read 通知（渲染层短暂回退未读样式）。
+      const readSet = new Set(readIDs);
       this.store._noteEntryChange(null, true, false);
       for (const id of readIDs) this.store._noteEntryChange(id, true, false);
-      for (const item of starIDs) this.store._noteEntryChange(item.id, item.isRead, true);
+      for (const item of starIDs) this.store._noteEntryChange(item.id, readSet.has(item.id) || item.isRead, true);
       if (laterIDs.length || tagPairs.length) this.store._bumpListSet();
       if (outboxQueue.length) this.store._scheduleOutboxDrain(1500);
       this.counters.matchedEntries += matchedEntries;
