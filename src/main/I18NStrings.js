@@ -1724,6 +1724,8 @@ const STRINGS = {
   "（空报告）": { zh: "（空报告）", en: "(empty report)" },
   "继续追问这份报告…": { zh: "继续追问这份报告…", en: "Ask a follow-up about this report…" },
   "（无摘要）": { zh: "（无摘要）", en: "(no snippet)" },
+  "研究主题过长（最多 200 字）。": { zh: "研究主题过长（最多 200 字）。", en: "Research topic is too long (max 200 characters)." },
+  "追问内容过长（最多 2000 字）。": { zh: "追问内容过长（最多 2000 字）。", en: "Follow-up is too long (max 2000 characters)." },
   "请输入研究主题。": { zh: "请输入研究主题。", en: "Please type a research topic." },
   "已有一项研究正在进行，请等它完成或先取消。": { zh: "已有一项研究正在进行，请等它完成或先取消。", en: "A research run is already in progress. Wait for it or cancel it first." },
   "请输入追问内容。": { zh: "请输入追问内容。", en: "Please type a follow-up question." },

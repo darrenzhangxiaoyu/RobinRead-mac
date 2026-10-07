@@ -43,7 +43,7 @@ app.whenReady().then(async () => {
     ok(!!store.database.prepare("SELECT 1 FROM schema_migrations WHERE id = 'v17-research-reports'").get(),
       '1 v17-research-reports 迁移已入链');
     ok(!!store.database.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_reports'").get()
-      && !!store.database.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_research_reports_created'").get(),
+      && !!store.database.prepare("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_research_reports_updated'").get(),
       '1 research_reports 表 + 索引存在');
     {
       const v17 = MIGRATIONS.find((m) => m.id === 'v17-research-reports');

@@ -1329,6 +1329,7 @@ export class KnowledgeCenter {
 
   _renderResearch(list) {
     const wrap = document.createElement('div');
+    this._research.tabHost = wrap; // 完成回调判「用户是否仍停留本 tab」用
     const head = document.createElement('div');
     head.className = 'kb-graph-head';
     head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('AI 研究'))}</span><span class="kb-graph-legend">${escapeHTML(t('聚合你的订阅库与 AIHOT 素材，生成带引用编号的研究报告，可继续追问。'))}</span>`;
@@ -1349,6 +1350,14 @@ export class KnowledgeCenter {
     const statusBar = document.createElement('div');
     statusBar.className = 'nj-research-status';
     statusBar.style.display = 'none';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-text nj-research-cancel';
+    cancelBtn.style.display = 'none';
+    cancelBtn.style.marginLeft = '8px';
+    cancelBtn.textContent = t('取消生成');
+    cancelBtn.addEventListener('click', () => { try { window.robin.researchCancel(); } catch (_) { /* 服务层取消，草稿保留 */ } });
+    statusBar.appendChild(cancelBtn);
     wrap.appendChild(statusBar);
 
     const liveHost = document.createElement('div');
@@ -1390,6 +1399,7 @@ export class KnowledgeCenter {
       liveHost.innerHTML = '';
       statusBar.style.display = '';
       statusBar.textContent = t('正在聚合素材…');
+      cancelBtn.style.display = '';
       let streamed = '';
       const paint = this._rafPainter(() => {
         if (seq !== this._research.seq || !document.body.contains(liveHost)) return;
@@ -1407,7 +1417,11 @@ export class KnowledgeCenter {
         const { report, cancelled } = res.data || {};
         const fresh = report?.id ? ((await window.robin.researchGet(report.id)) || report) : report;
         this._endResearchRun(unsubscribe);
-        if (fresh) this._openResearchDetail(fresh, { draft: cancelled || !fresh.isComplete });
+        // 完成回调仅在用户仍停留本 tab（research 视图仍挂在 DOM）时跳详情；
+        // 生成中切走的不抢屏——报告留在历史列表，用户自行重开
+        if (fresh && this._research.tabHost && this._research.tabHost.isConnected) {
+          this._openResearchDetail(fresh, { draft: cancelled || !fresh.isComplete });
+        }
       } catch (error) {
         if (seq !== this._research.seq) return;
         liveHost.style.display = 'none';
@@ -1418,6 +1432,7 @@ export class KnowledgeCenter {
         this._endResearchRun(unsubscribe);
         if (seq === this._research.seq) {
           statusBar.style.display = 'none';
+          cancelBtn.style.display = 'none';
           setBusy(false);
         }
       }

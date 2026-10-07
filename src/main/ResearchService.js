@@ -99,6 +99,7 @@ class ResearchService {
   async gather(topic) {
     const t = String(topic || '').trim();
     if (!t) throw new Error(i18n.localized('请输入研究主题。'));
+    if (t.length > 200) throw new Error(i18n.localized('研究主题过长（最多 200 字）。'));
     this.counters.gathers += 1;
     const candidates = [];
 
@@ -259,6 +260,7 @@ class ResearchService {
   async followUp(reportID, question, { onDelta = null, onStatus = null, signal = null } = {}) {
     const q = String(question || '').trim();
     if (!q) throw new Error(i18n.localized('请输入追问内容。'));
+    if (q.length > 2000) throw new Error(i18n.localized('追问内容过长（最多 2000 字）。'));
     const report = this.report(reportID);
     if (!report) throw new Error(i18n.localized('报告不存在或已被删除。'));
     this._acquireLock();
@@ -309,15 +311,19 @@ class ResearchService {
 
   /** 历史列表（新→旧）：含报告首行预览与素材数。 */
   listReports({ limit = LIST_LIMIT } = {}) {
-    const rows = this.store.database.prepare(
-      'SELECT * FROM research_reports ORDER BY updated_at DESC LIMIT ?'
-    ).all(Math.max(1, Math.min(Number(limit) || LIST_LIMIT, 500)));
+    // 列表只需元数据：不拉全量 report_md/sources_json（多轮追问膨胀后 SELECT * 会拖慢列表）；
+    // 排序走 updated_at 索引（v17 建在该列上）
+    const rows = this.store.database.prepare(`
+      SELECT id, topic, is_complete AS isComplete, created_at AS createdAt, updated_at AS updatedAt,
+             (SELECT COUNT(*) FROM json_each(research_reports.sources_json)) AS sourceCount,
+             substr(report_md, 1, 400) AS reportHead
+      FROM research_reports ORDER BY updated_at DESC LIMIT ?
+    `).all(Math.max(1, Math.min(Number(limit) || LIST_LIMIT, 500)));
     return rows.map((row) => {
-      const r = reportFromRow(row);
-      const firstLine = r.reportMd.split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#')) || '';
+      const firstLine = String(row.reportHead || '').split('\n').map((l) => l.trim()).find((l) => l && !l.startsWith('#')) || '';
       return {
-        id: r.id, topic: r.topic, isComplete: r.isComplete,
-        sourceCount: r.sources.length, createdAt: r.createdAt, updatedAt: r.updatedAt,
+        id: row.id, topic: row.topic, isComplete: Number(row.isComplete) === 1,
+        sourceCount: Number(row.sourceCount) || 0, createdAt: row.createdAt, updatedAt: row.updatedAt,
         preview: firstLine.slice(0, 120),
       };
     });

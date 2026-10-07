@@ -694,7 +694,7 @@ const MIGRATIONS = [
             created_at    REAL NOT NULL,
             updated_at    REAL NOT NULL
         );
-        CREATE INDEX IF NOT EXISTS idx_research_reports_created
+        CREATE INDEX IF NOT EXISTS idx_research_reports_updated
         ON research_reports(created_at DESC);
       `);
     },
