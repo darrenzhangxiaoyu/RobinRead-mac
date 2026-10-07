@@ -106,6 +106,8 @@ export class ReaderView {
     this.scrollEl.addEventListener('scroll', () => this._onScroll(), { passive: true });
     document.addEventListener('selectionchange', () => this._onSelectionChange());
     this.progressEl = document.getElementById('reading-progress');
+    // 阅读进度线：轨道满宽，填充宽度写在子元素上（端点气泡 data-pct 仍挂轨道）
+    this.progressFill = this.progressEl ? this.progressEl.querySelector('.reading-progress-fill') : null;
     // mouseup 兜底：部分场景 selectionchange 不触发（合成选区/快速点击）
     document.addEventListener('mouseup', () => setTimeout(() => this._onSelectionChange(), 10));
     this._buildScrollbarGestures();
@@ -449,6 +451,7 @@ export class ReaderView {
 
   clear() {
     this._ttsStop(); // 清空阅读器：停朗读、清队、移除播放器
+    document.getElementById('nj-translate-progress')?.remove(); // P2-3：翻译进度浮标随阅读区清空
     if (this.entryID && this.scrollEl) {
       this._rememberScrollPosition(this.entryID, this.scrollEl.scrollTop);
     }
@@ -571,6 +574,7 @@ export class ReaderView {
 
   _render() {
     this._ttsStop(); // 正文重排（打开新文/原文精读）：段落锚点重建，朗读必须先停
+    document.getElementById('nj-translate-progress')?.remove(); // P2-3：换文重排时清掉上一篇的翻译进度浮标
     this.articleSearch?.reset(); // 正文重建：搜索高亮与命中导航一并失效
     this.scrollEl.scrollTop = 0;
     this.scrollEl.innerHTML = '';
@@ -1736,7 +1740,11 @@ export class ReaderView {
     this.summary.error = null;
     this._renderSummaryCard();
 
+    // 竞态守卫（P1-3，仿 _openBody）：generateSummary 可能耗时数秒，
+    // 期间用户已切换文章时，旧文章的结果不得写回当前摘要卡
+    const eid = this.entryID;
     const result = await window.robin.generateSummary(this.entryID);
+    if (this.entryID !== eid) return;
     this.summary.generating = false;
     this.summary.streaming = '';
     if (result.ok && result.data) {
@@ -2530,7 +2538,7 @@ export class ReaderView {
     for (const color of HIGHLIGHT_COLORS) {
       const dot = document.createElement('button');
       dot.className = 'nj-hl-dot';
-      dot.title = color.label;
+      dot.title = t(color.label); // P2-5：色名走 i18n（琥珀/苔绿/黛蓝/胭脂/青莲）
       dot.innerHTML = `<span class="nj-hl-dot-core" style="background:${color.swatch}"></span>`;
       dot.addEventListener('mousedown', (event) => event.preventDefault());
       dot.addEventListener('click', () => {
@@ -2729,7 +2737,7 @@ export class ReaderView {
     for (const color of HIGHLIGHT_COLORS) {
       const dot = document.createElement('button');
       dot.className = 'nj-hl-dot' + (color.key === (hl.color || 'yellow') ? ' current' : '');
-      dot.title = color.label;
+      dot.title = t(color.label); // P2-5：色名走 i18n（琥珀/苔绿/黛蓝/胭脂/青莲）
       dot.innerHTML = `<span class="nj-hl-dot-core" style="background:${color.swatch}"></span>`;
       dot.addEventListener('click', () => this._setHighlightColor(hl, color.key));
       colors.appendChild(dot);
@@ -3408,7 +3416,7 @@ export class ReaderView {
       const max0 = this.scrollEl.scrollHeight - this.scrollEl.clientHeight;
       const ratio0 = max0 > 0 ? this.scrollEl.scrollTop / max0 : 0;
       if (this.progressEl) {
-        this.progressEl.style.width = `${ratio0 * 100}%`;
+        if (this.progressFill) this.progressFill.style.width = `${ratio0 * 100}%`;
         this.progressEl.dataset.pct = `${Math.round(ratio0 * 100)}%`; // 端点气泡显示阅读百分比
       }
       if (this.entryID && max0 > 0) this._trackResume(Math.round(ratio0 * 100));
@@ -3492,7 +3500,10 @@ export class ReaderView {
     this._study = { kind, generating: false, streaming: '', artifact: null, error: null, collapsed: preferCollapsed };
     this._renderStudyPanel();
 
+    // 竞态守卫（P1-3）：existingWork / 生成均可能跨文章切换后才返回，旧文章载荷不得写回面板
+    const eid = this.entryID;
     const workResult = await window.robin.existingWork(this.entryID, kind);
+    if (this.entryID !== eid) return;
     const cached = workResult?.ok ? workResult.data : null;
     if (cached && cached.content && this._study?.kind === kind) {
       this._study.artifact = cached;
@@ -3505,6 +3516,7 @@ export class ReaderView {
     this._renderStudyPanel();
     const fn = isDeep ? window.robin.deepRead : window.robin.richSummary;
     const result = await fn(this.entryID);
+    if (this.entryID !== eid) return; // 已切换文章：丢弃旧结果（kind 相同也不行——正文是另一篇）
     if (this._study?.kind !== kind) return;
     this._study.generating = false;
     this._study.streaming = '';

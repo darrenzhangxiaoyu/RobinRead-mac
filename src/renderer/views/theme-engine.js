@@ -163,9 +163,11 @@ export function fullPalette(t) {
     '--accent-ink': onAccent,
 
     // 墨色
+    // P1-6：透明阶梯与内置 robin.css 对齐（0.92 / 0.66 / 0.54）——
+    // 原 0.58/0.38 令自定义浅色主题 tertiary 合成对比跌到 ~2.2:1。
     '--text-primary': inkA(0.92),
-    '--text-secondary': inkA(0.58),
-    '--text-tertiary': inkA(0.38),
+    '--text-secondary': inkA(0.66),
+    '--text-tertiary': inkA(0.54),
 
     // 结构线与交互
     '--separator': light ? `rgba(${baseInk}, 0.10)` : `rgba(${baseInk}, 0.10)`,
@@ -178,7 +180,7 @@ export function fullPalette(t) {
 
     // 阅读器排版变量（正文底与纸面一致）
     '--reader-ink': inkA(0.92),
-    '--reader-muted': inkA(0.58),
+    '--reader-muted': inkA(0.66),
     '--reader-card': light ? H(bg - 0.008, sc * 0.25, ths) : H(bg + 0.03, sc * 0.3, ths),
 
     // 概览
@@ -343,14 +345,30 @@ export function contrastRatio(hexA, hexB) {
   return (light + 0.05) / (dark + 0.05);
 }
 
-/** 对一组关键配对做视觉可用性检测（正文/主色/副色 × 纸面）。 */
+/** rgba(r,g,b,a) 与纸面 hex 合成后的不透明色——半透明墨 × 纸面 = 用户实际看到的颜色。 */
+function compositeOn(fgRgba, bgHex) {
+  const m = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/.exec(String(fgRgba || ''));
+  const bg = String(bgHex || '').replace('#', '');
+  if (!m || bg.length < 6) return null;
+  const a = m[4] === undefined ? 1 : Number(m[4]);
+  const mix = (i) => Math.round(a * Number(m[i]) + (1 - a) * parseInt(bg.slice((i - 1) * 2, i * 2), 16));
+  return '#' + [1, 2, 3].map((i) => clamp(mix(i), 0, 255).toString(16).padStart(2, '0')).join('');
+}
+
+/** 对一组关键配对做视觉可用性检测（正文/主色/副色 × 纸面）。
+    P1-6：secondary/tertiary 为半透明墨，按「合成色 × 纸面」检测实际对比度——
+    阈值沿用 WCAG AA：secondary（常伴随正文阅读）4.5，tertiary（装饰性）3.0。 */
 export function auditPalette(palette) {
   const m = palette._meta;
+  const secComp = compositeOn(palette['--text-secondary'], m.page);
+  const terComp = compositeOn(palette['--text-tertiary'], m.page);
   const pairs = [
     { label: '正文 / 纸面', fg: m.ink, bg: m.page, need: 4.5 },
     { label: '主色 / 纸面', fg: m.accent, bg: m.page, need: 3 },
     { label: '副色 / 纸面', fg: m.secondary, bg: m.page, need: 3 },
     { label: '主色按钮字 / 主色', fg: palette['--accent-ink'], bg: m.accent, need: 3 },
+    { label: '次级文字合成 / 纸面', fg: secComp || m.ink, bg: m.page, need: 4.5 },
+    { label: '三级文字合成 / 纸面', fg: terComp || m.ink, bg: m.page, need: 3 },
   ];
   return pairs.map((pair) => {
     const ratio = contrastRatio(pair.fg, pair.bg);

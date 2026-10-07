@@ -785,7 +785,9 @@ export class EditionReader {
     // 划词工具条（R3）：复制/解释/翻译/提问（AI 流式经 ai:selection-delta）
     this._selChangeHandler = () => this._onSelectionChange();
     document.addEventListener('selectionchange', this._selChangeHandler);
-    window.robin?.onSelectionDelta?.((p) => this._selDelta(p));
+    // 保存退订函数（P1-1）：订阅返回值此前被丢弃，dismiss 不退订 → 每次开关期刊泄漏一个
+    // ipcRenderer 监听器并连带整份 overlay DOM（闭包持有 this）
+    this._unsubSelDelta = window.robin?.onSelectionDelta?.((p) => this._selDelta(p)) || null;
     this._relayout(true);
     // 阅读位置记忆：同一视野（feedKey）重开时落到上次离开的页
     const savedPos = this._loadPos();
@@ -841,6 +843,8 @@ export class EditionReader {
     clearInterval(this._vpTimer);
     document.removeEventListener('keydown', this._key, true);
     document.removeEventListener('selectionchange', this._selChangeHandler);
+    this._unsubSelDelta?.(); // P1-1：退订 selection-delta，防监听器与整份 DOM 泄漏
+    this._unsubSelDelta = null;
     this._dismissSelBar();
     this._dismissSelPopover();
     window.removeEventListener('resize', this._onResize);
@@ -990,6 +994,10 @@ export class EditionReader {
     if (!this.overlay || this.mode !== 'article') return;
     this.article.html = html;
     await this._paginateArticle(entry, html);
+    // P1-2：换文后重置灯箱图集缓存——_lbList 惰性缓存的是「上一篇」的图片列表，
+    // 不清会导致新文章首图灯箱串到旧文图集（计数/左右翻张全部错位）
+    this._lbList = null;
+    this._lbIdx = 0;
     this.index = 0;
     this._syncSheets(true);
     this._syncRail();
@@ -1003,6 +1011,8 @@ export class EditionReader {
     this._editionState = null;
     this.mode = 'edition';
     this.article = null;
+    this._lbList = null; // P1-2：退出正文同样清空灯箱图集（下次进文重建）
+    this._lbIdx = 0;
     this.pages = st.pages;
     this.index = clamp(st.index, 0, this.pages.length - 1);
     this.selected = st.selected;
@@ -1079,6 +1089,7 @@ export class EditionReader {
       this.article.headings = hit.headings;
       this.article.spreads = hit.spreads;
       this.pages = hit.pages;
+      this._buildFindTexts(); // 性能：缓存命中同样要刷新搜索文本缓存
       return;
     }
     // 解析块
@@ -1262,10 +1273,19 @@ export class EditionReader {
       article: sp,
     }));
     if (this.article) this.article.spreads = spreads;
+    this._buildFindTexts(); // 性能：分页完成时缓存各叶小写文本，搜索不再每键全量拼接 textContent
     // R34：装箱结果入缓存（LRU 上限 12 篇；spreads 携带可复挂的块 DOM）
     this._layoutCache = this._layoutCache || new Map();
     if (this._layoutCache.size > 12) this._layoutCache.delete(this._layoutCache.keys().next().value);
     this._layoutCache.set(layoutKey, { pages: this.pages, spreads, headings });
+  }
+
+  /** 搜索文本缓存（性能）：每个对开页左右叶的小写拼接文本，随分页完成重建。 */
+  _buildFindTexts() {
+    this._findTexts = (this.article?.spreads || []).map((sp) => ({
+      left: sp.left ? sp.left.map((b) => b.el.textContent).join(' ').toLowerCase() : '',
+      right: sp.right ? sp.right.map((b) => b.el.textContent).join(' ').toLowerCase() : '',
+    }));
   }
 
   _splitSentences(text) {
@@ -2072,12 +2092,12 @@ export class EditionReader {
     const needle = String(q).toLowerCase();
     if (this.mode === 'article' && this.article) {
       // 处级展开：每一处命中一个条目，计数与页面可数事实同口径（R11 评审）
+      // 性能：直接用分页完成时缓存的各叶小写文本（_buildFindTexts），不再每键全量拼接 textContent
       this._findMatches = [];
-      (this.article.spreads || []).forEach((sp, pi) => {
+      (this._findTexts || []).forEach((sp, pi) => {
         for (const leafKey of ['left', 'right']) {
-          const blocks = sp[leafKey];
-          if (!blocks || !blocks.length) continue;
-          const low = blocks.map((b) => b.el.textContent).join(' ').toLowerCase();
+          const low = sp[leafKey];
+          if (!low) continue;
           let pos = 0;
           while ((pos = low.indexOf(needle, pos)) !== -1) {
             this._findMatches.push({ page: pi, leaf: leafKey });
@@ -2603,70 +2623,74 @@ export class EditionReader {
     // 灯箱开启时：Esc 放大态先复位再关闭、←→ 切换画廊图片，其余按键忽略防误翻页
     if (this._lightboxOn && this.overlay.querySelector('.er-lightbox.on')) {
       if (e.key === 'Escape') {
-        e.preventDefault();
+        e.preventDefault(); e.stopPropagation();
         if ((this._lbZoom || 1) > 1.02) this._lbReset();
         else { this.overlay.querySelector('.er-lightbox').classList.remove('on'); this._lightboxOn = false; }
         return;
       }
-      if (e.key === 'ArrowRight') { e.preventDefault(); return this._lightboxStep(1); }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); return this._lightboxStep(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); return this._lightboxStep(1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); return this._lightboxStep(-1); }
       return;
     }
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); return this._findOpen(); }
-    if (e.key === 'f' || e.key === 'F') { e.preventDefault(); return this._toggleFullscreen(); }
+    // P1-4：期刊打开期间期刊独占键盘——命中的键一律 stopPropagation，
+    // 阻断 document 冒泡阶段的其余全局处理器（app.js bindKeyboard / list.js _navKey 等）
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); e.stopPropagation(); return this._findOpen(); }
+    if (e.key === 'f' || e.key === 'F') { e.preventDefault(); e.stopPropagation(); return this._toggleFullscreen(); }
     // 快捷键速查（R14）：Shift+/ 即 ?
-    if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); return this._toggleKeysPanel(); }
+    if (e.key === '?' || (e.shiftKey && e.key === '/')) { e.preventDefault(); e.stopPropagation(); return this._toggleKeysPanel(); }
     // 段落聚焦（R19）：P 切换，↑↓ 换段
-    if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); return this._toggleFocusMode(); }
+    if ((e.key === 'p' || e.key === 'P') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); e.stopPropagation(); return this._toggleFocusMode(); }
     // 收藏 / 稍后读（R12）：S/L 作用于选中卡（版面）或当前文章
-    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); return this._quickToggle('star'); }
-    if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); return this._quickToggle('later'); }
+    if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); e.stopPropagation(); return this._quickToggle('star'); }
+    if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); e.stopPropagation(); return this._quickToggle('later'); }
     if (e.key === 'Escape') {
       // 搜索条 → 灯箱 → 划词弹层 → 排版面板 → 快捷键面板 → 文章目录 → 返回版面 → 退出
-      if (this.overlay.querySelector('.er-findbar')) { e.preventDefault(); return this._findClose(); }
+      if (this.overlay.querySelector('.er-findbar')) { e.preventDefault(); e.stopPropagation(); return this._findClose(); }
       const keysPanel = this.overlay.querySelector('.er-keys-panel');
-      if (keysPanel) { e.preventDefault(); keysPanel.remove(); return; }
+      if (keysPanel) { e.preventDefault(); e.stopPropagation(); keysPanel.remove(); return; }
       const lb = this.overlay.querySelector('.er-lightbox.on');
       if (lb) {
-        e.preventDefault();
+        e.preventDefault(); e.stopPropagation();
         if ((this._lbZoom || 1) > 1.02) this._lbReset();
         else { lb.classList.remove('on'); this._lightboxOn = false; }
         return;
       }
-      if (this.selPopover) { e.preventDefault(); this._dismissSelPopover(); return; }
-      if (this.selBar) { e.preventDefault(); this._dismissSelBar(); return; }
+      if (this.selPopover) { e.preventDefault(); e.stopPropagation(); this._dismissSelPopover(); return; }
+      if (this.selBar) { e.preventDefault(); e.stopPropagation(); this._dismissSelBar(); return; }
       const typePanel = this.overlay.querySelector('.er-type-panel');
-      if (typePanel) { e.preventDefault(); typePanel.remove(); return; }
+      if (typePanel) { e.preventDefault(); e.stopPropagation(); typePanel.remove(); return; }
       const toc = this.overlay.querySelector('.er-toc');
-      if (toc) { e.preventDefault(); toc.remove(); return; }
-      if (this.mode === 'article') { e.preventDefault(); return this._closeArticle(); }
+      if (toc) { e.preventDefault(); e.stopPropagation(); toc.remove(); return; }
+      if (this.mode === 'article') { e.preventDefault(); e.stopPropagation(); return this._closeArticle(); }
+      e.stopPropagation();
       return this.dismiss();
     }
     if (!this.open) {
-      if (['ArrowRight', 'Enter', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); this._doOpen(); }
+      if (['ArrowRight', 'Enter', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); this._doOpen(); }
       return;
     }
     if (this.mode === 'article') {
       // 段落聚焦模式：↑↓ 换段（R19）
       if (this.focusMode) {
-        if (e.key === 'ArrowUp') { e.preventDefault(); return this._focusMove(-1); }
-        if (e.key === 'ArrowDown') { e.preventDefault(); return this._focusMove(1); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); return this._focusMove(-1); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); return this._focusMove(1); }
       }
-      if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); return this._go(this.index - 1); }
-      if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); return this._go(this.index + 1); }
+      if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); return this._go(this.index - 1); }
+      if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); return this._go(this.index + 1); }
       return;
     }
-    if (e.key === 'PageUp') { e.preventDefault(); return this._go(this.index - 1); }
-    if (e.key === 'PageDown') { e.preventDefault(); return this._go(this.index + 1); }
+    if (e.key === 'PageUp') { e.preventDefault(); e.stopPropagation(); return this._go(this.index - 1); }
+    if (e.key === 'PageDown') { e.preventDefault(); e.stopPropagation(); return this._go(this.index + 1); }
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
       if ((e.key === 'Enter' || e.key === ' ') && this.selected) {
-        e.preventDefault();
+        e.preventDefault(); e.stopPropagation();
         const entry = this.pages[this.index].entries.find((x) => x.id === this.selected);
         if (entry) this._openArticle(entry);
       }
       return;
     }
     e.preventDefault();
+    e.stopPropagation();
     if (this.turn) return;
     const page = this.pages[this.index];
     const placements = page.placements;

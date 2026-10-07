@@ -25,7 +25,7 @@ const os = require('node:os');
 const { app, BrowserWindow, clipboard } = require('electron');
 
 // 必须在 app ready 前 require：ipc.js 顶层注册 robin-icon 特权 scheme（与生产 main.js 相同）
-require('../src/main/ipc');
+const ipcAPI = require('../src/main/ipc');
 
 const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'robinread-phase2-renderer-'));
 app.setPath('userData', userData);
@@ -218,10 +218,21 @@ app.whenReady().then(async () => {
     check('A4-b kbExportMarkdown → copyText → 主进程剪贴板一致且非空',
       copyOK, `md=${JSON.stringify(mdProbe)} clipLen=${clipText.length}`);
 
-    // ── 6. A4-c：app:writeTextFile 写临时文件 → 读回一致 ──
+    // ── 6. A4-c：app:writeTextFile 写临时文件 → 读回一致（新安全契约：路径须经主进程登记授权）──
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robinread-phase2-export-'));
     const tmpFile = path.join(tmpDir, '导出测试.md');
     const payload = '# 阶段二探测\n\n带换行的**Markdown**内容。';
+    // 6a. 负向：未登记路径被拒（P2-11 安全收紧后任意路径不可写）
+    const denyProbe = await run(`(async () => { try {
+      const r = await window.robin.writeTextFile(${JSON.stringify(path.join(tmpDir, '未授权.md'))}, 'x');
+      return { ok: r && r.ok === true, error: r && r.error };
+    } catch (e) { return { ok: false, error: String(e && e.message || e) }; } })()`);
+    let deniedFileExists = fs.existsSync(path.join(tmpDir, '未授权.md'));
+    check('A4-c1 未登记路径 writeTextFile 被拒且不落盘',
+      denyProbe.ok !== true && deniedFileExists === false,
+      `ipc=${JSON.stringify(denyProbe)} exists=${deniedFileExists}`);
+    // 6b. 正向：主进程登记（模拟 pickSavePath 授权）后写入成功
+    ipcAPI.registerSavedPath(tmpFile);
     const writeProbe = await run(`(async () => { try {
       const r = await window.robin.writeTextFile(${JSON.stringify(tmpFile)}, ${JSON.stringify(payload)});
       return { ok: r && r.ok === true, data: r && r.data, error: r && r.error };

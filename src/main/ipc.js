@@ -81,9 +81,13 @@ function createMainWindow(store) {
     if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
-  // 同窗口导航防护：正文/期刊里点击 <a href> 不许替换应用窗口，一律转系统浏览器
+  // 同窗口导航防护：正文/期刊里点击 <a href> 不许替换应用窗口，一律转系统浏览器。
+  // file:// 仅放行应用自身 renderer 目录（index.html 所在目录）前缀——放行一切 file://
+  // 等于把用户本机任意 HTML 当作应用页面加载（可绕过沙箱约定读取本地资源）。
+  const appRendererDirPrefix = pathToFileURL(path.join(__dirname, '..', 'renderer') + path.sep).href;
   window.webContents.on('will-navigate', (event, url) => {
-    if (url.startsWith('file://') || url.startsWith('devtools://') || url.startsWith('data:')) return;
+    if (url.startsWith('devtools://') || url.startsWith('data:')) return;
+    if (url.startsWith('file://') && url.startsWith(appRendererDirPrefix)) return;
     event.preventDefault();
     if (/^https?:/i.test(url)) shell.openExternal(url);
   });
@@ -123,6 +127,47 @@ function resolveIcon() {
 const notificationBridge = {
   create(options) { return new Notification(options); },
 };
+
+// MARK: 写文件路径许可（P2-11：一次性路径 token）
+// 渲染层的写文件通道（app:writeTextFile / app:writeBinaryFile）只接受两类路径：
+//   1. 主进程保存对话框（app:pickSavePath）刚返回、仍在有效期内的路径（5 分钟）；
+//   2. userData 子目录内的路径（应用自身数据区）。
+// 其余任意路径一律拒绝——否则被入侵/走样的渲染层可以把内容写到本机任何位置。
+const SAVED_PATH_TTL_MS = 5 * 60 * 1000;
+const savedPathTokens = new Map(); // path(字符串原样) -> expiresAt(ms)
+
+/** 过期清扫（懒清理：每次查询/登记时顺带删）。 */
+function sweepSavedPathTokens() {
+  const now = Date.now();
+  for (const [p, expiresAt] of savedPathTokens) {
+    if (expiresAt <= now) savedPathTokens.delete(p);
+  }
+}
+
+/** 保存对话框返回路径时登记（续期式：同路径重复 pick 以最后一次为准）。 */
+function registerSavedPath(filePath) {
+  sweepSavedPathTokens();
+  savedPathTokens.set(String(filePath), Date.now() + SAVED_PATH_TTL_MS);
+}
+
+/** 写文件前置校验：未登记（或已过期）且不在 userData 内的路径直接拒绝。 */
+function assertWritablePath(filePath) {
+  if (!filePath || typeof filePath !== 'string') throw new Error('缺少有效的文件路径');
+  sweepSavedPathTokens();
+  if (savedPathTokens.has(filePath)) return;
+  try {
+    const userData = app.getPath('userData');
+    const rel = path.relative(userData, path.resolve(filePath));
+    const inside = rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+    if (inside) return;
+  } catch (_) { /* userData 不可用时只认 token */ }
+  throw new Error('该路径未经保存对话框授权，已拒绝写入');
+}
+
+/** 一次性消费：写成功后注销 token（同一 pick 只允许一次成功写入；失败可在 TTL 内重试）。 */
+function consumeSavedPath(filePath) {
+  savedPathTokens.delete(String(filePath));
+}
 
 // 应用退出标志：「关闭到托盘」会拦截一切 close（含 Alt+F4 / 任务栏关闭），
 // 显式退出路径（托盘菜单退出、备份恢复重启）必须先 markAppQuitting 置位绕过拦截。
@@ -324,7 +369,23 @@ function cleanupStorage(store) {
     const { sweepOrphans } = require('./Persistence/SearchIndex');
     sweepOrphans(store.database);
   } catch (_) { /* 全文索引兜底失败不阻塞 */ }
-  try { store.database.exec('VACUUM'); } catch (_) { /* VACUUM 失败不阻塞统计回显 */ }
+  try {
+    // P2-12：同 item 同 kind 只保留最新 3 条（重试/重生成路径曾每次 uuid 新行导致表膨胀）
+    store.database.exec(`
+      DELETE FROM ai_artifacts WHERE id IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY item_id, kind ORDER BY updated_at DESC) AS rn
+          FROM ai_artifacts WHERE item_id IS NOT NULL AND is_deleted = 0
+        ) WHERE rn > 3
+      );
+    `);
+  } catch (_) { /* 行膨胀清理失败不阻塞 */ }
+  try {
+    store.database.exec('VACUUM');
+    // P1-4：VACUUM 可能重排 FTS rowid，必须重建映射（SearchIndex 明文要求），否则首查全表扫
+    const { rebuildMap } = require('./Persistence/SearchIndex');
+    rebuildMap(store.database);
+  } catch (_) { /* VACUUM 失败不阻塞统计回显 */ }
   return storageStatsFor(store);
 }
 
@@ -534,7 +595,7 @@ function registerIPCHandlers(store, window) {
 
   // MARK: 搜索
   handle('app:search', (query, options) => store.searchEntries(query, options || {}));
-  handle('app:smartFolderSearch', (query, limit) => store.smartFolderSearch(query, { limit: Number(limit) || 200 }));
+  handle('app:smartFolderSearch', (query, limit) => store.searchEntries(query, { limit: Number(limit) || 200 }));
 
   // MARK: 今日简报（流式 + 当日缓存秒开）
   handle('ai:digest', (mode) => store.generateTodayDigest((delta) => send('ai:digest-delta', { delta }), mode === 'deep' ? 'deep' : 'brief'));
@@ -661,19 +722,24 @@ function registerIPCHandlers(store, window) {
     store.preferences.set('RobinRead.ignoredVersion', version);
   });
   // 应用内更新：下载 GitHub release 的 setup.exe（进度推 update:progress），随后 /S 静默重装
+  // P0-1：release 带 sha256（asset 级或 release 级）时下载后强制完整性校验
   handle('update:download', async () => {
     updater = updater || new UpdaterService(app.getPath('userData'));
     const result = await checkForUpdate(store.preferences.get('RobinRead.ignoredVersion', null));
     const assetURL = updater.resolveSetupAssetURL(result?.release);
     if (!assetURL) throw new Error('更新源未提供安装包直链，请到 GitHub Releases 页下载');
     const tag = String(result.release.tagName || '').replace(/^v/i, '');
+    const fileName = `RobinRead-${tag}-setup.exe`;
+    const expectedSHA256 = updater.resolveSetupAssetSHA256(result?.release, fileName);
     const push = (p) => { try { if (!window.isDestroyed()) window.webContents.send('update:progress', p); } catch (_) { /* 窗口已关 */ } };
-    return await updater.download(assetURL, `RobinRead-${tag}-setup.exe`, push, (url, opts) => net.fetch(url, opts));
+    return await updater.download(assetURL, fileName, push, (url, opts) => net.fetch(url, opts), expectedSHA256);
   });
   handle('update:install', () => {
     if (!updater) throw new Error('尚未下载更新包');
     return updater.install();
   });
+  // P2-8：下载中途取消（中止 fetch、销毁读写流、清理半成品）
+  handle('updater:cancel', () => (updater ? updater.cancel() : false));
 
   // MARK: 无边框窗口控制
   ipcMain.on('window:minimize', () => window.minimize());
@@ -777,7 +843,11 @@ function registerIPCHandlers(store, window) {
   handle('aihot:items', (opts) => store.aihot.items(opts || {}));
   handle('aihot:selectedPage', (opts) => store.aihot.selectedPage(opts || {}));
   handle('aihot:leaderboard', () => store.aihot.leaderboard());
-  handle('aihot:extractURL', (url) => store.aihot.extractURL(url));
+  handle('aihot:extractURL', (url) => {
+    // P2-7：与 extract:url 同款协议校验（原先这里放行任意字符串，file:// 等会被当 URL 抓取）
+    if (!/^https?:\/\//i.test(String(url || ''))) throw new Error('仅支持 http(s) 链接');
+    return store.aihot.extractURL(String(url));
+  });
   handle('aihot:snapshot', () => store.aihotSnapshot());
   handle('aihot:toggleFavorite', (item) => store.aihotToggleFavorite(item));
   handle('aihot:markRead', (ids) => store.aihotMarkRead(ids));
@@ -840,6 +910,7 @@ function registerIPCHandlers(store, window) {
   handle('app:copyText', (text) => { clipboard.writeText(String(text ?? '')); return true; });
 
   // MARK: 导出（另存为对话框 + 同步写文本文件；canceled / 异常由 handle 统一包装）
+  // 返回的路径同时登记为一次性写许可（P2-11）：随后的 write*File 只认这个路径或 userData 子目录。
   handle('app:pickSavePath', async ({ defaultName } = {}) => {
     const result = await dialog.showSaveDialog(window, {
       title: '导出文章',
@@ -847,16 +918,19 @@ function registerIPCHandlers(store, window) {
       filters: [{ name: 'Markdown', extensions: ['md'] }, { name: 'All Files', extensions: ['*'] }],
     });
     if (result.canceled || !result.filePath) return null;
+    registerSavedPath(result.filePath);
     return result.filePath;
   });
   handle('app:writeTextFile', ({ filePath, content } = {}) => {
-    if (!filePath || typeof filePath !== 'string') throw new Error('缺少有效的文件路径');
+    assertWritablePath(filePath);
     fs.writeFileSync(filePath, String(content ?? ''), 'utf8');
+    consumeSavedPath(filePath);
     return true;
   });
   handle('app:writeBinaryFile', ({ filePath, base64 } = {}) => {
-    if (!filePath || typeof filePath !== 'string') throw new Error('缺少有效的文件路径');
+    assertWritablePath(filePath);
     fs.writeFileSync(filePath, Buffer.from(String(base64 ?? ''), 'base64'));
+    consumeSavedPath(filePath);
     return true;
   });
   // 分享卡片图：复制 PNG 到剪贴板（renderer 端 clipboard 失焦会失败，必须走主进程）
@@ -868,8 +942,10 @@ function registerIPCHandlers(store, window) {
   });
 
   // 期刊当前页导出（R13）：主进程按 DIP 矩形截取窗口区域，返回 PNG base64
+  // P1-1：原先误用未定义的 win（本作用域参数名是 window）→ 通道 100% ReferenceError。
   handle('app:captureRect', async (rect) => {
-    const image = await win.capturePage({
+    if (!window || window.isDestroyed()) throw new Error('主窗口不可用，无法截图');
+    const image = await window.capturePage({
       x: Math.max(0, Math.round(Number(rect?.x) || 0)),
       y: Math.max(0, Math.round(Number(rect?.y) || 0)),
       width: Math.max(1, Math.round(Number(rect?.width) || 1)),
@@ -1244,4 +1320,7 @@ module.exports = {
   storageStatsFor,
   cleanupStorage,
   notificationBridge,
+  registerSavedPath,
+  assertWritablePath,
+  consumeSavedPath,
 };

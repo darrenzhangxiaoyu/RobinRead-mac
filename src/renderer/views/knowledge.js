@@ -219,7 +219,7 @@ export class KnowledgeCenter {
           <svg class="kb-goal-svg" viewBox="0 0 88 88" role="img">
             <defs>
               <linearGradient id="kbGoalGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" stop-color="#617357"/><stop offset="1" stop-color="#a3573d"/>
+                <stop offset="0" style="stop-color: var(--accent, #617357)"/><stop offset="1" style="stop-color: var(--warm-accent, #a3573d)"/>
               </linearGradient>
             </defs>
             <circle class="kb-goal-track" cx="44" cy="44" r="${R}"/>
@@ -259,10 +259,12 @@ export class KnowledgeCenter {
       el.appendChild(sparkWrap);
 
       requestAnimationFrame(() => {
-        const css = getComputedStyle(document.documentElement);
-        const readColor = css.getPropertyValue('--accent').trim() || '#617357';
-        const knowColor = css.getPropertyValue('--warm-accent').trim() || '#a3573d';
-        const gridColor = css.getPropertyValue('--note-border').trim() || '#ddd';
+        // 令牌从 body 读取：body.dark 覆盖的暗态令牌（--note-background 等）才能解析到暗值
+        const css = getComputedStyle(document.body);
+        const token = (name, fb) => (css.getPropertyValue(name) || '').trim() || fb;
+        const readColor = token('--accent', '#617357');
+        const knowColor = token('--warm-accent', '#a3573d');
+        const gridColor = token('--note-border', '#d8d5c6');
         const dpr = window.devicePixelRatio || 1;
         // 画布宽度取自身 content-box（CSS width:100% 已扣除卡片 padding）；取 parent clientWidth 会连 padding 一起量，右缘溢出卡片
         const H = 120;
@@ -530,7 +532,7 @@ export class KnowledgeCenter {
       card.className = 'kb-card';
       card.innerHTML = `
         ${hl.articleTitle ? `<div class="kb-card-source">${icon('newspaper')}<span></span></div>` : ''}
-        <div class="kb-hl-text" style="border-left: 3px solid ${hl.color === 'blue' ? 'var(--accent)' : '#d4a834'};"></div>
+        <div class="kb-hl-text" style="border-left: 3px solid ${hl.color === 'blue' ? 'var(--accent, #617357)' : 'var(--kb-hl-yellow, #d4a834)'};"></div>
         ${hl.note ? `<div class="kb-hl-note">${escapeHTML(hl.note)}</div>` : ''}
         <div class="kb-card-foot">
           ${hl.createdAt ? `<span class="kb-card-time">${escapeHTML(timeAgo(hl.createdAt))}</span>` : ''}

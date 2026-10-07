@@ -16,6 +16,15 @@ class AihotService {
   constructor() {
     this._cache = new Map(); // key -> { data, at }
     this._ttl = 5 * 60 * 1000; // 5 分钟缓存
+    this._cacheCap = 100; // P2-7：缓存条目上限（分页/搜索 key 无限增长会吃内存）
+  }
+
+  /** 缓存封顶：超出删最旧（Map 插入序即新旧序）。 */
+  _trimCache() {
+    while (this._cache.size > this._cacheCap) {
+      const oldest = this._cache.keys().next().value;
+      this._cache.delete(oldest);
+    }
   }
 
   async _getJSON(path, { ttl = this._ttl } = {}) {
@@ -33,6 +42,7 @@ class AihotService {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = await response.json();
       this._cache.set(path, { data, at: Date.now() });
+      this._trimCache();
       return data;
     } finally {
       clearTimeout(timer);
@@ -239,6 +249,7 @@ class AihotService {
       }
       if (models.length === 0) throw new Error('leaderboard parse empty');
       this._cache.set('/leaderboard', { data: models, at: Date.now() });
+      this._trimCache();
       return models;
     } finally {
       clearTimeout(timer);

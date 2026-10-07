@@ -63,9 +63,14 @@ export class ListView {
       }
       const isMove = key === 'j' || key === 'k';
       if (!isMove && !(event.key === 'Enter' || key === 'o')) return;
+      // P1-7：J/K 让路——阅读器栏为活动栏（column-focused）时，全局 j/k 负责
+      // 「下一篇/上一篇」导航（app.js navigateList）；列表/侧栏活动时才是本视图的光标模型
+      if (isMove && document.getElementById('reader')?.classList.contains('column-focused')) return;
       const curIdx = this.items.findIndex((it) => it.id === this.cursorID);
       if (!isMove) {
         event.preventDefault();
+        // 同为 document 级监听：stopPropagation 挡不住同节点后续监听器，须立即中止
+        event.stopImmediatePropagation(); // P1-7：命中 Enter/O 不外泄（防与全局 O 双击开原文叠加）
         if (curIdx >= 0) {
           const item = this.items[curIdx];
           this.handlers.onSelect(item.id, item);
@@ -74,6 +79,7 @@ export class ListView {
       }
       if (!this.items.length) return;
       event.preventDefault();
+      event.stopImmediatePropagation(); // P1-7：命中 J/K 即止——阻断全局处理器再做一次 navigateList（双开根源）
       const atEnd = curIdx === this.items.length - 1;
       const next = Math.min(this.items.length - 1, Math.max(0, curIdx + (key === 'j' ? 1 : -1)));
       // J 触底（R29）：请求下一页，到位后继续 J 即无缝续览
@@ -162,7 +168,13 @@ export class ListView {
 
   /** 渲染签名（R33）：视野/选中/未读徽/视图形态 + 逐条 id 与三态，任何实质变化都换签名。 */
   _renderSig(items, scope, selectedID, hasUnread) {
-    let h = `${scope?.kind || ''}|${scope?.id || scope?.name || ''}|${selectedID || ''}|${hasUnread ? 1 : 0}|${this.viewMode}`;
+    // P2-4：签名必须完整区分视野——原 kind+id/name 会把 {kind:'folder',folderName:A} 与
+    // {kind:'folder',folderName:B} 等不同视野判为同一签名，导致切视野后列表不重渲染
+    const scopeKey = scope
+      ? [scope.kind || '', scope.id || '', scope.name || '', scope.folderName || '', scope.tag || '', scope.feedID || '',
+        (scope.feedIDs || []).join(','), scope.accountID || ''].join('\u0002')
+      : '';
+    let h = `${scopeKey}|${selectedID || ''}|${hasUnread ? 1 : 0}|${this.viewMode}`;
     for (const it of items) h += `|${it.id}:${it.isRead ? 1 : 0}${it.isStarred ? 1 : 0}${it.isLater ? 1 : 0}`;
     return h;
   }
@@ -180,6 +192,7 @@ export class ListView {
     const sig = this._renderSig(items, scope, selectedID, hasUnread);
     if (sig === this._lastSig && !this._sigBust) {
       this.items = items;
+      this.scope = scope; // P2-4：早退分支同样同步视野（否则 this.scope 停留在旧视野，后续逻辑取错）
       return;
     }
     this._lastSig = sig;
@@ -653,7 +666,7 @@ export class ListView {
     mast.className = 'nj-edition';
 
     // 纸张质感四选（paper/white/book/kraft；夜间独立记忆见 paper-pref.js）
-    const papers = [['paper', '纸感'], ['white', '素白'], ['book', '书卷'], ['kraft', '牛皮']];
+    const papers = [['paper', t('纸感')], ['white', t('素白')], ['book', t('书卷')], ['kraft', t('牛皮')]];
     const paperNow = paperPref();
     this.rowsHost.closest('.list-scroll')?.classList.add(`nj-mag-${paperNow}`);
     const paperBtn = document.createElement('button');
@@ -693,7 +706,7 @@ export class ListView {
     const readBtn = document.createElement('button');
     readBtn.className = 'nj-edition-paper nj-edition-read';
     readBtn.title = t('翻页阅读本期文章');
-    readBtn.textContent = '翻页阅读';
+    readBtn.textContent = t('翻页阅读'); // P2-5：原为硬编码中文
     readBtn.addEventListener('click', () => {
       const er = new EditionReader({
         items,
@@ -1207,7 +1220,32 @@ function stripHtml(s) {
     .replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * 相似报道聚类：同标题语义（3-gram Jaccard>0.55）折叠为一行。
+ * 性能：原实现每次 render 全量 O(n²) 重算——按 items 身份签名（id+标题）缓存
+ * 分组结构（按 id 记忆），行集未变直接复用并重绑当前对象（读/星状态不参与聚类，
+ * 但行渲染用的是当前 items，故命中时按 id 重绑，避免行内状态陈旧）。
+ */
+let _clusterSig = null;
+let _clusterGroups = null; // [{ type: 'cluster'|'single', ids: string[] }]
+
 function clusterSimilar(items) {
+  const sig = items.map((it) => `${it.id}\u0001${it.title}`).join('\u0000');
+  if (sig === _clusterSig && _clusterGroups) {
+    const byID = new Map(items.map((it) => [it.id, it]));
+    const revived = [];
+    for (const g of _clusterGroups) {
+      if (g.type === 'cluster') {
+        const its = g.ids.map((id) => byID.get(id)).filter(Boolean);
+        if (its.length >= 2) { revived.push({ type: 'cluster', items: its }); continue; }
+        for (const it of its) revived.push({ type: 'single', item: it });
+      } else {
+        const it = byID.get(g.ids[0]);
+        if (it) revived.push({ type: 'single', item: it });
+      }
+    }
+    return revived;
+  }
   const out = [];
   const grams = items.map((item) => trigrams(item.title));
   const used = new Array(items.length).fill(false);
@@ -1225,6 +1263,8 @@ function clusterSimilar(items) {
     if (group.length >= 2) out.push({ type: 'cluster', items: group });
     else out.push({ type: 'single', item: group[0] });
   }
+  _clusterSig = sig;
+  _clusterGroups = out.map((g) => ({ type: g.type, ids: g.type === 'cluster' ? g.items.map((x) => x.id) : [g.item.id] }));
   return out;
 }
 

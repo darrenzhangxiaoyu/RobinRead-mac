@@ -63,11 +63,18 @@ export class ReadingControls {
     };
     const addSeg = (sec, options, current, onChange) => sec.appendChild(seg(options, current, onChange));
 
+    // P2-2：字号真源是根节点 CSS 变量 --article-font-size（app.applyFontSize 写入）。
+    // 原 window.__robinArticleFontSize 从未赋值，字号段高亮恒为 17。
+    const currentFontSize = () => {
+      const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--article-font-size'));
+      return Number.isFinite(v) && v > 0 ? v : 17;
+    };
+
     // ── 版面 ──
     const secType = addSection(t('版面'));
     addSeg(secType, [['serif', t('衬线')], ['sans', t('无衬线')], ['wenkai', t('文楷')]], layout.fontFamily || 'serif',
       (v) => window.robin.setReaderLayout({ fontFamily: v }));
-    addSeg(secType, [[15, '15'], [17, '17'], [19, '19'], [21, '21'], [24, '24']], window.__robinArticleFontSize || 17,
+    addSeg(secType, [[15, '15'], [17, '17'], [19, '19'], [21, '21'], [24, '24']], currentFontSize(),
       (v) => window.robin.setFontSize(Number(v)));
     addSeg(secType, [['compact', t('紧凑')], ['standard', t('标准')], ['loose', t('宽松')]], layout.lineHeight || 'standard',
       (v) => window.robin.setReaderLayout({ lineHeight: v }));

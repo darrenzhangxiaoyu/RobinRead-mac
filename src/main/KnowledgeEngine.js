@@ -10,69 +10,22 @@ class KnowledgeEngine {
   constructor(store) {
     this.store = store;
     this.llm = new LLMService();
-    this._ensureTables();
+    this._verifySchema();
   }
 
-  _ensureTables() {
-    this.store.database.exec(`
-      CREATE TABLE IF NOT EXISTS highlights (
-        id TEXT PRIMARY KEY NOT NULL, item_id TEXT NOT NULL, text TEXT NOT NULL,
-        color TEXT DEFAULT 'yellow', note TEXT, paragraph_id TEXT,
-        start_offset INTEGER, end_offset INTEGER, created_at REAL NOT NULL,
-        FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS notes (
-        id TEXT PRIMARY KEY NOT NULL, item_id TEXT NOT NULL, content TEXT NOT NULL,
-        tags TEXT, linked_notes TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL,
-        FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS review_queue (
-        id TEXT PRIMARY KEY NOT NULL, item_id TEXT NOT NULL, highlight_id TEXT,
-        ease_factor REAL DEFAULT 2.5, interval_days INTEGER DEFAULT 1, repetitions INTEGER DEFAULT 0,
-        next_review_at REAL NOT NULL, last_reviewed_at REAL,
-        FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS smart_folders (
-        id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, query TEXT NOT NULL,
-        filters TEXT, sort_by TEXT DEFAULT 'date', created_at REAL NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS article_tags (
-        item_id TEXT NOT NULL, tag TEXT NOT NULL, source TEXT DEFAULT 'auto',
-        PRIMARY KEY(item_id, tag), FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS reading_stats (
-        date TEXT PRIMARY KEY NOT NULL, articles_read INTEGER DEFAULT 0,
-        articles_starred INTEGER DEFAULT 0, highlights_made INTEGER DEFAULT 0,
-        notes_created INTEGER DEFAULT 0, ai_summaries_generated INTEGER DEFAULT 0,
-        reading_time_minutes REAL DEFAULT 0
-      );
-      CREATE TABLE IF NOT EXISTS collections (
-        id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT, created_at REAL NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS collection_items (
-        collection_id TEXT NOT NULL, item_id TEXT NOT NULL, added_at REAL NOT NULL,
-        PRIMARY KEY(collection_id, item_id),
-        FOREIGN KEY(collection_id) REFERENCES collections(id) ON DELETE CASCADE,
-        FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS ai_quality_scores (
-        item_id TEXT PRIMARY KEY NOT NULL, rule_score INTEGER, ai_score REAL,
-        ai_reasoning TEXT, ai_keywords TEXT, ai_reading_level TEXT,
-        is_technical INTEGER DEFAULT 0, scored_at REAL NOT NULL,
-        FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-    `);
-    // 2026-08 批注锚点升级：高亮/笔记带重锚定上下文（prefix/suffix/quote），
-    // 正文重渲染（翻译包裹/原文重排/换 contentHash）后仍可精确定位
-    this._addColumnIfMissing('highlights', 'anchor', 'TEXT');
-    this._addColumnIfMissing('notes', 'anchor', 'TEXT');
-  }
-
-  /** 幂等加列（旧库升级）。 */
-  _addColumnIfMissing(table, column, type) {
-    const cols = this.store.database.prepare(`PRAGMA table_info(${table})`).all();
-    if (!cols.some((c) => c.name === column)) {
-      this.store.database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  /**
+   * 能力检查（P2-2）：表结构由 DatabaseMigrations v9 统一创建，构造器不再执行
+   * ad-hoc DDL（违反迁移铁律）。缺表说明迁移链未执行——显式报错好过后续每条
+   * SQL 各自报「no such table」。已有库升级：v9 内 IF NOT EXISTS 原样保留数据。
+   */
+  _verifySchema() {
+    const required = ['highlights', 'notes', 'review_queue', 'smart_folders',
+      'article_tags', 'reading_stats', 'collections', 'collection_items', 'ai_quality_scores'];
+    const missing = required.filter((table) => !this.store.database.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?"
+    ).get(table));
+    if (missing.length) {
+      throw new Error(`数据库 schema 缺少知识引擎表（${missing.join(', ')}）：DatabaseMigrations v9 未执行`);
     }
   }
 
@@ -428,7 +381,9 @@ class KnowledgeEngine {
   /** 聚合某日（默认今天）的高亮与笔记，生成回顾。 */
   dailyReview(dateStr = null) {
     const day = dateStr || this._localDate();
-    const start = Date.parse(day + 'T00:00:00Z') / 1000;
+    // P2-3：本地时区口径（与 _localDate 一致）。ISO 日期串不带 Z 按 ES 规范即本地
+    // 午夜——原先硬拼 'T00:00:00Z' 会把 UTC+8 的当天回顾错位到前一天 08:00 起。
+    const start = Date.parse(day + 'T00:00:00') / 1000;
     const end = start + 86400;
     const highlights = this.store.database.prepare(`
       SELECT h.*, a.title as article_title FROM highlights h

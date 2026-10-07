@@ -41,6 +41,8 @@ const state = {
   selectedEntryID: null,
   retainedIDs: new Set(),       // 未读会话保留（对应 retainedUnreadIDs）
   listItems: [],
+  activeQuery: '',            // 当前搜索词（runSearch / 智能文件夹共用）
+  searchMode: false,          // P1-5：搜索态标志——runSearch 维护，驱动「搜索结果进文自动高亮」闭环
   zenMode: false,
   sidebarCollapsed: false,
   activeColumn: 1,              // 0=sidebar 1=list 2=reader
@@ -54,6 +56,9 @@ const state = {
 const views = {};
 let navConfirmation = null;     // { key, entryID, expiresAt, timer }
 let toastTimer = null;
+// P1-8：列表请求序号——reloadList 与 onStateChanged 全量重拉并发竞争时，
+// 只有最新请求的返回才允许落地（视野切换乱序的根源修复）
+let listReqSeq = 0;
 
 // MARK: - 启动
 
@@ -728,8 +733,10 @@ async function reloadSidebar() {
 }
 
 async function reloadList({ resetScroll = false } = {}) {
+  const seq = ++listReqSeq; // P1-8：登记本次请求序号，过期返回直接丢弃
   const result = await window.robin.getList(state.scope, { limit: 100, retainingIDs: [...state.retainedIDs], sort: currentListSort() });
   if (!result.ok) return;
+  if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次结果过期
   state.listItems = result.data;
   views.list.render(state.listItems, state.scope, state.selectedEntryID, currentHasUnread());
   views.list.setDigestVisible(state.scope?.kind === 'today' || state.scope?.kind === 'unread');
@@ -746,11 +753,13 @@ async function runSearch(query) {
   if (!query) {
     views.list.setSearchMode(false);
     state.activeQuery = '';
+    state.searchMode = false; // P1-5：清空搜索退出搜索态，后续进文不再自动高亮
     views.list.setDigestVisible(state.scope?.kind === 'today' || state.scope?.kind === 'unread');
     await reloadList();
     return;
   }
   state.activeQuery = query;
+  state.searchMode = true; // P1-5：从搜索结果进入文章 → reader.searchAfterOpen 自动高亮首个命中
   views.list.setSearchMode(true);
   views.list.setDigestVisible(false);
   // 优先全文搜索（含正文），空结果回退到标题/摘要搜索
@@ -774,14 +783,15 @@ function renderDigestVisual(raw, refs, meta, onClose = null) {
   const now = new Date();
   const locale = window.__robinLanguage === 'en' ? 'en-US' : 'zh-CN';
   const dateStr = now.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
-  const week = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+  // P2-5：星期名改按界面语言经 Intl 取（原 t('星期'+week) 动态拼 key 永不命中）
+  const weekdayStr = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(now);
   const hero = document.createElement('div');
   hero.className = 'dg-hero';
   const topicCount = (String(raw).match(/^## 主题：/gm) || []).length;
   const modeLabel = meta?.mode === 'deep' ? t('精读版') : t('简报版');
   hero.innerHTML = `
     <div class="dg-hero-date"></div>
-    <div class="dg-hero-sub">${escapeHTMLInline(t('今日 AI 简报'))} · ${escapeHTMLInline(modeLabel)} · ${t('星期' + week)}</div>
+    <div class="dg-hero-sub">${escapeHTMLInline(t('今日 AI 简报'))} · ${escapeHTMLInline(modeLabel)} · ${escapeHTMLInline(weekdayStr)}</div>
     <div class="dg-hero-stats">
       <span class="dg-stat"><b>${meta?.items ?? '—'}</b>${escapeHTMLInline(t('篇文章'))}</span>
       <span class="dg-stat"><b>${topicCount || '—'}</b>${escapeHTMLInline(t('个主题'))}</span>
@@ -967,14 +977,28 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
     showTodayDigest({ forceRegenerate: true, mode });
   });
 
+  // 性能：流式 delta 高频到达——rAF 合帧渲染（一帧至多一次全量重建），
+  // 且仅当用户本就停在底部时才自动跟随滚动（翻看上文不被拽回底部）
+  let rafPending = false;
+  let pendingPaint = null;
   const renderInto = (content, refs, meta, streaming) => {
     lastContent = content || '';
     lastRefs = refs || [];
-    body.classList.remove('loading');
-    body.classList.toggle('streaming', !!streaming);
-    body.innerHTML = '';
-    body.appendChild(renderDigestVisual(content, refs, { ...meta, mode }, () => overlay.remove()));
-    body.scrollTop = body.scrollHeight;
+    pendingPaint = { content, refs, meta, streaming };
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      const job = pendingPaint;
+      pendingPaint = null;
+      if (!job || !document.body.contains(body)) return; // 弹窗已关闭
+      const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+      body.classList.remove('loading');
+      body.classList.toggle('streaming', !!job.streaming);
+      body.innerHTML = '';
+      body.appendChild(renderDigestVisual(job.content, job.refs, { ...job.meta, mode }, () => overlay.remove()));
+      if (nearBottom) body.scrollTop = body.scrollHeight; // 首帧/缓存渲染时内容未溢出，等效始终落底
+    });
   };
 
   // 当日缓存：秒开渲染 + 提供「重新生成」；强制重新生成或无缓存时走流式
@@ -1170,6 +1194,9 @@ function handleScopeSelect(scope) {
   state.scope = scope;
   state.selectedEntryID = null;
   state.retainedIDs.clear();
+  state.searchMode = false; // P1-5：切换视野退出搜索态——残留 searchMode 会让旧查询误高亮新文章
+  state.activeQuery = '';
+  views.list.clearSearch?.();
   views.reader.clear();
   reloadSidebar();
   reloadList({ resetScroll: true });
@@ -1383,10 +1410,18 @@ function bindKeyboard() {
       event.preventDefault(); new ShortcutsView().present(); return;
     }
 
+    // 期刊打开（P1-4）：裸键整体让路——期刊 _keydown 以 capture 阶段独占键盘
+    // （与 list.js _navKey 对 .er-overlay 的既有约定一致，杜绝 j/k/F/S/空格/←→ 双触发）。
+    // Ctrl/Cmd 系全局快捷键（上方分支）不在此列：命令面板在期刊打开时仍可用（R20 期刊命令组）
+    if (document.querySelector('.er-overlay')) return;
+
     if (typing) return;
 
     // j/k 下一篇/上一篇（列表导航，vim 风格）
+    // P1-7：仅阅读器为活动栏时由全局处理器做上/下一篇导航；列表/侧栏栏活动时
+    // 让路给 R28 光标模型（list.js _navKey：J/K 移光标，Enter/O 打开），不再双开
     if (event.code === 'KeyJ' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      if (state.activeColumn !== 2) return;
       event.preventDefault();
       navigateList(1);
       return;
@@ -1425,6 +1460,7 @@ function bindKeyboard() {
       return;
     }
     if (event.code === 'KeyK' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      if (state.activeColumn !== 2) return; // P1-7：列表栏活动时让路给 _navKey 光标模型
       event.preventDefault();
       navigateList(-1);
       return;
@@ -1788,6 +1824,7 @@ async function runSmartFolderSearch(name, query) {
   const items = result.ok ? result.data : [];
   state.listItems = items;
   state.activeQuery = query;
+  state.searchMode = true; // P1-5：智能文件夹=保存的搜索，进文同样自动高亮关键词
   views.list.setSearchMode(true);
   views.list.setDigestVisible(false);
   views.list.render(items, { kind: 'smart', name }, state.selectedEntryID, false);
@@ -1984,8 +2021,9 @@ function bindEvents() {
       return;
     }
     // 静默刷新行状态（不整体重建，避免打断滚动与选择）
+    const seq = ++listReqSeq; // P1-8：与 reloadList 同一序号空间，互相竞争时新者胜
     const result = await window.robin.getList(state.scope, { limit: Math.max(100, state.listItems.length), retainingIDs: [...state.retainedIDs], sort: currentListSort() });
-    if (result.ok) {
+    if (result.ok && seq === listReqSeq) {
       const beforeIDs = new Set(state.listItems.map((entry) => entry.id));
       const afterIDs = new Set(result.data.map((entry) => entry.id));
       let sameSet = beforeIDs.size === afterIDs.size;

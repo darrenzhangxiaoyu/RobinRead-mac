@@ -172,9 +172,10 @@ export class CommandPalette {
         reset.textContent = t('清空搜索，显示全部命令');
         reset.addEventListener('click', () => {
           this.query = '';
-          if (this.inputEl) this.inputEl.value = '';
+          if (this.input) this.input.value = ''; // P2-1：实例字段是 this.input（原 this.inputEl 不存在，清空失效）
           this.activeIndex = 0;
-          this._filter();
+          this._filter('');
+          this.input?.focus(); // 清空后焦点回输入框，可直接继续键入
         });
         this.listHost.appendChild(reset);
       }

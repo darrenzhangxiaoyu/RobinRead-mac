@@ -16,48 +16,21 @@ const { nowSeconds, uuid } = require('./Models');
 class EvolutionEngine {
   constructor(store) {
     this.store = store;
-    this._ensureTables();
+    this._verifySchema();
   }
 
-  _ensureTables() {
-    this.store.database.exec(`
-      CREATE TABLE IF NOT EXISTS feed_health (
-        feed_id TEXT PRIMARY KEY NOT NULL,
-        fetch_success_count INTEGER DEFAULT 0,
-        fetch_failure_count INTEGER DEFAULT 0,
-        consecutive_failures INTEGER DEFAULT 0,
-        last_success_at REAL,
-        last_failure_at REAL,
-        last_error TEXT,
-        entry_count INTEGER DEFAULT 0,
-        is_dead INTEGER DEFAULT 0,
-        FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
-      );
-      CREATE TABLE IF NOT EXISTS reading_behavior (
-        id TEXT PRIMARY KEY NOT NULL,
-        item_id TEXT NOT NULL,
-        feed_id TEXT,
-        action TEXT NOT NULL,
-        weight REAL NOT NULL DEFAULT 1.0,
-        created_at REAL NOT NULL,
-        FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_behavior_item ON reading_behavior(item_id);
-      CREATE INDEX IF NOT EXISTS idx_behavior_feed ON reading_behavior(feed_id);
-      CREATE TABLE IF NOT EXISTS ai_feedback (
-        id TEXT PRIMARY KEY NOT NULL,
-        item_id TEXT,
-        kind TEXT NOT NULL,
-        rating INTEGER NOT NULL,
-        comment TEXT,
-        created_at REAL NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS interest_profile (
-        key TEXT PRIMARY KEY NOT NULL,
-        value REAL NOT NULL,
-        updated_at REAL NOT NULL
-      );
-    `);
+  /**
+   * 能力检查（P2-2）：表结构由 DatabaseMigrations v9 统一创建，构造器不再执行
+   * ad-hoc DDL。缺表即迁移链未执行——显式报错，避免后续逐条「no such table」。
+   */
+  _verifySchema() {
+    const required = ['feed_health', 'reading_behavior', 'ai_feedback', 'interest_profile'];
+    const missing = required.filter((table) => !this.store.database.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?"
+    ).get(table));
+    if (missing.length) {
+      throw new Error(`数据库 schema 缺少自进化引擎表（${missing.join(', ')}）：DatabaseMigrations v9 未执行`);
+    }
   }
 
   // ── 源健康 ────────────────────────────────────────────────

@@ -73,13 +73,16 @@ function parseJSON(text) {
   const items = (decoded.items || []).map((item) => {
     const link = item.url || item.external_url || null;
     const body = item.content_html ?? item.content_text ?? null;
+    const summary = decodeHTMLEntities(item.summary || (body ? plainText(body) : ''));
     return {
-      id: item.id || link || uuidLike(),
+      // P2-10：无 guid/link 时用确定性内容身份（标题+摘要前缀）——同 feed 内稳定，
+      // 原先随机 uuid 让这类条目每次解析都换身份 → 刷新即重复入库。
+      id: item.id || link || deterministicFallback(item.title, summary),
       title: decodeHTMLEntities((item.title || '').trim()) || '未命名文章',
       author: item.authors && item.authors[0] ? item.authors[0].name : null,
       url: link,
       publishedAt: parseDate(item.date_published),
-      summary: decodeHTMLEntities(item.summary || (body ? plainText(body) : '')),
+      summary,
       contentHTML: item.content_text
         ? normalizeFeedMarkup(item.content_text)
         : normalizeFeedMarkup(item.content_html ?? null),
@@ -95,12 +98,13 @@ function parseJSON(text) {
   };
 }
 
-function uuidLike() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+/**
+ * 无 guid/link/date 条目的确定性兜底身份（P2-10）：
+ * `${title}|${summary.slice(0,200)}`——同一 feed 内同标题+同摘要前缀的条目
+ * 每次解析得到同一 id，入库判重才有效（随机 uuid 会造成重复文章）。
+ */
+function deterministicFallback(title, summary) {
+  return `${String(title || '')}|${String(summary || '').slice(0, 200)}`;
 }
 
 function parseDate(value) {
@@ -326,8 +330,11 @@ function parseXML(xml, baseURL) {
         // mid/idx/sn 参数丢失（跳转到微信首页而非原文）。此处统一补一次实体解码。
         const linkString = currentItemLink ?? (currentItem.link ? resolveURL(decodeXMLEntities(currentItem.link)) : null);
         const body = currentItem.content ?? currentItem.summary ?? currentItem.description ?? null;
+        // hnrss 等链接聚合源：description 是元信息非正文 → 转友好卡片 + 短摘要
+        let entrySummary = plainText(currentItem.summary ?? currentItem.description ?? body ?? '');
+        // P2-10：兜底身份改为确定性内容（标题+摘要前缀），替换原随机 uuid
         const stable = currentItem.guid ?? currentItem.id ?? linkString
-          ?? `${currentItem.title || ''}|${currentItem.published ?? currentItem.pubdate ?? uuidLike()}`;
+          ?? deterministicFallback(currentItem.title, entrySummary);
         // AIHOT 聚合站：剥「via」转发壳，但 url 保留 item 页（item 页可 SSR 完整内容，
         // 打开时由 extractArticle 抓取完整信息）；content 里保留「🔗 阅读原文」真实原文入口
         let entryURL = linkString;
@@ -335,8 +342,6 @@ function parseXML(xml, baseURL) {
         if (isAggregatorItemPage(entryURL) && entryContent) {
           entryContent = stripAggregatorTail(entryContent);
         }
-        // hnrss 等链接聚合源：description 是元信息非正文 → 转友好卡片 + 短摘要
-        let entrySummary = plainText(currentItem.summary ?? currentItem.description ?? body ?? '');
         if (entryContent) {
           const meta = transformAggregatorMeta(entryContent);
           if (meta) {

@@ -320,18 +320,19 @@ class ArticleRepository {
         entry.dateArrived ?? now, now);
 
       this.db.prepare(`
-        INSERT INTO articles (item_id, title, author, url, published_at, summary, content_html, content_updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO articles (item_id, title, author, url, url_norm, published_at, summary, content_html, content_updated_at)
+        VALUES (?, ?, ?, ?, REPLACE(?, '&amp;', '&'), ?, ?, ?, ?)
         ON CONFLICT(item_id) DO UPDATE SET
           title = excluded.title,
           author = excluded.author,
           url = excluded.url,
+          url_norm = excluded.url_norm,
           published_at = excluded.published_at,
           summary = excluded.summary,
           content_updated_at = excluded.content_updated_at
       `).run(
         entry.id, entry.title || '未命名文章', entry.author ?? null, entry.url ?? null,
-        entry.publishedAt ?? null, entry.summary ?? '', entry.contentHTML ?? null, now
+        entry.url ?? null, entry.publishedAt ?? null, entry.summary ?? '', entry.contentHTML ?? null, now
       );
       // 注意：content_html 不在 DO UPDATE 中覆盖 —— 保留本地较新正文。
 
@@ -366,6 +367,24 @@ class ArticleRepository {
       LEFT JOIN article_states s ON s.item_id = i.id
       WHERE i.id = ?
     `).get(entryID));
+  }
+
+  /** 按 id 集合批量取条目（一次 IN 查询；_refreshLocalFeed 的 N+1 收敛用）。 */
+  entriesByIDs(ids) {
+    const list = (Array.isArray(ids) ? ids : []).filter(Boolean);
+    if (!list.length) return [];
+    const placeholders = list.map(() => '?').join(',');
+    return this.db.prepare(`
+      SELECT i.id, i.account_id, i.external_id, i.feed_id, i.created_at, i.updated_at,
+             a.title, a.author, a.url, a.published_at, a.summary, a.content_html,
+             COALESCE(s.is_read, 0) AS is_read, COALESCE(s.is_starred, 0) AS is_starred,
+             COALESCE(s.is_later, 0) AS is_later,
+             COALESCE(s.date_arrived, i.created_at) AS date_arrived
+      FROM items i
+      LEFT JOIN articles a ON a.item_id = i.id
+      LEFT JOIN article_states s ON s.item_id = i.id
+      WHERE i.id IN (${placeholders})
+    `).all(...list).map(entryRowToEntry);
   }
 
   entriesForFeed(feedID) {
@@ -584,6 +603,22 @@ class AIArtifactRepository {
 
   saveArtifact(artifact) {
     const now = nowSeconds();
+    // P2-12 行复用（防膨胀）：同 (subject_key, kind, content_hash) 的未删行沿用原 id
+    // UPSERT——重试/重生成/流式两段落盘不再每次 uuid 新行（旧行由 housekeeping 的
+    // 「同 item 同 kind 保留最新 3 条」兜底清理）。
+    let artifactId = artifact.id;
+    let createdAt = artifact.createdAt ?? now;
+    if (artifact.subjectKey != null) {
+      const existing = this.db.prepare(`
+        SELECT id, created_at FROM ai_artifacts
+        WHERE subject_key = ? AND kind = ? AND content_hash = ? AND is_deleted = 0
+        ORDER BY updated_at DESC LIMIT 1
+      `).get(artifact.subjectKey, artifact.kind, artifact.contentHash);
+      if (existing) {
+        artifactId = existing.id;
+        createdAt = existing.created_at;
+      }
+    }
     this.db.prepare(`
       INSERT INTO ai_artifacts (
         id, account_id, item_id, subject_key, kind, content_hash, model, target_language,
@@ -594,16 +629,19 @@ class AIArtifactRepository {
         content = excluded.content,
         segments_json = excluded.segments_json,
         is_complete = excluded.is_complete,
+        model = excluded.model,
+        target_language = excluded.target_language,
+        prompt_version = excluded.prompt_version,
         updated_at = excluded.updated_at
     `).run(
-      artifact.id, artifact.accountID ?? null, artifact.itemID ?? null, artifact.subjectKey,
+      artifactId, artifact.accountID ?? null, artifact.itemID ?? null, artifact.subjectKey,
       artifact.kind, artifact.contentHash, artifact.model, artifact.targetLanguage,
       artifact.promptVersion ?? 1, artifact.content ?? '',
       JSON.stringify(artifact.segments || []), artifact.selectionText ?? null,
       artifact.selectionArticleHash ?? null,
       artifact.selectionAnchor ? JSON.stringify(artifact.selectionAnchor) : null,
       artifact.isComplete ? 1 : 0,
-      artifact.createdAt ?? now, now
+      createdAt, now
     );
   }
 

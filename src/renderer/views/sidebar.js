@@ -8,7 +8,7 @@
  * - 文件夹行：单击选中；再次单击折叠/展开；右键（全部已读/重命名/删除）
  * - 底栏：设置齿轮 + NEW 版本胶囊（可忽略）
  */
-import { t } from '../i18n.js';
+import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 
 export class SidebarView {
@@ -155,6 +155,9 @@ export class SidebarView {
     // 「订阅源」拖拽头（仅本地账户根区展示，对应 SubscriptionsHeaderView 的移出文件夹语义放在文件夹内）
     const row = document.createElement('div');
     row.className = 'sidebar-row sidebar-folder-row';
+    // P1-6：文件夹行挂可更新锚点——updateCounts 据此刷新文件夹未读徽标
+    // （key 与主进程 sidebarCounts.unreadByFolder 的 `${accountID}::${folderName}` 同构）
+    row.dataset.folderKey = key;
     const selected = scope?.kind === 'folder' && scope.accountID === account.id && scope.folderName === folder.name;
     if (selected) row.classList.add('selected');
 
@@ -433,7 +436,7 @@ export class SidebarView {
     const version = String(release.tagName || '').replace(/^v/i, '');
     const capsule = document.createElement('span');
     capsule.className = 'update-capsule';
-    capsule.title = tf_('点击前往下载新版本 v{0}', version);
+    capsule.title = tf('点击前往下载新版本 v%@', version); // P2-5：本地中文模板改走 i18n
     capsule.innerHTML = `<span>NEW</span><span class="ver"></span><span class="dismiss" title="${attr(t('不再提示此版本更新'))}">✕</span>`;
     capsule.querySelector('.ver').textContent = `v${version}`;
     capsule.addEventListener('click', (event) => {
@@ -453,6 +456,10 @@ export class SidebarView {
     this.lastCounts = counts;
     this.scrollEl.querySelectorAll('.sidebar-row[data-feed-id]').forEach((row) => {
       this._bindCount(row, counts?.unreadByFeed?.[row.dataset.feedId] ?? 0);
+    });
+    // P1-6：文件夹未读徽标同步刷新（主进程 counts 推送含 unreadByFolder，键为 accountID::folderName）
+    this.scrollEl.querySelectorAll('.sidebar-row[data-folder-key]').forEach((row) => {
+      this._bindCount(row, counts?.unreadByFolder?.[row.dataset.folderKey] ?? 0);
     });
     const smartRows = this.scrollEl.querySelectorAll('.sidebar-row[data-scope]');
     const map = {
@@ -519,9 +526,4 @@ function letter(title) {
 
 function attr(value) {
   return String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-}
-
-function tf_(template, ...args) {
-  let index = 0;
-  return template.replace(/\{0\}|%lld|%@/g, () => String(args[index++] ?? ''));
 }

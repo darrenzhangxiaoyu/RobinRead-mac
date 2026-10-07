@@ -928,33 +928,34 @@ export class SettingsView {
     const provHost = provGroup.querySelector('.group-rows');
     this._renderProviders(provHost, llm, hasKey);
 
-    container.appendChild(group('阅读助手：摘要',
+    container.appendChild(group(t('阅读助手：摘要'),
       llm.automaticallyGenerateSummary ? t('首次打开尚无摘要的文章时自动生成；已有缓存不会重复请求。') : t('保持手动模式，只在你点击“生成摘要”后请求模型。'), [
-      toggleRow('展示 AI 摘要模块', t('关闭后，文章阅读页不显示摘要模块；已生成的摘要不会被删除。'), llm.showsAISummary !== false, setLLMField('showsAISummary')),
-      toggleRow('打开文章时自动生成 AI 摘要', t('开启后，打开没有缓存摘要的文章会自动发送正文到模型。'), Boolean(llm.automaticallyGenerateSummary), setLLMField('automaticallyGenerateSummary')),
+      toggleRow(t('展示 AI 摘要模块'), t('关闭后，文章阅读页不显示摘要模块；已生成的摘要不会被删除。'), llm.showsAISummary !== false, setLLMField('showsAISummary')),
+      toggleRow(t('打开文章时自动生成 AI 摘要'), t('开启后，打开没有缓存摘要的文章会自动发送正文到模型。'), Boolean(llm.automaticallyGenerateSummary), setLLMField('automaticallyGenerateSummary')),
     ]));
 
-    container.appendChild(group('阅读助手：翻译与划词', t('逐段翻译只处理当前屏幕视口内容；划词功能触发后以浮窗形式呈现。'), [
-      inputRow('翻译目标语言', t('你可以自由填入你想翻译成的语言，例如中文、英语、法语等。'), '简体中文', llm.targetLanguage, setLLMField('targetLanguage')),
-      toggleRow('划词解释按钮', t('开启后，划词选择文本时展示“直接解释”按钮'), llm.showsSelectionExplanation !== false, setLLMField('showsSelectionExplanation')),
-      toggleRow('划词提问按钮', t('开启后，划词选择文本时展示“向 AI 提问”按钮'), llm.showsSelectionAsk !== false, setLLMField('showsSelectionAsk')),
-      toggleRow('划词翻译按钮', t('开启后，划词选择文本时展示“翻译”按钮'), llm.showsSelectionTranslation !== false, setLLMField('showsSelectionTranslation')),
+    container.appendChild(group(t('阅读助手：翻译与划词'), t('逐段翻译只处理当前屏幕视口内容；划词功能触发后以浮窗形式呈现。'), [
+      inputRow(t('翻译目标语言'), t('你可以自由填入你想翻译成的语言，例如中文、英语、法语等。'), '简体中文', llm.targetLanguage, setLLMField('targetLanguage')),
+      toggleRow(t('划词解释按钮'), t('开启后，划词选择文本时展示“直接解释”按钮'), llm.showsSelectionExplanation !== false, setLLMField('showsSelectionExplanation')),
+      toggleRow(t('划词提问按钮'), t('开启后，划词选择文本时展示“向 AI 提问”按钮'), llm.showsSelectionAsk !== false, setLLMField('showsSelectionAsk')),
+      toggleRow(t('划词翻译按钮'), t('开启后，划词选择文本时展示“翻译”按钮'), llm.showsSelectionTranslation !== false, setLLMField('showsSelectionTranslation')),
     ]));
 
-    container.appendChild(group('个性化 Prompt', t('自定义指令会附加在系统默认 Prompt 之后（例如：“请用通俗易懂的口语解释”或“侧重分析工程实现细节”）。'), [
+    container.appendChild(group(t('个性化 Prompt'), t('自定义指令会附加在系统默认 Prompt 之后（例如：“请用通俗易懂的口语解释”或“侧重分析工程实现细节”）。'), [
       textAreaRow(llm.customPrompt || '', setLLMField('customPrompt')),
     ]));
 
-    container.appendChild(group('生成偏好（高级）', t('DeepSeek 会按此选项发送 thinking；选择低、中、高时也会发送对应的 reasoning_effort。'), [
-      row('推理偏好', t('仅在服务商明确支持时生效；翻译和划词解释会自动关闭推理。'), selectControl(
+    container.appendChild(group(t('生成偏好（高级）'), t('DeepSeek 会按此选项发送 thinking；选择低、中、高时也会发送对应的 reasoning_effort。'), [
+      row(t('推理偏好'), t('仅在服务商明确支持时生效；翻译和划词解释会自动关闭推理。'), selectControl(
+        // value 保持中文原值（主进程 LLMService 按中文字面量分支），仅显示文案走 i18n
         [['自动', t('自动')], ['关闭', t('关闭')], ['低', t('低')], ['中', t('中')], ['高', t('高')]],
         llm.reasoningMode || '自动',
         setLLMField('reasoningMode'),
       )),
     ]));
 
-    container.appendChild(group('连接安全（高级）', t('仅用于模型 Base URL。HTTP 未加密，只有在你信任局域网环境时才建议开启。'), [
-      toggleRow('允许局域网 HTTP（不安全）', null, Boolean(llm.allowInsecureLocalEndpoint), setLLMField('allowInsecureLocalEndpoint')),
+    container.appendChild(group(t('连接安全（高级）'), t('仅用于模型 Base URL。HTTP 未加密，只有在你信任局域网环境时才建议开启。'), [
+      toggleRow(t('允许局域网 HTTP（不安全）'), null, Boolean(llm.allowInsecureLocalEndpoint), setLLMField('allowInsecureLocalEndpoint')),
     ]));
   }
 
@@ -1071,7 +1072,7 @@ export class SettingsView {
               this.state.snapshot.llm = { ...(this.state.snapshot.llm || {}), model: value };
             });
         conn.appendChild(modelRow);
-        conn.appendChild(inputRow('API Key', hasKey ? t('已设置（仅保存在这台设备）') : null, '局域网模型可留空', '', async (value) => {
+        conn.appendChild(inputRow(t('API Key'), hasKey ? t('已设置（仅保存在这台设备）') : null, '局域网模型可留空', '', async (value) => {
           await window.robin.setAPIKey(value);
           this.handlers.onRefreshState?.();
         }, { password: true, placeholderFilled: hasKey }));
@@ -1161,8 +1162,8 @@ export class SettingsView {
       <div class="desc">${escapeHTML(t('同步功能正在完善中，正式上线前请继续使用本机数据与 FreshRSS 账号。'))}</div></div>`;
     container.appendChild(notice);
 
-    container.appendChild(group('隐私', null, [
-      row('API Key', null, staticText(t('仅存于本机，不参与同步'))),
+    container.appendChild(group(t('隐私'), null, [
+      row(t('API Key'), null, staticText(t('仅存于本机，不参与同步'))),
     ]));
   }
 

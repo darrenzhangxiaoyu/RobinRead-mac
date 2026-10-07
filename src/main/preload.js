@@ -141,6 +141,7 @@ contextBridge.exposeInMainWorld('robin', {
   ignoreVersion: (version) => invoke('update:ignoreVersion', version),
   updateDownload: () => invoke('update:download'),
   updateInstall: () => invoke('update:install'),
+  updateCancel: () => invoke('updater:cancel'),
   onUpdateProgress: (listener) => subscribe('update:progress', listener),
 
   // 事件订阅

@@ -178,7 +178,7 @@ class AppStore extends EventEmitter {
     this._repairAihotArticles();
     this._cleanupDuplicates();
     this._repairAggregatorMeta();
-    this._repairEncodedEntities(); // 存量标题/摘要 HTML 实体一次性自愈（借鉴上游 v1.4.2）
+    this._repairEncodedEntities().catch(() => { /* 自愈失败不阻塞启动，下次再试 */ }); // 存量标题/摘要 HTML 实体一次性自愈（借鉴上游 v1.4.2）
     // 全文索引回填（存量文章一次性，分批让出事件循环；FTS 不可用时内部自动跳过）
     setTimeout(() => { this._ftsBackfill().catch(() => {}); }, 8000);
   }
@@ -187,34 +187,50 @@ class AppStore extends EventEmitter {
    * 存量标题/摘要实体自愈（幂等，独立标记）：早期版本入库的 title/summary 可能残留
    * `&amp;` `&lt;` `&#39;` 等实体，阅读列表原样显示。只重写真正变化的行；含裸 `&`
    * 的普通标题（如 R&D）解码后不变、不写库。
+   * P2-9：①完成标记只在全量修完后置位——中途异常下次启动重试（原先失败也置位，
+   * 半修状态被永久跳过）；②全量 LIKE 扫描改 rowid 游标分批 + 30ms 让出（仿 _ftsBackfill），
+   * 大库启动不再被单条全表扫描阻塞。
    */
-  _repairEncodedEntities() {
+  async _repairEncodedEntities() {
     if (this.preferences.get('RobinRead.repair.encodedEntities', false) === true) return;
+    const decode = (value) => String(value ?? '')
+      .replace(/&#(\d+);/g, (m, d) => { const code = Number(d); return code > 31 && code < 65536 ? String.fromCodePoint(code) : m; })
+      .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
+      .replace(/&apos;/gi, "'").replace(/&#39;/gi, "'")
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&'); // & 必须最后解，避免二次解码
+    let totalFixed = 0;
+    let lastRowid = 0;
+    const batchSize = 500;
     try {
-      const decode = (value) => String(value ?? '')
-        .replace(/&#(\d+);/g, (m, d) => { const code = Number(d); return code > 31 && code < 65536 ? String.fromCodePoint(code) : m; })
-        .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&quot;/gi, '"')
-        .replace(/&apos;/gi, "'").replace(/&#39;/gi, "'")
-        .replace(/&nbsp;/gi, ' ')
-        .replace(/&amp;/gi, '&'); // & 必须最后解，避免二次解码
-      const rows = this.database.prepare(
-        "SELECT item_id, title, summary FROM articles WHERE title LIKE '%&%' OR summary LIKE '%&%'"
-      ).all();
-      const update = this.database.prepare('UPDATE articles SET title = ?, summary = ? WHERE item_id = ?');
-      let fixed = 0;
-      this.database.transaction(() => {
-        for (const row of rows) {
-          const title = decode(row.title);
-          const summary = decode(row.summary);
-          if (title !== row.title || summary !== row.summary) {
-            update.run(title, summary, row.item_id);
-            fixed += 1;
+      for (;;) {
+        const rows = this.database.prepare(`
+          SELECT rowid AS rid, item_id, title, summary FROM articles
+          WHERE rowid > ? AND (title LIKE '%&%' OR summary LIKE '%&%')
+          ORDER BY rowid LIMIT ?
+        `).all(lastRowid, batchSize);
+        if (!rows.length) break;
+        lastRowid = rows[rows.length - 1].rid;
+        let fixed = 0;
+        const update = this.database.prepare('UPDATE articles SET title = ?, summary = ? WHERE item_id = ?');
+        this.database.transaction(() => {
+          for (const row of rows) {
+            const title = decode(row.title);
+            const summary = decode(row.summary);
+            if (title !== row.title || summary !== row.summary) {
+              update.run(title, summary, row.item_id);
+              fixed += 1;
+            }
           }
-        }
-      });
-      if (fixed > 0) console.log(`[repair] encoded entities fixed: ${fixed}`);
-    } catch (_) { /* 自愈失败不阻塞启动 */ }
-    this.preferences.set('RobinRead.repair.encodedEntities', true);
+        });
+        totalFixed += fixed;
+        await new Promise((resolve) => setTimeout(resolve, 30)); // 分批让出事件循环
+      }
+      if (totalFixed > 0) console.log(`[repair] encoded entities fixed: ${totalFixed}`);
+      this.preferences.set('RobinRead.repair.encodedEntities', true); // 全部修完才置完成标记
+    } catch (e) {
+      console.warn('[repair] encoded entities repair interrupted (will retry on next launch):', e?.message || e);
+    }
   }
 
   /**
@@ -225,7 +241,8 @@ class AppStore extends EventEmitter {
     try {
       if (this.preferences.get('RobinRead.repair.articleData', false)) return;
       const fixed = this.database.prepare(
-        "UPDATE articles SET url = REPLACE(url, '&amp;', '&') WHERE url LIKE '%&amp;%'"
+        // url_norm 同步重算（P2-5）：判重走等值列，遗留实体行修复时两列必须一致
+        "UPDATE articles SET url = REPLACE(url, '&amp;', '&'), url_norm = REPLACE(url, '&amp;', '&') WHERE url LIKE '%&amp;%'"
       ).run();
       this.preferences.set('RobinRead.repair.articleData', true);
       if (fixed.changes > 0) console.log(`[repair] url 实体解码 ${fixed.changes} 条`);
@@ -265,16 +282,16 @@ class AppStore extends EventEmitter {
       if (this.preferences.get('RobinRead.repair.duplicates', false)) return;
       let dupRemoved = 0;
       const dupGroups = this.database.prepare(`
-        SELECT i.feed_id, REPLACE(a.url, '&amp;', '&') AS norm_url
+        SELECT i.feed_id, a.url_norm AS norm_url
         FROM items i INNER JOIN articles a ON a.item_id = i.id
-        WHERE a.url IS NOT NULL
+        WHERE a.url IS NOT NULL AND a.url != ''
         GROUP BY i.feed_id, norm_url HAVING COUNT(*) > 1
       `).all();
       const delItem = this.database.prepare('DELETE FROM items WHERE id = ?');
       for (const g of dupGroups) {
         const rows = this.database.prepare(`
           SELECT i.id FROM items i INNER JOIN articles a ON a.item_id = i.id
-          WHERE i.feed_id = ? AND REPLACE(a.url, '&amp;', '&') = ?
+          WHERE i.feed_id = ? AND a.url_norm = ?
           ORDER BY i.created_at ASC, i.id ASC
         `).all(g.feed_id, g.norm_url);
         for (let k = 1; k < rows.length; k++) {
@@ -827,9 +844,11 @@ class AppStore extends EventEmitter {
   _entryExistsByURL(feedID, url) {
     const normalized = String(url || '').replace(/&amp;/gi, '&');
     if (!normalized) return false;
+    // P2-5：等值匹配 url_norm（v10 迁移建列+索引+回填）——原先对列做
+    // REPLACE(a.url,'&amp;','&') 比较，函数计算让索引失效、每次判重全表扫。
     const row = this.database.prepare(`
       SELECT 1 FROM articles a INNER JOIN items i ON i.id = a.item_id
-      WHERE i.feed_id = ? AND REPLACE(a.url, '&amp;', '&') = ? LIMIT 1
+      WHERE i.feed_id = ? AND a.url_norm = ? LIMIT 1
     `).get(feedID, normalized);
     return !!row;
   }
@@ -1012,7 +1031,10 @@ class AppStore extends EventEmitter {
       if (!byAccount.has(item.accountID)) byAccount.set(item.accountID, []);
       byAccount.get(item.accountID).push(item.id);
     }
-    for (const entryID of entryIDs) this.statesRepo.setRead(entryID, true);
+    // P2-4：批量置读合并为单事务（原先每条 setRead 一个事务 = 每条一次 WAL fsync）
+    this.database.transaction(() => {
+      for (const entryID of entryIDs) this.statesRepo.setRead(entryID, true);
+    });
     if (entryIDs.length) {
       this._noteEntryChange(null, true, false); // 失效计数缓存
       this._bumpListSet(); // 未读/今日等视图的行集随批量已读变化
@@ -1037,16 +1059,19 @@ class AppStore extends EventEmitter {
   markMany(entryIDs, read = true) {
     const ids = (entryIDs || []).filter(Boolean);
     const byAccount = new Map();
-    for (const entryID of ids) {
-      this.statesRepo.setRead(entryID, Boolean(read));
-      if (read) this._retainedUnreadIDs.add(entryID);
-      const entry = this.articlesRepo.entry(entryID);
-      if (entry && entry.accountID !== LOCAL_ACCOUNT_ID) {
-        if (!byAccount.has(entry.accountID)) byAccount.set(entry.accountID, []);
-        byAccount.get(entry.accountID).push(entryID);
-        this.statesRepo.enqueueOutbox(entry.accountID, entryID, 'read', Boolean(read));
+    // P2-4：整批单事务（置库 + outbox 排队一起落盘），逐条推送语义不变
+    this.database.transaction(() => {
+      for (const entryID of ids) {
+        this.statesRepo.setRead(entryID, Boolean(read));
+        if (read) this._retainedUnreadIDs.add(entryID);
+        const entry = this.articlesRepo.entry(entryID);
+        if (entry && entry.accountID !== LOCAL_ACCOUNT_ID) {
+          if (!byAccount.has(entry.accountID)) byAccount.set(entry.accountID, []);
+          byAccount.get(entry.accountID).push(entryID);
+          this.statesRepo.enqueueOutbox(entry.accountID, entryID, 'read', Boolean(read));
+        }
       }
-    }
+    });
     if (ids.length) {
       this._noteEntryChange(null, true, false);
       this._bumpListSet();
@@ -1061,16 +1086,19 @@ class AppStore extends EventEmitter {
     const ids = (entryIDs || []).filter(Boolean);
     const want = Boolean(starred);
     const byAccount = new Map();
-    for (const entryID of ids) {
-      this.statesRepo.setStarred(entryID, want);
-      if (want) this._retainedStarredIDs.add(entryID);
-      const entry = this.articlesRepo.entry(entryID);
-      if (entry && entry.accountID !== LOCAL_ACCOUNT_ID) {
-        if (!byAccount.has(entry.accountID)) byAccount.set(entry.accountID, []);
-        byAccount.get(entry.accountID).push(entryID);
-        this.statesRepo.enqueueOutbox(entry.accountID, entryID, 'starred', want);
+    // P2-4：整批单事务，语义与逐条路径一致
+    this.database.transaction(() => {
+      for (const entryID of ids) {
+        this.statesRepo.setStarred(entryID, want);
+        if (want) this._retainedStarredIDs.add(entryID);
+        const entry = this.articlesRepo.entry(entryID);
+        if (entry && entry.accountID !== LOCAL_ACCOUNT_ID) {
+          if (!byAccount.has(entry.accountID)) byAccount.set(entry.accountID, []);
+          byAccount.get(entry.accountID).push(entryID);
+          this.statesRepo.enqueueOutbox(entry.accountID, entryID, 'starred', want);
+        }
       }
-    }
+    });
     if (ids.length) {
       this._noteEntryChange(null, false, want);
       this._scheduleOutboxDrain(1500);
@@ -1082,10 +1110,13 @@ class AppStore extends EventEmitter {
   /** 批量稍后读（单向入队；出队走单条）。later 视野行集变化 → _bumpListSet 全量重拉。 */
   laterMany(entryIDs, later = true) {
     const ids = (entryIDs || []).filter(Boolean);
-    for (const entryID of ids) {
-      this.statesRepo.setLater(entryID, Boolean(later));
-      if (later) this._retainedLaterIDs.add(entryID);
-    }
+    // P2-4：整批单事务
+    this.database.transaction(() => {
+      for (const entryID of ids) {
+        this.statesRepo.setLater(entryID, Boolean(later));
+        if (later) this._retainedLaterIDs.add(entryID);
+      }
+    });
     if (ids.length) {
       this._noteEntryChange(null, false, false, Boolean(later));
       this._bumpListSet();
@@ -1277,6 +1308,9 @@ class AppStore extends EventEmitter {
       const pageSize = Number(this.database.prepare('PRAGMA page_size').get().page_size);
       this.database.exec('PRAGMA wal_checkpoint(TRUNCATE)');
       this.database.exec('VACUUM');
+      // P1-4：VACUUM 可能重排 FTS rowid——SearchIndex 明文要求此后必须 rebuildMap，
+      // 否则映射失配、首查退化为全表扫（读时校验虽能自愈但代价高）。
+      try { SearchIndex.rebuildMap(this.database); } catch (_) { /* 映射重建失败不致命 */ }
       const after = Number(this.database.prepare('PRAGMA page_count').get().page_count);
       freedBytes = Math.max(0, (before - after) * pageSize);
     } catch (_) { /* 回收失败不致命：淘汰已完成 */ }
@@ -1609,6 +1643,12 @@ class AppStore extends EventEmitter {
         cache[pending[index].title] = translated;
       }
     }
+    // P2-6：缓存封顶 2000 条（参考 skipArticleTranslate 的做法）——整包偏好键
+    // 随时间无限增长会让每次写回 preferences.json 越来越大。键序即插入序，删最旧。
+    const cacheKeys = Object.keys(cache);
+    if (cacheKeys.length > 2000) {
+      for (const oldKey of cacheKeys.slice(0, cacheKeys.length - 2000)) delete cache[oldKey];
+    }
     this.preferences.set('RobinRead.titleTranslations', cache);
     return { translations: result };
   }
@@ -1753,10 +1793,12 @@ class AppStore extends EventEmitter {
       : null);
     if (!html) throw new Error(i18n.localized('文章暂无正文内容。'));
     const feed = this.feedsRepo.feed?.(entry.feedID) || null;
-    const title = entry.title || i18n.localized('未命名文章');
+    // P1-5：title / feed.title / author 都是来自 feed 的不可信字段，裸插进导出 HTML
+    // 会造成注入（标题携带 <script> 时导出文件打开即执行）。输出前一律 HTML 转义。
+    const title = escapeHtmlminimal(entry.title || i18n.localized('未命名文章'));
     const metaBits = [];
-    if (feed?.title) metaBits.push(feed.title);
-    if (entry.author) metaBits.push(entry.author);
+    if (feed?.title) metaBits.push(escapeHtmlminimal(feed.title));
+    if (entry.author) metaBits.push(escapeHtmlminimal(entry.author));
     if (entry.publishedAt) {
       const d = new Date(entry.publishedAt * 1000);
       if (!Number.isNaN(d.getTime())) metaBits.push(d.toISOString().slice(0, 10));
@@ -1839,6 +1881,16 @@ class AppStore extends EventEmitter {
           OR fetched_at < strftime('%s','now','-45 days');
         DELETE FROM reading_behavior WHERE id IN (
           SELECT id FROM reading_behavior ORDER BY created_at DESC LIMIT -1 OFFSET 5000
+        );
+      `);
+      // P2-12：同 item 同 kind 只保留最新 3 条（saveArtifact 已改按
+      // subject_key+content_hash 复用行，这里兜底清掉历史遗留的多余行）
+      this.database.exec(`
+        DELETE FROM ai_artifacts WHERE id IN (
+          SELECT id FROM (
+            SELECT id, ROW_NUMBER() OVER (PARTITION BY item_id, kind ORDER BY updated_at DESC) AS rn
+            FROM ai_artifacts WHERE item_id IS NOT NULL AND is_deleted = 0
+          ) WHERE rn > 3
         );
       `);
       SearchIndex.sweepOrphans(this.database); // 全文索引孤儿行（条目级联删除路径分散，每日兜底）
@@ -1977,7 +2029,9 @@ class AppStore extends EventEmitter {
       lastRefreshedAt: nowSeconds(),
     }));
     this.evolution.recordFetch({ feedID: feed.id, ok: true, entryCount: (result.parsed.entries || []).length });
-    return newIDs.map((id) => this.articlesRepo.entry(id)).filter(Boolean);
+    // 性能小修：新增条目一次 IN 查询取回（原先逐条 entry() 的 N+1），保持返回顺序
+    const byID = new Map(this.articlesRepo.entriesByIDs(newIDs).map((e) => [e.id, e]));
+    return newIDs.map((id) => byID.get(id)).filter(Boolean);
   }
 
   _scheduleAutoRefresh() {
@@ -2167,34 +2221,38 @@ class AppStore extends EventEmitter {
   }
 
   _applyReaderItems(accountID, items, idMap) {
-    for (const item of items) {
-      if (!item.id) continue;
-      const existingItemID = idMap.get(item.id);
-      // itemID 必须按账号作用域生成：items 主键是 id（不带 account_id），
-      // 不同 Reader 账号（FreshRSS/Miniflux）的外部 ID 都是 feed/1、tag:.../item/<hex>
-      // 这类服务端本地编号，极易重叠；不带账号前缀会让第二个账号的 upsert
-      // ON CONFLICT(id) 静默改写第一个账号的文章。存量行经 idMap 继续命中，升级安全。
-      const itemID = existingItemID ?? `gr:${accountID}:${stableDigest(item.id)}`;
-      const feed = this._feedForReaderItem(accountID, item);
-      if (!feed) continue;
+    // P2-4：整批单事务（upsertEntry 内层 SAVEPOINT 嵌套安全）——首启全量 200 条
+    // 原先每条一事务，一次同步 200 次 WAL fsync。
+    this.database.transaction(() => {
+      for (const item of items) {
+        if (!item.id) continue;
+        const existingItemID = idMap.get(item.id);
+        // itemID 必须按账号作用域生成：items 主键是 id（不带 account_id），
+        // 不同 Reader 账号（FreshRSS/Miniflux）的外部 ID 都是 feed/1、tag:.../item/<hex>
+        // 这类服务端本地编号，极易重叠；不带账号前缀会让第二个账号的 upsert
+        // ON CONFLICT(id) 静默改写第一个账号的文章。存量行经 idMap 继续命中，升级安全。
+        const itemID = existingItemID ?? `gr:${accountID}:${stableDigest(item.id)}`;
+        const feed = this._feedForReaderItem(accountID, item);
+        if (!feed) continue;
 
-      const publishedAt = item.published ?? item.updated ?? (item.timestampMS ?? item.crawlTimeMS) ?? nowSeconds();
-      const contentHTML = item.contentHTML ?? item.summaryContent ?? null;
-      const summary = contentHTML ? plainText(contentHTML).slice(0, 600) : '';
-      this.articlesRepo.upsertEntry({
-        id: itemID,
-        accountID,
-        externalID: item.id,
-        feedID: feed.id,
-        title: item.title || '未命名文章',
-        author: item.author,
-        url: item.canonicalURL ?? item.alternateURL,
-        publishedAt,
-        summary,
-        contentHTML,
-        dateArrived: (item.crawlTimeMS ?? publishedAt),
-      });
-    }
+        const publishedAt = item.published ?? item.updated ?? (item.timestampMS ?? item.crawlTimeMS) ?? nowSeconds();
+        const contentHTML = item.contentHTML ?? item.summaryContent ?? null;
+        const summary = contentHTML ? plainText(contentHTML).slice(0, 600) : '';
+        this.articlesRepo.upsertEntry({
+          id: itemID,
+          accountID,
+          externalID: item.id,
+          feedID: feed.id,
+          title: item.title || '未命名文章',
+          author: item.author,
+          url: item.canonicalURL ?? item.alternateURL,
+          publishedAt,
+          summary,
+          contentHTML,
+          dateArrived: (item.crawlTimeMS ?? publishedAt),
+        });
+      }
+    });
   }
 
   _feedForReaderItem(accountID, item) {
@@ -2238,13 +2296,16 @@ class AppStore extends EventEmitter {
       'SELECT DISTINCT item_id FROM article_state_outbox WHERE account_id = ?'
     ).all(accountID).map((r) => r.item_id));
 
-    for (const row of rows) {
-      if (pending.has(row.id)) continue;
-      const shouldRead = row.is_read === 1 || !unreadSet.has(row.id);
-      const shouldStar = starredSet.has(row.id);
-      if (row.is_read !== (shouldRead ? 1 : 0)) this.statesRepo.setRead(row.id, shouldRead);
-      if (row.is_starred !== (shouldStar ? 1 : 0)) this.statesRepo.setStarred(row.id, shouldStar);
-    }
+    // P2-4：对账置库合并单事务（每条一次独立事务在大账户上会拖慢对账并放大 WAL）
+    this.database.transaction(() => {
+      for (const row of rows) {
+        if (pending.has(row.id)) continue;
+        const shouldRead = row.is_read === 1 || !unreadSet.has(row.id);
+        const shouldStar = starredSet.has(row.id);
+        if (row.is_read !== (shouldRead ? 1 : 0)) this.statesRepo.setRead(row.id, shouldRead);
+        if (row.is_starred !== (shouldStar ? 1 : 0)) this.statesRepo.setStarred(row.id, shouldStar);
+      }
+    });
   }
 
   // MARK: - Outbox
@@ -2571,7 +2632,16 @@ class AppStore extends EventEmitter {
     if (!entry) return null;
     const cache = this.cachesRepo.cache(entryID);
     const text = this._entrySourceText(entry, cache);
-    const contentHash = stableDigest(text);
+    // P1-2：deepRead 写入侧（_generateArticleWork）的 hash 含 persona 系统提示，
+    // 读取侧必须同口径计算——原先漏掉 persona 导致缓存永不命中、每次都重打 LLM。
+    let contentHash;
+    if (kind === AIArtifactKind.deepRead) {
+      const personaPref = this.preferences.get('RobinRead.ai.persona', { id: 'scholar', custom: '' });
+      const deepReadSystem = resolveDeepReadSystem(personaPref);
+      contentHash = stableDigest(deepReadSystem ? text + '::persona:' + deepReadSystem : text);
+    } else {
+      contentHash = stableDigest(text);
+    }
     return this.artifactsRepo.anyLatestArtifact({ itemID: entryID, kind, contentHash });
   }
 
@@ -2615,27 +2685,8 @@ class AppStore extends EventEmitter {
     return memo;
   }
 
-  async explainSelection({ entryID, selection, localContext = '' }) {
-    const { config, apiKey } = this._requireAIReady();
-    const articleContext = await this.ensureArticleContext(entryID);
-    return this.llm.explainSelection({
-      selection, localContext, articleContext, configuration: config, apiKey,
-      onDelta: null,
-    });
-  }
-
-  async askSelection({ entryID, selection, question, localContext = '' }) {
-    const { config, apiKey } = this._requireAIReady();
-    const articleContext = await this.ensureArticleContext(entryID);
-    return this.llm.askSelection({
-      selection, question, localContext, articleContext, configuration: config, apiKey,
-    });
-  }
-
-  async translateSelection({ entryID, selection }) {
-    const { config, apiKey } = this._requireAIReady();
-    return this.llm.translate(selection, config, apiKey);
-  }
+  // P2-1：已删除 explainSelection / askSelection / translateSelection 的首版实现——
+  // 同名第二版（带锚点持久化与流式转发）在类体后部覆盖了它们，首版从未生效。
 
   // MARK: - AIHot 本地状态（收藏 / 已读 / 关注关键词）+ AI 深读
 

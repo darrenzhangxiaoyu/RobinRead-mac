@@ -207,7 +207,9 @@ ${JSON.stringify(paragraphs)}`;
   }
 
   async _nonStreaming(request, signal = null) {
-    const { response, bump, finish } = await fetchWithTimeout(request);
+    // P1-3：signal 必须透传给 fetchWithTimeout——外部取消（cancelAI 的 AbortController）
+    // 只有接到请求级 controller 上才能真正中止在途连接；漏传即取消链断裂。
+    const { response, bump, finish } = await fetchWithTimeout(request, signal);
     try {
       // 非流式同样按空闲计时：有字节到达就续期。长文上下文（6 万字 + reasoning）
       // 的合法耗时可超 90s，不能按总时长掐断；持续无输出才中止。
@@ -239,7 +241,8 @@ ${JSON.stringify(paragraphs)}`;
   }
 
   async _stream(request, onDelta, signal = null) {
-    const { response, bump, finish } = await fetchWithTimeout(request);
+    // P1-3：同 _nonStreaming——流式路径的外部取消同样要接到请求级 controller
+    const { response, bump, finish } = await fetchWithTimeout(request, signal);
     try {
       if (!response.ok) {
         const data = Buffer.from(await response.arrayBuffer());

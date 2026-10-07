@@ -379,6 +379,121 @@ const MIGRATIONS = [
       } catch (_) { /* FTS 不可用：SearchIndex 全程空操作 */ }
     },
   },
+
+  {
+    id: 'v9-knowledge-evolution-schema',
+    up: (db) => {
+      // 知识引擎 + 自进化引擎的表结构（P2-2：原先由引擎构造器 ad-hoc CREATE TABLE，
+      // 违反「DDL 必须走迁移链」铁律）。IF NOT EXISTS 语义保留——已有库升级时
+      // 表与数据原样保留（幂等），新库由本迁移一次建齐。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS highlights (
+          id TEXT PRIMARY KEY NOT NULL, item_id TEXT NOT NULL, text TEXT NOT NULL,
+          color TEXT DEFAULT 'yellow', note TEXT, paragraph_id TEXT,
+          start_offset INTEGER, end_offset INTEGER, created_at REAL NOT NULL,
+          FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS notes (
+          id TEXT PRIMARY KEY NOT NULL, item_id TEXT NOT NULL, content TEXT NOT NULL,
+          tags TEXT, linked_notes TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL,
+          FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS review_queue (
+          id TEXT PRIMARY KEY NOT NULL, item_id TEXT NOT NULL, highlight_id TEXT,
+          ease_factor REAL DEFAULT 2.5, interval_days INTEGER DEFAULT 1, repetitions INTEGER DEFAULT 0,
+          next_review_at REAL NOT NULL, last_reviewed_at REAL,
+          FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS smart_folders (
+          id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, query TEXT NOT NULL,
+          filters TEXT, sort_by TEXT DEFAULT 'date', created_at REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS article_tags (
+          item_id TEXT NOT NULL, tag TEXT NOT NULL, source TEXT DEFAULT 'auto',
+          PRIMARY KEY(item_id, tag), FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS reading_stats (
+          date TEXT PRIMARY KEY NOT NULL, articles_read INTEGER DEFAULT 0,
+          articles_starred INTEGER DEFAULT 0, highlights_made INTEGER DEFAULT 0,
+          notes_created INTEGER DEFAULT 0, ai_summaries_generated INTEGER DEFAULT 0,
+          reading_time_minutes REAL DEFAULT 0
+        );
+        CREATE TABLE IF NOT EXISTS collections (
+          id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT, created_at REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS collection_items (
+          collection_id TEXT NOT NULL, item_id TEXT NOT NULL, added_at REAL NOT NULL,
+          PRIMARY KEY(collection_id, item_id),
+          FOREIGN KEY(collection_id) REFERENCES collections(id) ON DELETE CASCADE,
+          FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS ai_quality_scores (
+          item_id TEXT PRIMARY KEY NOT NULL, rule_score INTEGER, ai_score REAL,
+          ai_reasoning TEXT, ai_keywords TEXT, ai_reading_level TEXT,
+          is_technical INTEGER DEFAULT 0, scored_at REAL NOT NULL,
+          FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS feed_health (
+          feed_id TEXT PRIMARY KEY NOT NULL,
+          fetch_success_count INTEGER DEFAULT 0,
+          fetch_failure_count INTEGER DEFAULT 0,
+          consecutive_failures INTEGER DEFAULT 0,
+          last_success_at REAL,
+          last_failure_at REAL,
+          last_error TEXT,
+          entry_count INTEGER DEFAULT 0,
+          is_dead INTEGER DEFAULT 0,
+          FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS reading_behavior (
+          id TEXT PRIMARY KEY NOT NULL,
+          item_id TEXT NOT NULL,
+          feed_id TEXT,
+          action TEXT NOT NULL,
+          weight REAL NOT NULL DEFAULT 1.0,
+          created_at REAL NOT NULL,
+          FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_behavior_item ON reading_behavior(item_id);
+        CREATE INDEX IF NOT EXISTS idx_behavior_feed ON reading_behavior(feed_id);
+        CREATE TABLE IF NOT EXISTS ai_feedback (
+          id TEXT PRIMARY KEY NOT NULL,
+          item_id TEXT,
+          kind TEXT NOT NULL,
+          rating INTEGER NOT NULL,
+          comment TEXT,
+          created_at REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS interest_profile (
+          key TEXT PRIMARY KEY NOT NULL,
+          value REAL NOT NULL,
+          updated_at REAL NOT NULL
+        );
+      `);
+      // 2026-08 批注锚点升级：高亮/笔记带重锚定上下文（原引擎构造器里的幂等加列，随 DDL 一并入链）
+      for (const [table, column] of [['highlights', 'anchor'], ['notes', 'anchor']]) {
+        try {
+          db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+        } catch (_) { /* 列已存在：幂等重入 */ }
+      }
+    },
+  },
+
+  {
+    id: 'v10-articles-url-norm',
+    up: (db) => {
+      // 规范化 url 列（P2-5）：同 feed 判重原先对 REPLACE(a.url,'&amp;','&') 做全表函数
+      // 计算（索引失效）。落成实列 + 索引后判重为等值匹配；写入点（upsertEntry）同步维护。
+      try {
+        db.exec('ALTER TABLE articles ADD COLUMN url_norm TEXT');
+      } catch (_) { /* 列已存在：幂等重入 */ }
+      db.exec(`
+        UPDATE articles SET url_norm = REPLACE(url, '&amp;', '&')
+        WHERE url IS NOT NULL AND url != '';
+      `);
+      db.exec('CREATE INDEX IF NOT EXISTS idx_articles_url_norm ON articles(url_norm);');
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */
