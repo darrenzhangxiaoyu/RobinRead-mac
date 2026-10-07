@@ -1628,7 +1628,6 @@ export function showAddFeed(folders, onDone) {
     addButton.disabled = true;
     setFooter([cancelButton(), previewButton, addButton]);
 
-    const my = seq;
     let selectedRef = null;
 
     previewButton.addEventListener('click', async () => {

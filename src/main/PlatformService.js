@@ -320,10 +320,11 @@ const WEIBO = {
     const pics = (Array.isArray(m.pics) ? m.pics : [])
       .map((p) => (p && typeof p === 'object' ? (p.large?.url || p.url) : null))
       .filter((u) => typeof u === 'string' && /^https?:\/\//.test(u))
+      .map((u) => u.replace(/^http:\/\//, 'https://')) // 与 BILIBILI 同口径：明文图链升级 https（微博图床支持）
       .slice(0, 9);
     for (const pic of pics) parts.push(`<figure><img src="${escapeHTMLText(pic)}" alt=""></figure>`);
     const pageInfo = m.page_info && typeof m.page_info === 'object' ? m.page_info : null;
-    if (pageInfo && pageInfo.type === 'video' && pageInfo.page_url) {
+    if (pageInfo && pageInfo.type === 'video' && /^https?:\/\//i.test(String(pageInfo.page_url || ''))) {
       parts.push(`<p><a href="${escapeHTMLText(pageInfo.page_url)}">${escapeHTMLText(i18n.localized('查看视频'))}</a></p>`);
     }
 
