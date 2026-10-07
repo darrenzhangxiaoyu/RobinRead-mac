@@ -542,6 +542,43 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v13-media-items',
+    up: (db) => {
+      // 媒体中心（F3）：RSS enclosure（播客音频/视频）媒体条目与播放状态。
+      // - item_id 与 items 主键同构（一篇文章至多一条主媒体，PK 即防重）；
+      // - kind: audio | video（mime 或扩展名推断）；
+      // - duration_seconds / size_bytes 可空（RSS 常缺，下载完成后回填 size）；
+      // - played_at = 最近一次播放时间；position_seconds = 续播位置（>95% 自动归零
+      //   即视为播完，「已播完」= played_at 非空且 position 为 0）；
+      // - download_state: none | downloading | done | failed（离线收听）；
+      //   local_path 为 userData/media/ 内的落盘文件，播放器优先本地。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS media_items (
+            item_id          TEXT PRIMARY KEY NOT NULL,
+            url              TEXT NOT NULL,
+            mime             TEXT,
+            kind             TEXT NOT NULL DEFAULT 'audio' CHECK (kind IN ('audio','video')),
+            duration_seconds REAL,
+            size_bytes       INTEGER,
+            played_at        REAL,
+            position_seconds REAL,
+            download_state   TEXT NOT NULL DEFAULT 'none' CHECK (download_state IN ('none','downloading','done','failed')),
+            download_error   TEXT,
+            local_path       TEXT,
+            created_at       REAL NOT NULL,
+
+            FOREIGN KEY(item_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_items_created
+        ON media_items(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_media_items_played
+        ON media_items(played_at);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

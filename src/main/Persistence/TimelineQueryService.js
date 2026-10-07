@@ -33,6 +33,8 @@ function rowToListItem(row) {
     // 全文抓取（F1）：是否已有网页提取正文缓存（主键探测，不物化缓存内容）。
     // 列表徽标据此显示/消失：启用全文的源 + 无缓存 → 显示「全文」小徽标。
     hasBodyCache: Number(row.has_body_cache ?? 0) === 1,
+    // 媒体中心（F3）：是否带 enclosure 媒体附件（主键探测）→ 列表行「▶」小标记
+    hasMedia: Number(row.has_media ?? 0) === 1,
     feedIconURL: feedIconURL({
       storedIconURL: row.stored_icon_url ?? null,
       siteURL: row.site_url ?? null,
@@ -61,13 +63,15 @@ const LIST_SELECT = `
       COALESCE(s.is_read, 0) AS is_read,
       COALESCE(s.is_starred, 0) AS is_starred,
       COALESCE(s.is_later, 0) AS is_later,
-      CASE WHEN c.item_id IS NULL THEN 0 ELSE 1 END AS has_body_cache
+      CASE WHEN c.item_id IS NULL THEN 0 ELSE 1 END AS has_body_cache,
+      CASE WHEN mi.item_id IS NULL THEN 0 ELSE 1 END AS has_media
   FROM items i
   INNER JOIN feeds f ON f.id = i.feed_id
   LEFT JOIN accounts acc ON acc.id = i.account_id
   LEFT JOIN articles a ON a.item_id = i.id
   LEFT JOIN article_states s ON s.item_id = i.id
   LEFT JOIN article_caches c ON c.item_id = i.id
+  LEFT JOIN media_items mi ON mi.item_id = i.id
 `;
 
 class TimelineQueryService {

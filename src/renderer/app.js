@@ -31,6 +31,8 @@ import { FeedStore } from './views/feed-store.js';
 import { KnowledgeCenter } from './views/knowledge.js';
 import { EvolutionView } from './views/evolution-view.js';
 import { AihotView } from './views/aihot-view.js';
+import { MediaView } from './views/media-view.js';
+import { MediaMiniPlayer } from './views/media-player.js';
 import { AccountController } from './views/account.js';
 
 let customThemeTokens = null; // null = 使用内置纸感默认
@@ -105,6 +107,7 @@ async function bootstrap() {
     onOpenKnowledge: () => openKnowledgeCenter(),
     onOpenEvolution: () => openEvolutionView(),
     onOpenAihot: () => openAihotView(),
+    onOpenMedia: () => openMediaView(),
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -116,6 +119,14 @@ async function bootstrap() {
     onUserChanged: (user) => views.sidebar.updateAccount(user),
   });
   views.account.init();
+  // 媒体中心（F3）：全局单实例迷你播放器（与 TTS 互斥在此裁决，双方经 deps 互通）
+  views.mediaPlayer = new MediaMiniPlayer({
+    tts: {
+      state: () => views.reader?.ttsState || 'idle',
+      stop: () => views.reader?.stopTTS?.(),
+    },
+    toast: showToast,
+  });
   views.list = new ListView(document.getElementById('list-scroll'), {
     onSelect: handleEntrySelect,
     onContext: showListRowContext,
@@ -623,6 +634,7 @@ function buildPaletteCommands() {
     { label: t('切换聚焦模式'), keywords: 'focus 聚焦 渐暗', icon: 'eye', hint: 'F', action: toggleFocusMode },
     { label: t('切换禅模式'), keywords: 'zen 禅 全屏', icon: 'expand', action: toggleZenMode },
     { label: t('今日简报'), keywords: 'digest 简报 日报 ai open', icon: 'spark', action: () => showTodayDigest() },
+    { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
     { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', action: openKnowledgeCenter },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
@@ -1869,6 +1881,19 @@ function openAihotView() {
     onFeedback: showToast,
   });
   ah.present();
+}
+
+/** 媒体中心（F3）：媒体条目浮层（音频→迷你播放器 / 视频→打开阅读器内嵌播放）。 */
+function openMediaView() {
+  const mv = new MediaView({
+    onOpenArticle: (itemID) => {
+      mv.dismiss();
+      handleEntrySelect(itemID, { isRead: true });
+    },
+    player: views.mediaPlayer,
+    toast: showToast,
+  });
+  mv.present();
 }
 
 function openFeedStore() {

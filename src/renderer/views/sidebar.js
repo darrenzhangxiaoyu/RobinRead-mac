@@ -64,6 +64,8 @@ export class SidebarView {
     readingGroup.appendChild(this.smartRow('starred', t('收藏'), 'star', counts?.starred ?? 0, scope));
     // 稍后读：短期待办队列（与收藏的长期留存相区别），带未完成计数
     readingGroup.appendChild(this.smartRow('later', t('稍后读'), 'clock', counts?.laterCount ?? 0, scope));
+    // 媒体中心（F3）：带媒体附件（播客/视频）的文章入口，带未播完计数（空态在浮层内）
+    readingGroup.appendChild(this.mediaRow(counts, scope));
     readingSection.appendChild(readingGroup);
     this.scrollEl.appendChild(readingSection);
 
@@ -140,6 +142,20 @@ export class SidebarView {
     row.querySelector('.sidebar-label').textContent = label;
     this._bindCount(row, count);
     row.addEventListener('click', () => this.handlers.onSelect({ kind }));
+    return row;
+  }
+
+  /** 媒体入口（F3）：外观与智能行一致，但点击打开媒体浮层（onOpenMedia），计数=未播完。 */
+  mediaRow(counts, scope) {
+    const row = document.createElement('div');
+    row.className = 'sidebar-row';
+    row.dataset.scope = 'media';
+    if (scope?.kind === 'media') row.classList.add('selected');
+    row.innerHTML = `${icon('playCircle')}<span class="sidebar-label"></span><span class="sidebar-count" style="visibility:hidden"></span>`;
+    row.querySelector('.sidebar-label').textContent = t('媒体');
+    this._bindCount(row, counts?.mediaUnfinished ?? 0);
+    row.title = t('媒体中心（播客 / 视频）');
+    row.addEventListener('click', () => this.handlers.onOpenMedia?.());
     return row;
   }
 
@@ -467,6 +483,7 @@ export class SidebarView {
       unread: counts?.allUnread ?? 0,
       starred: counts?.starred ?? 0,
       later: counts?.laterCount ?? 0,
+      media: counts?.mediaUnfinished ?? 0, // F3：媒体未播完计数
     };
     smartRows.forEach((row) => this._bindCount(row, map[row.dataset.scope] ?? 0));
   }

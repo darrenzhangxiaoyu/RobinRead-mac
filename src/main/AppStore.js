@@ -31,6 +31,7 @@ const { AihotService } = require('./AihotService');
 const { ExploreService } = require('./ExploreService');
 const { FullTextService } = require('./FullTextService');
 const { RulesEngine } = require('./RulesEngine');
+const { MediaService } = require('./MediaService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -142,6 +143,7 @@ class AppStore extends EventEmitter {
     this.explore = new ExploreService(this);
     this.fulltext = new FullTextService(this); // 全文抓取引擎（F1）：刷新后后台补抓摘要型源全文
     this.rules = new RulesEngine(this); // 规则过滤引擎（F2）：灌文后按用户规则自动执行动作
+    this.media = new MediaService(this, userDataPath); // 媒体中心（F3）：enclosure 入库/进度/队列/离线下载
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -396,6 +398,8 @@ class AppStore extends EventEmitter {
       }
       this._countsCache = { rev: this._dataRev, counts: sidebarCounts };
     }
+    // 媒体中心（F3）：侧栏「媒体」入口未播完计数（自带脏标记缓存，随条目/进度变更失效）
+    sidebarCounts = { ...sidebarCounts, mediaUnfinished: this.media.unfinishedCount() };
 
     return {
       accounts: enabledAccounts,
@@ -672,7 +676,10 @@ class AppStore extends EventEmitter {
     const content = this.articleContent(entryID);
     const summary = this.existingSummary(entryID);
     const annotations = this.selectionAnnotations(entryID);
-    return { entry, feed, content, summary, annotations };
+    // 媒体中心（F3）：带媒体文章在阅读器内嵌 <video controls> / 播放卡片
+    // （只带元数据；播放源经 media:source 实时解析——本地文件优先，且不受 LRU 缓存陈旧影响）
+    const media = this.media.forItem(entryID);
+    return { entry, feed, content, summary, annotations, media };
   }
 
   /** 相邻预取排程：让当前 IPC 回复先走，再在下一拍做预取（fire-and-forget，异常静默）。 */
@@ -816,6 +823,11 @@ class AppStore extends EventEmitter {
           console.warn(`[RobinRead] 文章入库失败（跳过）：${entryID}`, err.message);
           continue;
         }
+        // 媒体中心（F3）：enclosure 媒体附件随灌文入库（PK 防重，同事务）
+        if (parsed.enclosure) {
+          try { this.media.upsertFromParsed(entryID, parsed.enclosure); }
+          catch (_) { /* 媒体入库失败不影响文章本体 */ }
+        }
         // 自动打标签（喂给兴趣画像，零 LLM 成本）
         try { this.knowledge.autoTagEntry(entryID, parsed.title, parsed.summary); } catch (_) { /* 忽略 */ }
         newUnread.push(entryID);
@@ -867,9 +879,21 @@ class AppStore extends EventEmitter {
 
   deleteFeeds(feedIDs) {
     for (const feedID of feedIDs) {
+      // 媒体中心（F3）：删除源时一并清掉已离线的媒体文件（DB 行随 items 级联，文件需手动清）
+      try {
+        const locals = this.database.prepare(`
+          SELECT m.local_path AS p FROM media_items m
+          INNER JOIN items i ON i.id = m.item_id
+          WHERE i.feed_id = ? AND m.local_path IS NOT NULL
+        `).all(feedID);
+        for (const row of locals) {
+          try { require('node:fs').rmSync(row.p, { force: true }); } catch (_) { /* 尽力而为 */ }
+        }
+      } catch (_) { /* 清理失败不阻塞删除 */ }
       this.articlesRepo.deleteEntriesForFeed(feedID);
       this.feedsRepo.deleteFeed(feedID);
     }
+    this.media._invalidateCounts();
     this._invalidatePrepared(); // 条目可能已删：宁可多失效
     this._emitState();
   }

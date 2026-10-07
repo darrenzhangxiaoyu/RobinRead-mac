@@ -648,6 +648,21 @@ function registerIPCHandlers(store, window) {
   handle('rules:replay', (opts) => R().replayRecent(opts || {}));
   handle('rules:samples', (limit) => R().recentSamples(limit));
 
+  // MARK: 媒体中心（F3：视图查询 / 进度 / 队列 / 离线下载；下载进度走推送）
+  const M = () => store.media;
+  if (store.media) store.media.onDownloadProgress((payload) => send('media:download-progress', payload));
+  handle('media:list', (filter, opts) => M().list({ filter, ...(opts || {}) }));
+  handle('media:counts', () => M().counts());
+  handle('media:source', (entryID) => M().source(entryID));
+  handle('media:progress', (entryID, positionSeconds, finished) => M().saveProgress(entryID, positionSeconds, { finished: finished === true }));
+  handle('media:queue:list', () => M().queueList());
+  handle('media:queue:add', (entryID) => M().queueAdd(entryID));
+  handle('media:queue:remove', (entryID) => M().queueRemove(entryID));
+  handle('media:queue:clear', () => M().queueClear());
+  handle('media:queue:next', (afterID) => M().queueNext(afterID));
+  handle('media:download', (entryID) => M().download(entryID));
+  handle('media:download:delete', (entryID) => M().deleteDownload(entryID));
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
 

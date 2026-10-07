@@ -33,6 +33,20 @@ async function httpFetch(url, { headers, signal } = {}) {
   return { status: res.status, headers: res.headers, buf: Buffer.from(await res.arrayBuffer()) };
 }
 
+/**
+ * 流式 HTTP GET（F3 媒体下载）：与 httpFetch 同一条网络通路（net.fetch = 系统代理），
+ * 但不缓冲整包——返回 web ReadableStream，由调用方 pipeline 到磁盘（500MB 上限防内存炸弹）。
+ * 纯 node 环境（探针）回退全局 fetch 的 body（同为 web stream，Readable.fromWeb 兼容）。
+ */
+async function httpStream(url, { headers, signal } = {}) {
+  if (netFetchImpl) {
+    const response = await netFetchImpl(url, { method: 'GET', headers, signal, redirect: 'follow' });
+    return { status: response.status, headers: response.headers, webStream: response.body };
+  }
+  const res = await fetch(url, { headers, signal, redirect: 'follow' });
+  return { status: res.status, headers: res.headers, webStream: res.body };
+}
+
 async function fetchFeed(feed, { force = false } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
@@ -77,4 +91,4 @@ async function fetchFeed(feed, { force = false } = {}) {
   }
 }
 
-module.exports = { fetchFeed, HTTPStatusError, useNetFetch };
+module.exports = { fetchFeed, httpStream, HTTPStatusError, useNetFetch };

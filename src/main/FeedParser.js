@@ -59,6 +59,50 @@ function parse(data, baseURL) {
   return parseXML(text, baseURL);
 }
 
+// MARK: - Enclosure（播客音频/视频附件，F3 媒体中心）
+
+/**
+ * mime / URL 推断媒体类别：audio/* → audio；video/* → video；
+ * mime 缺失时按扩展名兜底（.mp3/.m4a/.aac/.ogg/.wav/.opus/.flac → audio，
+ * .mp4/.m4v/.webm/.mov/.mkv → video）。都不是 → null（非媒体附件，不入库）。
+ */
+function enclosureKind(mime, url) {
+  const m = String(mime || '').toLowerCase();
+  if (m.startsWith('audio/')) return 'audio';
+  if (m.startsWith('video/')) return 'video';
+  if (m === 'application/ogg') return 'audio'; // ogg 容器在播客语境几乎全是音频
+  const path = String(url || '').split(/[?#]/)[0].toLowerCase();
+  if (/\.(mp3|m4a|aac|ogg|oga|opus|wav|flac|wma)$/.test(path)) return 'audio';
+  if (/\.(mp4|m4v|webm|mov|mkv|avi|mpeg|mpg)$/.test(path)) return 'video';
+  return null;
+}
+
+/** itunes:duration 文本 → 秒（"1:02:03" / "05:30" / "90"）；不可解析 → null。 */
+function parseDurationSeconds(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  const parts = text.split(':').map((p) => Number(p));
+  if (parts.some((p) => !Number.isFinite(p) || p < 0)) return null;
+  let seconds = 0;
+  for (const p of parts) seconds = seconds * 60 + p;
+  return seconds > 0 ? seconds : null;
+}
+
+/** 采集到的候选（enclosure 优先，media:content 兜底）→ 规范媒体对象；非媒体返回 null。 */
+function normalizeEnclosure(candidate) {
+  if (!candidate || !candidate.url) return null;
+  const kind = enclosureKind(candidate.type, candidate.url);
+  if (!kind) return null;
+  const length = Number(candidate.length);
+  return {
+    url: candidate.url,
+    mime: candidate.type || null,
+    kind,
+    lengthBytes: Number.isFinite(length) && length > 0 ? Math.round(length) : null,
+    durationSeconds: parseDurationSeconds(candidate.duration),
+  };
+}
+
 // MARK: - JSON Feed
 
 function parseJSON(text) {
@@ -74,6 +118,17 @@ function parseJSON(text) {
     const link = item.url || item.external_url || null;
     const body = item.content_html ?? item.content_text ?? null;
     const summary = decodeHTMLEntities(item.summary || (body ? plainText(body) : ''));
+    // JSON Feed attachments：取首个 audio/video 附件（F3 媒体中心）
+    let enclosure = null;
+    for (const att of (Array.isArray(item.attachments) ? item.attachments : [])) {
+      enclosure = normalizeEnclosure({
+        url: att.url,
+        type: att.mime_type || att.mimeType || null,
+        length: att.size_in_bytes ?? att.length,
+        duration: att.duration_seconds ?? att.duration,
+      });
+      if (enclosure) break;
+    }
     return {
       // P2-10：无 guid/link 时用确定性内容身份（标题+摘要前缀）——同 feed 内稳定，
       // 原先随机 uuid 让这类条目每次解析都换身份 → 刷新即重复入库。
@@ -86,6 +141,7 @@ function parseJSON(text) {
       contentHTML: item.content_text
         ? normalizeFeedMarkup(item.content_text)
         : normalizeFeedMarkup(item.content_html ?? null),
+      enclosure,
     };
   });
 
@@ -279,13 +335,43 @@ function parseXML(xml, baseURL) {
         currentItem = {};
         currentItemLink = null;
       }
+      // F3：播客附件采集。RSS 2.0 <enclosure url type length/> 是自闭合标签，
+      // tokenizeXML 对它同样派发 onStart；media:content（url/fileSize/type）作兜底候选，
+      // enclosure 优先。duration（itunes:duration）在 onEnd 里按文本采集。
+      if (currentItem != null && (local === 'enclosure' || local === 'content')) {
+        const mediaURL = attributes.url ?? attributes.href ?? attributes.src;
+        if (mediaURL) {
+          const resolved = resolveURL(decodeXMLEntities(mediaURL));
+          if (resolved && currentItem.enclosureCandidate == null) {
+            currentItem.enclosureCandidate = {
+              url: resolved,
+              type: attributes.type || '',
+              length: attributes.length ?? attributes.fileSize,
+              duration: null,
+            };
+          }
+        }
+      }
       if (local === 'link') {
         const href = attributes.href ?? attributes.url;
         const resolved = href ? resolveURL(decodeXMLEntities(href)) : null;
+        const rel = String(attributes.rel || '').toLowerCase();
         if (resolved) {
           if (currentItem != null) {
-            currentItemLink = resolved;
-          } else if ((attributes.rel || '').toLowerCase() !== 'self') {
+            // Atom 播客源：<link rel="enclosure" href type length> 是媒体附件而非文章链接（F3）
+            if (rel === 'enclosure') {
+              if (resolved && currentItem.enclosureCandidate == null) {
+                currentItem.enclosureCandidate = {
+                  url: resolved,
+                  type: attributes.type || '',
+                  length: attributes.length,
+                  duration: null,
+                };
+              }
+            } else {
+              currentItemLink = resolved;
+            }
+          } else if (rel !== 'self') {
             // Atom rel="self" 指回 feed 端点而非站点首页
             feedLink = resolved;
           }
@@ -311,6 +397,11 @@ function parseXML(xml, baseURL) {
               // 首个写入者胜出，避免 media:content 等模块元素覆盖真实正文
               if (currentItem[key] == null) currentItem[key] = text;
             }
+            break;
+          }
+          case 'duration': {
+            // itunes:duration（"1:02:03" / "05:30" / "90"）→ 媒体时长（F3）
+            if (text && currentItem.durationRaw == null) currentItem.durationRaw = text;
             break;
           }
           default: break;
@@ -357,6 +448,12 @@ function parseXML(xml, baseURL) {
           publishedAt: parseDate(currentItem.published ?? currentItem.updated ?? currentItem.pubdate),
           summary: entrySummary,
           contentHTML: normalizeFeedMarkup(entryContent),
+          // F3：enclosure / media:content → 媒体附件（audio|video；非媒体 mime 归一为 null）
+          enclosure: normalizeEnclosure(
+            currentItem.enclosureCandidate
+              ? { ...currentItem.enclosureCandidate, duration: currentItem.durationRaw }
+              : null
+          ),
         });
         currentItem = null;
         currentItemLink = null;
@@ -388,4 +485,4 @@ function parseXML(xml, baseURL) {
   };
 }
 
-module.exports = { parse, parseDate, FeedParserError, tokenizeXML, decodeXMLEntities, stripAggregatorTail, isAggregatorItemPage, transformAggregatorMeta };
+module.exports = { parse, parseDate, FeedParserError, tokenizeXML, decodeXMLEntities, stripAggregatorTail, isAggregatorItemPage, transformAggregatorMeta, enclosureKind, parseDurationSeconds, normalizeEnclosure };

@@ -355,6 +355,7 @@ export class ListView {
           ${favicon}
           <span class="entry-source" title="${attr(item.sourceTitle || '')}"></span>
           ${badge ? `<span class="entry-account-badge"></span>` : ''}
+          ${item.hasMedia ? `<span class="entry-media-badge" title="${attr(t('含音频/视频'))}">▶</span>` : ''}
           ${fulltextPending(item) ? `<span class="entry-fulltext-badge" title="${attr(t('正在后台补抓全文'))}">${escapeHTML(t('全文'))}</span>` : ''}
           ${item.isLater ? `<span class="later-mini" title="${attr(t('稍后读'))}">${icon('clock')}</span>` : ''}
           ${item.isStarred ? `<span class="star-mini" title="${attr(t('已收藏'))}">${icon('starFilled')}</span>` : ''}

@@ -174,6 +174,7 @@ export class ReaderView {
     const data = result.data;
     this.entry = data.entry;
     this.feed = data.feed;
+    this.mediaInfo = data.media || null; // F3：enclosure 媒体元数据（阅读器内嵌播放卡片）
     this.summary.artifact = data.summary;
 
     let html = data.content?.html;
@@ -460,6 +461,7 @@ export class ReaderView {
     this.entry = null;
     this.feed = null;
     this.html = null;
+    this.mediaInfo = null; // F3：媒体卡片随文章清空
     this.paragraphs = [];
     this.bilingualActive = false;
     this._translateMode = 'off';
@@ -585,6 +587,12 @@ export class ReaderView {
     this.body = document.createElement('div');
     this.body.className = 'robin-body';
     article.appendChild(this.body);
+    // 媒体中心（F3）：带 enclosure 的文章在标题下、正文前内嵌媒体卡片
+    // （视频 → <video controls> 直接播画面；音频 → 播放卡片唤起迷你播放器）
+    if (this.mediaInfo) {
+      try { article.insertBefore(this._buildMediaCard(), this.body); }
+      catch (_) { /* 媒体卡片失败不影响正文 */ }
+    }
     this.scrollEl.appendChild(article);
     this._articleEl = article; // 翻页动效挂载点
     // 每源排版偏好（重量级）：article 级 CSS 变量覆盖（比根变量更近作用域，仅影响本篇）
@@ -3697,6 +3705,52 @@ export class ReaderView {
     return (this.body.textContent || '').trim();
   }
 
+  // MARK: - 媒体卡片（F3 媒体中心：enclosure 内嵌播放）
+
+  /**
+   * 标题下内嵌媒体卡片：
+   * - video → <video controls>（离线时 src 为 file:// 本地文件，画面播放；
+   *   「离线可听」的音频轨仍可经迷你播放器收听）；
+   * - audio → 播放卡片（唤起全局迷你播放器，支持倍速/队列/离线）。
+   * 播放源经 media:source 实时解析（本地优先），不信任 reader 载荷缓存的陈旧 URL。
+   */
+  _buildMediaCard() {
+    const card = document.createElement('div');
+    card.className = 'nj-media-card';
+    card.dataset.role = 'media-card';
+    const info = this.mediaInfo || {};
+    const kind = info.kind === 'video' ? 'video' : 'audio';
+    const head = document.createElement('div');
+    head.className = 'nj-media-card-head';
+    head.innerHTML = `<span class="nj-media-card-kind">${escapeHTML(kind === 'video' ? t('视频') : t('音频'))}</span><span class="nj-media-card-title"></span>`;
+    head.querySelector('.nj-media-card-title').textContent = this.entry?.title || '';
+    card.appendChild(head);
+
+    if (kind === 'video') {
+      const video = document.createElement('video');
+      video.className = 'nj-media-card-video';
+      video.controls = true;
+      video.preload = 'metadata';
+      video.playsInline = true;
+      card.appendChild(video);
+      window.robin.mediaSource(info.itemID).then((src) => {
+        if (src && src.url && this.mediaInfo === info) video.src = src.url; // 竞态守卫：已换文不回填
+        else if (!src || !src.url) video.remove();
+      }).catch(() => video.remove());
+    } else {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn-text bordered nj-media-card-play';
+      btn.innerHTML = `${TTS_PLAY_SVG}<span style="margin-left:5px">${escapeHTML(t('播放音频'))}</span>`;
+      btn.addEventListener('click', () => {
+        // 与 TTS 互斥由迷你播放器裁决（内部先停 TTS）
+        window.__robinMedia?.open(info.itemID);
+      });
+      card.appendChild(btn);
+    }
+    return card;
+  }
+
   // MARK: - TTS 朗读（听文章）
 
   /** 对外状态：idle / playing / paused（E2E 探测与调试用）。 */
@@ -3884,8 +3938,16 @@ export class ReaderView {
       this._ttsStop();
       return;
     }
+    // 媒体中心（F3）互斥 2/2：TTS 开播前先暂停媒体迷你播放器
+    // （反向互斥在 MediaMiniPlayer.open/toggle 内：开媒体先停 TTS）
+    window.__robinMedia?.pauseForTTS?.();
     this._ttsStarting = true;
     Promise.resolve(this._ttsStart()).finally(() => { this._ttsStarting = false; });
+  }
+
+  /** 媒体中心（F3）互斥缝：供迷你播放器在开播/恢复前停止朗读。 */
+  stopTTS() {
+    if (this.ttsState !== 'idle') this._ttsStop();
   }
 
   async _ttsStart() {

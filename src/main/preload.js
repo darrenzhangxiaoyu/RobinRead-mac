@@ -88,6 +88,20 @@ contextBridge.exposeInMainWorld('robin', {
   rulesReplay: (opts) => data('rules:replay', opts),
   rulesSamples: (limit) => data('rules:samples', limit),
 
+  // 媒体中心（F3：视图 / 进度 / 队列 / 下载；onMediaDownloadProgress 收下载进度推送）
+  mediaList: (filter, opts) => data('media:list', filter, opts),
+  mediaCounts: () => data('media:counts'),
+  mediaSource: (entryID) => data('media:source', entryID),
+  mediaProgress: (entryID, positionSeconds, finished) => data('media:progress', entryID, positionSeconds, finished === true),
+  mediaQueueList: () => data('media:queue:list'),
+  mediaQueueAdd: (entryID) => data('media:queue:add', entryID),
+  mediaQueueRemove: (entryID) => data('media:queue:remove', entryID),
+  mediaQueueClear: () => data('media:queue:clear'),
+  mediaQueueNext: (afterID) => data('media:queue:next', afterID),
+  mediaDownload: (entryID) => data('media:download', entryID),
+  mediaDownloadDelete: (entryID) => data('media:download:delete', entryID),
+  onMediaDownloadProgress: (listener) => subscribe('media:download-progress', listener),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

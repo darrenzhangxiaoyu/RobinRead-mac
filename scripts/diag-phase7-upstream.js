@@ -99,6 +99,9 @@ app.whenReady().then(async () => {
     store.database.prepare("UPDATE articles SET title = ? WHERE item_id = ?").run('R&amp;D 与 &#39;引号&#39; 实体', oldUnread);
     store.preferences.set('RobinRead.repair.encodedEntities', false);
     store._repairEncodedEntities();
+    // P2-9 批量化后 _repairEncodedEntities 是 async（分批让出事件循环），完成标记在末批后置位——
+    // 等一拍再断言（原先同步读标记恒 false，属探针自身的竞态，与产品代码无关）
+    await sleep(150);
     const fixed = store.database.prepare('SELECT title FROM articles WHERE item_id = ?').get(oldUnread);
     check('D1 存量实体解码', fixed.title === "R&D 与 '引号' 实体", fixed.title);
     check('D2 修复标记幂等', store.preferences.get('RobinRead.repair.encodedEntities', false) === true);
