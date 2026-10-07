@@ -579,6 +579,52 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v14-topics',
+    up: (db) => {
+      // 话题盯梢（F4）：关键词 → 三路（本库/AIHOT/源池）聚合的专属信息流。
+      // - topics.keywords_json: string[]（1-3 个）；lanes_json: { local, aihot, pool }；
+      // - frequency: refresh（每次刷新后自动聚合）| daily（24h 一次）；
+      // - ai_filter: 聚合时用 LLM 对候选做相关度精筛（无 Key 自动降级关闭）；
+      // - topic_hits: 聚合命中（UNIQUE(topic_id,url_norm) 去重；每话题滚动保留 200 条）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS topics (
+            id          TEXT PRIMARY KEY NOT NULL,
+            name        TEXT NOT NULL,
+            keywords_json  TEXT NOT NULL,
+            lanes_json     TEXT NOT NULL,
+            frequency   TEXT NOT NULL DEFAULT 'refresh' CHECK (frequency IN ('refresh','daily')),
+            ai_filter   INTEGER NOT NULL DEFAULT 0,
+            enabled     INTEGER NOT NULL DEFAULT 1,
+            last_run    REAL,
+            hit_count   INTEGER NOT NULL DEFAULT 0,
+            created_at  REAL NOT NULL,
+            updated_at  REAL NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS topic_hits (
+            id            TEXT PRIMARY KEY NOT NULL,
+            topic_id      TEXT NOT NULL,
+            lane          TEXT NOT NULL CHECK (lane IN ('local','aihot','pool')),
+            title         TEXT NOT NULL,
+            url           TEXT NOT NULL,
+            url_norm      TEXT NOT NULL,
+            summary       TEXT,
+            source_name   TEXT,
+            entry_id      TEXT,
+            published_at  REAL,
+            hit_at        REAL NOT NULL,
+
+            FOREIGN KEY(topic_id)
+                REFERENCES topics(id)
+                ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_hits_unique
+        ON topic_hits(topic_id, url_norm);
+        CREATE INDEX IF NOT EXISTS idx_topic_hits_recent
+        ON topic_hits(topic_id, hit_at DESC);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

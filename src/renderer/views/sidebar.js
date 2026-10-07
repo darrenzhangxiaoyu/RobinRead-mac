@@ -66,6 +66,8 @@ export class SidebarView {
     readingGroup.appendChild(this.smartRow('later', t('稍后读'), 'clock', counts?.laterCount ?? 0, scope));
     // 媒体中心（F3）：带媒体附件（播客/视频）的文章入口，带未播完计数（空态在浮层内）
     readingGroup.appendChild(this.mediaRow(counts, scope));
+    // 话题盯梢（F4）：关键词聚合信息流入口，计数=启用话题数
+    readingGroup.appendChild(this.topicsRow(counts, scope));
     readingSection.appendChild(readingGroup);
     this.scrollEl.appendChild(readingSection);
 
@@ -156,6 +158,20 @@ export class SidebarView {
     this._bindCount(row, counts?.mediaUnfinished ?? 0);
     row.title = t('媒体中心（播客 / 视频）');
     row.addEventListener('click', () => this.handlers.onOpenMedia?.());
+    return row;
+  }
+
+  /** 话题入口（F4）：点击打开话题浮层（onOpenTopics），计数=启用话题数。 */
+  topicsRow(counts, scope) {
+    const row = document.createElement('div');
+    row.className = 'sidebar-row';
+    row.dataset.scope = 'topics';
+    if (scope?.kind === 'topics') row.classList.add('selected');
+    row.innerHTML = `${icon('search')}<span class="sidebar-label"></span><span class="sidebar-count" style="visibility:hidden"></span>`;
+    row.querySelector('.sidebar-label').textContent = t('话题');
+    this._bindCount(row, counts?.topicsEnabled ?? 0);
+    row.title = t('话题盯梢：关键词动态自动汇成信息流');
+    row.addEventListener('click', () => this.handlers.onOpenTopics?.());
     return row;
   }
 

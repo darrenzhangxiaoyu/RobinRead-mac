@@ -663,6 +663,15 @@ function registerIPCHandlers(store, window) {
   handle('media:download', (entryID) => M().download(entryID));
   handle('media:download:delete', (entryID) => M().deleteDownload(entryID));
 
+  // MARK: 话题盯梢（F4：CRUD / 聚合 / 信息流）
+  const TP = () => store.topics;
+  handle('topics:list', () => TP().listTopics());
+  handle('topics:save', (payload) => TP().saveTopic(payload || {}));
+  handle('topics:delete', (id) => TP().deleteTopic(id));
+  handle('topics:setEnabled', (id, enabled) => TP().setTopicEnabled(id, enabled === true));
+  handle('topics:aggregate', (id) => TP().aggregateTopic(id, { force: true }));
+  handle('topics:hits', (id, opts) => TP().hits(id, opts || {}));
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
 

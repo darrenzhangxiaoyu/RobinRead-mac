@@ -33,6 +33,7 @@ import { EvolutionView } from './views/evolution-view.js';
 import { AihotView } from './views/aihot-view.js';
 import { MediaView } from './views/media-view.js';
 import { MediaMiniPlayer } from './views/media-player.js';
+import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 
 let customThemeTokens = null; // null = 使用内置纸感默认
@@ -108,6 +109,7 @@ async function bootstrap() {
     onOpenEvolution: () => openEvolutionView(),
     onOpenAihot: () => openAihotView(),
     onOpenMedia: () => openMediaView(),
+    onOpenTopics: () => openTopicsView(),
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -635,6 +637,7 @@ function buildPaletteCommands() {
     { label: t('切换禅模式'), keywords: 'zen 禅 全屏', icon: 'expand', action: toggleZenMode },
     { label: t('今日简报'), keywords: 'digest 简报 日报 ai open', icon: 'spark', action: () => showTodayDigest() },
     { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
+    { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
     { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', action: openKnowledgeCenter },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
@@ -1811,6 +1814,10 @@ function showListRowContext(event, item) {
       label: t(item.isStarred ? '取消收藏' : '收藏'), icon: 'star',
       onClick: () => window.robin.toggleStar(item.id),
     },
+    {
+      label: t('盯梢这类内容'), icon: 'search',
+      onClick: () => openTopicsView(item.title || ''),
+    },
   ]);
 }
 
@@ -1894,6 +1901,30 @@ function openMediaView() {
     toast: showToast,
   });
   mv.present();
+}
+
+/** 话题盯梢（F4）：管理页/信息流浮层；本库命中直达阅读器，外部命中走任意链接精读。 */
+function openTopicsView(prefill = '') {
+  const tv = new TopicView({
+    onOpenEntry: (itemID) => {
+      tv.dismiss();
+      handleEntrySelect(itemID, { isRead: true });
+    },
+    onOpenURL: (url) => openLinkReader(url),
+    toast: showToast,
+  });
+  tv.present();
+  if (prefill) tv.presentCreate(prefill);
+}
+
+/** 任意链接精读（复用 R-D3 通路）：外部命中也进阅读器而不只是裸外链。 */
+async function openLinkReader(url) {
+  try {
+    const ok = await views.reader.openExternalUrl(String(url).trim());
+    if (!ok) window.robin.openLink(url);
+  } catch (_) {
+    window.robin.openLink(url);
+  }
 }
 
 function openFeedStore() {

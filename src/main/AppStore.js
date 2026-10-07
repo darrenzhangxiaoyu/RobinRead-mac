@@ -32,6 +32,7 @@ const { ExploreService } = require('./ExploreService');
 const { FullTextService } = require('./FullTextService');
 const { RulesEngine } = require('./RulesEngine');
 const { MediaService } = require('./MediaService');
+const { TopicService } = require('./TopicService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -144,6 +145,7 @@ class AppStore extends EventEmitter {
     this.fulltext = new FullTextService(this); // 全文抓取引擎（F1）：刷新后后台补抓摘要型源全文
     this.rules = new RulesEngine(this); // 规则过滤引擎（F2）：灌文后按用户规则自动执行动作
     this.media = new MediaService(this, userDataPath); // 媒体中心（F3）：enclosure 入库/进度/队列/离线下载
+    this.topics = new TopicService(this); // 话题盯梢（F4）：关键词三路聚合专属信息流
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -400,6 +402,8 @@ class AppStore extends EventEmitter {
     }
     // 媒体中心（F3）：侧栏「媒体」入口未播完计数（自带脏标记缓存，随条目/进度变更失效）
     sidebarCounts = { ...sidebarCounts, mediaUnfinished: this.media.unfinishedCount() };
+    // 话题盯梢（F4）：侧栏「话题」入口启用话题数
+    sidebarCounts = { ...sidebarCounts, topicsEnabled: this.topics.enabledCount() };
 
     return {
       accounts: enabledAccounts,
@@ -2024,6 +2028,8 @@ class AppStore extends EventEmitter {
     }
     this._invalidatePrepared(); // 刷新可能新增/删除/改状态：宁可多失效（成功失败都清）
     this.fulltext.kick(); // 全文抓取（F1）：灌文全部落地、状态推送之后再异步起队列
+    // 话题盯梢（F4）：同样在刷新落地后异步聚合（按话题频率过滤；逐话题独立容错）
+    this.topics.aggregateDue().catch(() => { /* 聚合失败不影响刷新 */ });
     this._emitState();
   }
 
