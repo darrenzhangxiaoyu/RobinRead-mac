@@ -16,6 +16,7 @@ const SECTIONS = [
   { id: 'accounts', title: '账号', icon: 'person' },
   { id: 'ai', title: 'AI 功能', icon: 'ai' },
   { id: 'refresh', title: '刷新', icon: 'refresh' },
+  { id: 'rules', title: '过滤规则', icon: 'funnel' },
   { id: 'language', title: '语言', icon: 'globe' },
   { id: 'sync', title: '同步', icon: 'cloud' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
@@ -121,6 +122,7 @@ export class SettingsView {
       case 'accounts': this._accounts(scroll); break;
       case 'ai': this._ai(scroll, llm); break;
       case 'refresh': this._refresh(scroll, prefs); break;
+      case 'rules': this._rules(scroll); break;
       case 'language': this._language(scroll, prefs); break;
       case 'sync': this._sync(scroll); break;
       case 'feedback': this._feedback(scroll); break;
@@ -1204,6 +1206,130 @@ export class SettingsView {
     }).catch(() => { /* 统计拉取失败：开关仍可用，仅无统计文案 */ });
   }
 
+  /**
+   * 过滤规则（F2）分区：规则列表（名称/作用域/命中数/开关/顺序/编辑/删除）+
+   * 新建/编辑表单（作用域多选源、条件行、动作、正则即时校验、规则测试器）+
+   * 「对最近 200 篇回放」入口（带确认提示）。
+   */
+  _rules(container) {
+    const feeds = [];
+    for (const account of this.state.sidebar || []) {
+      for (const feed of account.allFeeds || []) {
+        feeds.push({ id: feed.id, title: feed.title || feed.id, accountTitle: account.account?.displayName || '' });
+      }
+    }
+    const feedTitle = (id) => feeds.find((f) => f.id === id)?.title || id;
+
+    const rulesGroup = group(t('过滤规则'), t('按条件自动处理新文章：命中即执行标已读/收藏/稍后读/打标签；规则在新文章入库时自动应用。'), []);
+    container.appendChild(rulesGroup);
+    const host = rulesGroup.querySelector('.group-rows');
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'rule-toolbar';
+    const addButton = document.createElement('button');
+    addButton.className = 'btn-text primary';
+    addButton.innerHTML = `${icon('plus')}<span style="margin-left:5px"></span>`;
+    addButton.querySelector('span').textContent = t('新建规则');
+    addButton.addEventListener('click', () => showRuleEditor({ feeds, onSaved: () => this.render() }));
+    const replayButton = document.createElement('button');
+    replayButton.className = 'btn-text bordered';
+    replayButton.innerHTML = `${icon('playCircle')}<span style="margin-left:5px"></span>`;
+    replayButton.querySelector('span').textContent = t('对最近 200 篇回放');
+    replayButton.addEventListener('click', async () => {
+      const okToRun = await confirmBox(t('回放过滤规则'), {
+        message: t('将对最近 200 篇文章重新执行全部启用的规则（已执行过的动作不会重复计入状态）。确定继续吗？'),
+        okLabel: t('开始回放'),
+      });
+      if (!okToRun) return;
+      replayButton.disabled = true;
+      const result = await window.robin.rulesReplay({ limit: 200 });
+      replayButton.disabled = false;
+      if (!result) { await alertBox(t('回放失败'), t('请稍后重试。')); return; }
+      showToast(t('回放完成：扫描 %lld 篇，命中 %lld 篇')
+        .replace('%lld', String(result.scanned)).replace('%lld', String(result.matched)));
+      this.render();
+    });
+    toolbar.append(addButton, replayButton);
+    host.appendChild(toolbar);
+
+    const listEl = document.createElement('div');
+    listEl.className = 'rule-list';
+    host.appendChild(listEl);
+    const emptyEl = document.createElement('div');
+    emptyEl.style.cssText = 'padding:4px 16px 10px;font-size:12px;color:var(--text-tertiary);';
+    emptyEl.textContent = t('还没有规则。新建一条，让刷进来的文章自动分诊。');
+    host.appendChild(emptyEl);
+
+    window.robin.rulesList().then((rules) => {
+      if (!this.overlay) return; // 分区已关闭：放弃补写
+      const list = rules || [];
+      emptyEl.style.display = list.length ? 'none' : '';
+      const countNote = document.createElement('div');
+      countNote.className = 'rule-count-note';
+      countNote.textContent = t('%lld / 50 条规则').replace('%lld', String(list.length));
+      toolbar.appendChild(countNote);
+
+      list.forEach((rule, index) => {
+        const scopeText = rule.scope.kind === 'all'
+          ? t('全部订阅源')
+          : rule.scope.ids.slice(0, 2).map(feedTitle).join('、') + (rule.scope.ids.length > 2 ? ` +${rule.scope.ids.length - 2}` : '');
+        const rowEl = document.createElement('div');
+        rowEl.className = 'rule-row';
+        const label = document.createElement('div');
+        label.className = 'rule-row-label';
+        const title = document.createElement('div');
+        title.className = 'rule-row-title';
+        title.textContent = rule.name; // textContent：不可信回显安全
+        const desc = document.createElement('div');
+        desc.className = 'rule-row-desc';
+        desc.textContent = `${scopeText} · ${t('已命中 %lld 次').replace('%lld', String(rule.hitCount))}`;
+        label.append(title, desc);
+        const controls = document.createElement('div');
+        controls.className = 'rule-row-controls';
+        const up = document.createElement('button');
+        up.className = 'btn icon-only';
+        up.title = t('上移');
+        up.setAttribute('aria-label', t('上移'));
+        up.innerHTML = icon('chevronUp');
+        up.disabled = index === 0;
+        up.addEventListener('click', async () => { await window.robin.rulesMove(rule.id, 'up'); this.render(); });
+        const down = document.createElement('button');
+        down.className = 'btn icon-only';
+        down.title = t('下移');
+        down.setAttribute('aria-label', t('下移'));
+        down.innerHTML = icon('chevronDown');
+        down.disabled = index === list.length - 1;
+        down.addEventListener('click', async () => { await window.robin.rulesMove(rule.id, 'down'); this.render(); });
+        const edit = document.createElement('button');
+        edit.className = 'btn icon-only';
+        edit.title = t('编辑');
+        edit.setAttribute('aria-label', t('编辑'));
+        edit.innerHTML = icon('pencil');
+        edit.addEventListener('click', () => showRuleEditor({ feeds, rule, onSaved: () => this.render() }));
+        const del = document.createElement('button');
+        del.className = 'btn icon-only rule-danger';
+        del.title = t('删除');
+        del.setAttribute('aria-label', t('删除'));
+        del.innerHTML = icon('trash');
+        del.addEventListener('click', async () => {
+          const okDel = await confirmBox(t('删除规则'), {
+            message: t('确定删除规则「%@」吗？').replace('%@', rule.name),
+            okLabel: t('删除'), danger: true,
+          });
+          if (!okDel) return;
+          await window.robin.rulesDelete(rule.id);
+          this.render();
+        });
+        controls.append(toggleControl(rule.enabled, async (v) => {
+          await window.robin.rulesSetEnabled(rule.id, v);
+          this.render();
+        }), up, down, edit, del);
+        rowEl.append(label, controls);
+        listEl.appendChild(rowEl);
+      });
+    }).catch(() => { /* 列表拉取失败：保持空态文案 */ });
+  }
+
   _language(container, prefs) {
     container.appendChild(group(t('界面语言'), t('默认跟随系统设置；也可以随时在这里切换，应用界面会立即更新。'), [
       row(t('语言选择'), null, selectControl(
@@ -1501,6 +1627,407 @@ export function showFreshRSSAccount(onAdded) {
 }
 
 // MARK: - 构建工具
+
+/**
+ * 规则编辑器（F2）：名称 / 作用域（全局或指定源多选）/ 条件行（增删+正则即时校验）/
+ * 动作多选（标已读、收藏、稍后读、打标签）/ 规则测试器（粘贴或从最近文章选样本，
+ * 实时显示逐条件命中与将执行的动作）。保存走 rules:save（主进程全量校验）。
+ */
+export function showRuleEditor({ feeds = [], rule = null, onSaved }) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+  const modal = document.createElement('div');
+  modal.className = 'modal small rule-editor';
+  modal.innerHTML = `
+    <div class="modal-main">
+      <div class="modal-header"><h3></h3></div>
+      <div class="sheet-body rule-editor-body"></div>
+      <div class="modal-footer"></div>
+    </div>`;
+  modal.querySelector('h3').textContent = rule ? t('编辑规则') : t('新建规则');
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  const esc = (event) => {
+    if (event.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', esc); }
+  };
+  document.addEventListener('keydown', esc);
+
+  const body = modal.querySelector('.sheet-body');
+
+  const FIELD_OPTIONS = [
+    ['title', t('标题')], ['summary', t('摘要')], ['author', t('作者')],
+    ['url', t('URL')], ['body', t('正文')],
+  ];
+  const OP_OPTIONS = [
+    ['contains', t('包含')], ['notContains', t('不包含')], ['regex', t('正则匹配')],
+    ['notRegex', t('正则不匹配')], ['startsWith', t('以…开头')], ['endsWith', t('以…结尾')],
+  ];
+
+  // ── 名称 ──
+  const nameInput = field(body, t('规则名称'), 'pencil', t('例如：周报自动已读'));
+
+  // ── 作用域 ──
+  const scopeBlock = document.createElement('div');
+  scopeBlock.className = 'rule-block';
+  const scopeLabel = document.createElement('div');
+  scopeLabel.className = 'rule-block-label';
+  scopeLabel.textContent = t('作用域');
+  const scopeSelect = document.createElement('select');
+  scopeSelect.className = 'control';
+  scopeSelect.innerHTML = `<option value="all"></option><option value="feeds"></option>`;
+  scopeSelect.options[0].textContent = t('全部订阅源（全局）');
+  scopeSelect.options[1].textContent = t('指定订阅源…');
+  scopeBlock.append(scopeLabel, scopeSelect);
+  const feedPick = document.createElement('div');
+  feedPick.className = 'rule-feed-pick';
+  const renderFeedPick = (selectedIDs) => {
+    feedPick.innerHTML = '';
+    if (!feeds.length) {
+      const empty = document.createElement('div');
+      empty.className = 'rule-feed-empty';
+      empty.textContent = t('还没有订阅源。');
+      feedPick.appendChild(empty);
+      return;
+    }
+    for (const feed of feeds) {
+      const item = document.createElement('label');
+      item.className = 'rule-feed-item';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selectedIDs.includes(feed.id);
+      checkbox.dataset.feedID = feed.id;
+      const text = document.createElement('span');
+      text.textContent = feed.title; // textContent：源名不可信回显安全
+      item.append(checkbox, text);
+      feedPick.appendChild(item);
+    }
+  };
+  scopeBlock.appendChild(feedPick);
+  body.appendChild(scopeBlock);
+  const syncScopeUI = () => {
+    const scoped = scopeSelect.value === 'feeds';
+    feedPick.style.display = scoped ? '' : 'none';
+  };
+  scopeSelect.addEventListener('change', syncScopeUI);
+
+  // ── 条件 ──
+  const condBlock = document.createElement('div');
+  condBlock.className = 'rule-block';
+  const condHead = document.createElement('div');
+  condHead.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+  const condLabel = document.createElement('div');
+  condLabel.className = 'rule-block-label';
+  condLabel.style.margin = '0';
+  condLabel.textContent = t('条件');
+  let matchMode = rule?.match === 'any' ? 'any' : 'all';
+  let testTimer = null;
+  const scheduleTest = () => {
+    clearTimeout(testTimer);
+    testTimer = setTimeout(() => runTest(), 300);
+  };
+  const matchSeg = segmented([['all', t('全部满足')], ['any', t('任一满足')]], matchMode, (value) => {
+    matchMode = value;
+    scheduleTest();
+  });
+  condHead.append(condLabel, matchSeg);
+  condBlock.appendChild(condHead);
+  const condRows = document.createElement('div');
+  condRows.className = 'rule-cond-rows';
+  condBlock.appendChild(condRows);
+  const addCondButton = document.createElement('button');
+  addCondButton.className = 'btn-text bordered rule-add-cond';
+  addCondButton.innerHTML = `${icon('plus')}<span style="margin-left:5px"></span>`;
+  addCondButton.querySelector('span').textContent = t('添加条件');
+  condBlock.appendChild(addCondButton);
+  body.appendChild(condBlock);
+
+  const makeCondRow = (condition = { field: 'title', op: 'contains', value: '' }) => {
+    const row = document.createElement('div');
+    row.className = 'rule-cond-row';
+    const fieldSel = document.createElement('select');
+    fieldSel.className = 'control';
+    for (const [value, text] of FIELD_OPTIONS) {
+      const option = document.createElement('option');
+      option.value = value; option.textContent = text;
+      fieldSel.appendChild(option);
+    }
+    fieldSel.value = condition.field;
+    const opSel = document.createElement('select');
+    opSel.className = 'control';
+    for (const [value, text] of OP_OPTIONS) {
+      const option = document.createElement('option');
+      option.value = value; option.textContent = text;
+      opSel.appendChild(option);
+    }
+    opSel.value = condition.op;
+    const valueInput = document.createElement('input');
+    valueInput.className = 'control rule-cond-value';
+    valueInput.placeholder = t('关键词或正则…');
+    valueInput.value = condition.value ?? '';
+    const errLine = document.createElement('div');
+    errLine.className = 'rule-regex-error';
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn icon-only';
+    removeBtn.title = t('删除条件');
+    removeBtn.setAttribute('aria-label', t('删除条件'));
+    removeBtn.innerHTML = icon('trash');
+    removeBtn.addEventListener('click', () => {
+      row.remove();
+      if (condRows.children.length === 0) addCondRow(); // 至少保留一行
+      scheduleTest();
+    });
+    row.append(fieldSel, opSel, valueInput, removeBtn, errLine);
+    const validateValue = () => {
+      const op = opSel.value;
+      const value = valueInput.value.trim();
+      const isRegex = op === 'regex' || op === 'notRegex';
+      let problem = null;
+      if (value) {
+        if (value.length > 200) problem = t('条件值过长（最多 200 字，正则同限）。');
+        else if (isRegex) problem = regexProblem(value);
+      }
+      errLine.textContent = problem || '';
+      valueInput.classList.toggle('invalid', Boolean(problem));
+    };
+    valueInput.addEventListener('input', () => { validateValue(); scheduleTest(); });
+    opSel.addEventListener('change', () => { validateValue(); scheduleTest(); });
+    fieldSel.addEventListener('change', scheduleTest);
+    validateValue();
+    return row;
+  };
+  const addCondRow = (condition) => condRows.appendChild(makeCondRow(condition));
+  addCondButton.addEventListener('click', () => { addCondRow(); scheduleTest(); });
+
+  // ── 动作 ──
+  const actionBlock = document.createElement('div');
+  actionBlock.className = 'rule-block';
+  const actionLabel = document.createElement('div');
+  actionLabel.className = 'rule-block-label';
+  actionLabel.textContent = t('动作（可多选）');
+  actionBlock.appendChild(actionLabel);
+  const actionChips = document.createElement('div');
+  actionChips.className = 'rule-action-chips';
+  const chipFor = (actionKey, label) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'rule-action-chip';
+    chip.dataset.action = actionKey;
+    chip.textContent = label;
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      scheduleTest();
+    });
+    return chip;
+  };
+  const readChip = chipFor('read', t('标为已读'));
+  const starChip = chipFor('star', t('收藏'));
+  const laterChip = chipFor('later', t('加入稍后读'));
+  actionChips.append(readChip, starChip, laterChip);
+  actionBlock.appendChild(actionChips);
+  const tagInput = document.createElement('input');
+  tagInput.className = 'control rule-tag-input';
+  tagInput.placeholder = t('打标签（多个用逗号分隔，留空则不打）');
+  actionBlock.appendChild(tagInput);
+  const tagErr = document.createElement('div');
+  tagErr.className = 'rule-regex-error';
+  actionBlock.appendChild(tagErr);
+  const parseTags = () => tagInput.value.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+  tagInput.addEventListener('input', () => {
+    const bad = parseTags().some((tag) => tag.length > 50 || /[\x00-\x1f]/.test(tag));
+    tagErr.textContent = bad ? t('标签名长度需在 1-50 字之间。') : '';
+    scheduleTest();
+  });
+  body.appendChild(actionBlock);
+
+  // ── 规则测试器 ──
+  const testBlock = document.createElement('div');
+  testBlock.className = 'rule-block rule-test-block';
+  const testHead = document.createElement('div');
+  testHead.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;';
+  const testLabel = document.createElement('div');
+  testLabel.className = 'rule-block-label';
+  testLabel.style.margin = '0';
+  testLabel.textContent = t('规则测试器');
+  const sampleSelect = document.createElement('select');
+  sampleSelect.className = 'control';
+  sampleSelect.innerHTML = `<option value="custom"></option>`;
+  sampleSelect.options[0].textContent = t('自定义样本（直接粘贴）');
+  testHead.append(testLabel, sampleSelect);
+  testBlock.appendChild(testHead);
+  hint(testBlock, t('粘贴或从最近文章选一篇样本，实时预览逐条件命中与将执行的动作。'));
+
+  const sampleFields = {};
+  for (const [key, label] of [['title', t('标题')], ['author', t('作者')], ['url', t('URL')], ['summary', t('摘要')], ['body', t('正文')]]) {
+    const wrap = document.createElement('label');
+    wrap.className = 'sheet-field';
+    const labelEl = document.createElement('div');
+    labelEl.textContent = label;
+    const input = key === 'body' || key === 'summary' ? document.createElement('textarea') : document.createElement('input');
+    input.className = 'control wide';
+    if (key === 'body') input.rows = 3;
+    if (key === 'summary') input.rows = 2;
+    input.addEventListener('input', () => { sampleSelect.value = 'custom'; scheduleTest(); });
+    wrap.append(labelEl, input);
+    sampleFields[key] = input;
+    testBlock.appendChild(wrap);
+  }
+  const testResult = document.createElement('div');
+  testResult.className = 'rule-test-result';
+  testResult.setAttribute('aria-live', 'polite');
+  testBlock.appendChild(testResult);
+  body.appendChild(testBlock);
+
+  // 测试执行：表单 → rules:test（主进程同一套匹配与校验，所见即所得）
+  const collect = () => {
+    const conditions = [...condRows.querySelectorAll('.rule-cond-row')].map((row) => {
+      const [fieldSel, opSel, valueInput] = row.querySelectorAll('select, input.rule-cond-value');
+      return { field: fieldSel.value, op: opSel.value, value: valueInput.value.trim() };
+    });
+    const actions = [...actionChips.querySelectorAll('.rule-action-chip.active')].map((chip) => chip.dataset.action);
+    for (const tag of parseTags()) actions.push(`tag:${tag}`);
+    const scope = scopeSelect.value === 'feeds'
+      ? { kind: 'feeds', ids: [...feedPick.querySelectorAll('input:checked')].map((el) => el.dataset.feedID) }
+      : { kind: 'all' };
+    return {
+      id: rule?.id ?? null,
+      name: nameInput.value.trim(),
+      scope,
+      match: matchMode,
+      conditions,
+      actions,
+      enabled: true,
+    };
+  };
+  const runTest = async () => {
+    const payload = collect();
+    const complete = payload.conditions.length >= 1 && payload.conditions.every((c) => c.field && c.op && c.value);
+    if (!complete) {
+      testResult.innerHTML = '';
+      const note = document.createElement('div');
+      note.className = 'rule-test-hint';
+      note.textContent = t('补全条件后自动预览命中结果。');
+      testResult.appendChild(note);
+      return;
+    }
+    const sample = {
+      title: sampleFields.title.value, author: sampleFields.author.value,
+      url: sampleFields.url.value, summary: sampleFields.summary.value, body: sampleFields.body.value,
+    };
+    const result = await window.robin.rulesTest(payload, sample);
+    testResult.innerHTML = '';
+    if (!result) {
+      const bad = document.createElement('div');
+      bad.className = 'rule-test-hint rule-test-invalid';
+      bad.textContent = t('规则尚未通过校验，修正后可预览。');
+      testResult.appendChild(bad);
+      return;
+    }
+    const verdict = document.createElement('div');
+    verdict.className = `rule-test-verdict ${result.matched ? 'hit' : 'miss'}`;
+    verdict.innerHTML = `${icon(result.matched ? 'checkCircle' : 'questionCircle')}<span></span>`;
+    verdict.querySelector('span').textContent = result.matched ? t('命中：将执行以下动作') : t('未命中：不执行动作');
+    testResult.appendChild(verdict);
+    const list = document.createElement('div');
+    list.className = 'rule-test-conditions';
+    result.conditions.forEach((condition) => {
+      const item = document.createElement('div');
+      item.className = `rule-test-cond ${condition.hit ? 'hit' : 'miss'}`;
+      const fieldText = (FIELD_OPTIONS.find(([v]) => v === condition.field) || ['', condition.field])[1];
+      const opText = (OP_OPTIONS.find(([v]) => v === condition.op) || ['', condition.op])[1];
+      item.innerHTML = `${icon(condition.hit ? 'checkCircle' : 'close')}<span class="cond"></span>`;
+      const condEl = item.querySelector('.cond');
+      condEl.textContent = `${fieldText} ${opText} ${condition.value}`;
+      list.appendChild(item);
+    });
+    testResult.appendChild(list);
+    if (result.matched && result.actions.length) {
+      const actionsLine = document.createElement('div');
+      actionsLine.className = 'rule-test-actions';
+      const labels = { read: t('标为已读'), star: t('收藏'), later: t('加入稍后读') };
+      actionsLine.textContent = result.actions.map((action) => action.startsWith('tag:')
+        ? `${t('打标签')}：${action.slice(4)}` : labels[action] || action).join(' · ');
+      testResult.appendChild(actionsLine);
+    }
+  };
+
+  // 最近样本下拉（异步载入；选中即填充样本字段）
+  window.robin.rulesSamples(20).then((samples) => {
+    for (const sample of samples || []) {
+      const option = document.createElement('option');
+      option.value = sample.id;
+      option.textContent = sample.title || sample.id;
+      sampleSelect.appendChild(option);
+    }
+    sampleSelect.addEventListener('change', () => {
+      const picked = (samples || []).find((s) => s.id === sampleSelect.value);
+      if (!picked) return;
+      sampleFields.title.value = picked.title || '';
+      sampleFields.author.value = picked.author || '';
+      sampleFields.url.value = picked.url || '';
+      sampleFields.summary.value = picked.summary || '';
+      sampleFields.body.value = picked.body || '';
+      scheduleTest();
+    });
+  }).catch(() => { /* 样本拉取失败：仍可手贴样本 */ });
+
+  // ── 初始值回填 ──
+  if (rule) {
+    nameInput.value = rule.name || '';
+    scopeSelect.value = rule.scope?.kind === 'feeds' ? 'feeds' : 'all';
+    renderFeedPick(rule.scope?.kind === 'feeds' ? rule.scope.ids : []);
+    for (const condition of (rule.conditions?.length ? rule.conditions : [{}])) addCondRow(condition);
+    for (const chip of actionChips.querySelectorAll('.rule-action-chip')) {
+      chip.classList.toggle('active', (rule.actions || []).includes(chip.dataset.action));
+    }
+    tagInput.value = (rule.actions || []).filter((a) => a.startsWith('tag:')).map((a) => a.slice(4)).join(', ');
+  } else {
+    renderFeedPick([]);
+    addCondRow();
+  }
+  syncScopeUI();
+
+  // ── 保存 ──
+  submitBar(modal, t('取消'), t('保存'), async (button) => {
+    const payload = collect();
+    if (!payload.name) { await alertBox(t('无法保存'), t('请填写规则名称。')); return false; }
+    button.textContent = t('保存中…');
+    const result = await window.robin.rulesSave(payload);
+    if (!result.ok) {
+      await alertBox(t('无法保存'), String(result.error || t('请检查规则配置。')));
+      return false;
+    }
+    onSaved?.();
+    return true;
+  });
+
+  scheduleTest(); // 初始（新建空态 → 提示补全条件）
+}
+
+/** 正则即时校验（与主进程同一套规则：长度/编译/嵌套量词）。返回错误文案或 null。 */
+function regexProblem(value) {
+  if (!value) return null;
+  if (value.length > 200) return t('正则过长（最多 200 字）。');
+  try { new RegExp(value, 'i'); } catch (_) { return t('正则表达式无法编译，请检查语法。'); }
+  if (/(?:\((?:[^()\\]|\\.|\([^()]*\))*[+*}]\s*\)|\[[^\]]*[+*}]\s*\])[+*{]/.test(value)) {
+    return t('正则含嵌套量词（如 (a+)+），有灾难性回溯风险，已被拒绝。');
+  }
+  return null;
+}
+
+/** 设置弹层内轻量 toast（与 app.js 的 toast-capsule 同款 DOM；补齐本模块 4 处既有调用的未定义引用）。 */
+let ruleToastTimer = null;
+function showToast(message, duration = 1800) {
+  document.getElementById('toast-capsule')?.remove();
+  const toast = document.createElement('div');
+  toast.className = 'toast-capsule';
+  toast.id = 'toast-capsule';
+  toast.innerHTML = `<span class="check">${icon('checkCircle')}</span><span class="toast-msg"></span>`;
+  toast.querySelector('.toast-msg').textContent = message;
+  document.body.appendChild(toast);
+  clearTimeout(ruleToastTimer);
+  ruleToastTimer = setTimeout(() => { toast.remove(); }, duration);
+}
 
 function group(title, footer, rows) {
   const el = document.createElement('div');

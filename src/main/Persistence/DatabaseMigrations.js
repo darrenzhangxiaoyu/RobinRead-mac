@@ -515,6 +515,33 @@ const MIGRATIONS = [
       `);
     },
   },
+
+  {
+    id: 'v12-filter-rules',
+    up: (db) => {
+      // 规则过滤引擎（F2）：作用域 + 条件 + 动作的自动化规则（对标 Inoreader Filters）。
+      // - scope_json：{"kind":"all"}（全局）或 {"kind":"feeds","ids":[feedID,...]}（指定源多选）
+      // - conditions_json：{"mode":"all"|"any","list":[{field,op,value}]}（mode=全部/任一满足）
+      // - actions_json：["read"|"star"|"later"|"tag:<名>"]（可多选；打标签复用 article_tags）
+      // - priority 越小越先执行（列表顺序），hit_count 供编辑器回显命中量。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS filter_rules (
+            id              TEXT PRIMARY KEY NOT NULL,
+            name            TEXT NOT NULL,
+            scope_json      TEXT NOT NULL,
+            conditions_json TEXT NOT NULL,
+            actions_json    TEXT NOT NULL,
+            enabled         INTEGER NOT NULL DEFAULT 1,
+            priority        INTEGER NOT NULL DEFAULT 0,
+            hit_count       INTEGER NOT NULL DEFAULT 0,
+            created_at      REAL NOT NULL,
+            updated_at      REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_filter_rules_priority
+        ON filter_rules(priority, enabled);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

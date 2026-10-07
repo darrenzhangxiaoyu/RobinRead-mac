@@ -30,6 +30,7 @@ const { EvolutionEngine } = require('./EvolutionEngine');
 const { AihotService } = require('./AihotService');
 const { ExploreService } = require('./ExploreService');
 const { FullTextService } = require('./FullTextService');
+const { RulesEngine } = require('./RulesEngine');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -140,6 +141,7 @@ class AppStore extends EventEmitter {
     this.aihot = new AihotService();
     this.explore = new ExploreService(this);
     this.fulltext = new FullTextService(this); // 全文抓取引擎（F1）：刷新后后台补抓摘要型源全文
+    this.rules = new RulesEngine(this); // 规则过滤引擎（F2）：灌文后按用户规则自动执行动作
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -823,6 +825,9 @@ class AppStore extends EventEmitter {
         }
       }
     });
+    // 规则过滤引擎（F2）：灌文事务提交后、状态推送之前同步应用规则
+    // （纯内存匹配 + 批量写单事务；零规则零成本，异常不外抛不影响入库主流程）
+    if (newUnread.length) this.rules.applyToNewEntries(newUnread);
     if (newUnread.length > 200) newUnread = newUnread.slice(0, 200);
     if (newUnread.length) this._bumpListSet();
     // 全文抓取（F1）：灌文事务提交后只登记 ID，筛选与网络由 fulltext.kick() 异步接力
@@ -2164,7 +2169,9 @@ class AppStore extends EventEmitter {
         });
         items = incremental.items;
       }
-      this._applyReaderItems(accountID, items, idMap);
+      const newSyncedIDs = this._applyReaderItems(accountID, items, idMap);
+      // 规则过滤引擎（F2）：同步灌入的新文章同样过规则（作用域按条目自身源判定）
+      if (newSyncedIDs.length) this.rules.applyToNewEntries(newSyncedIDs);
 
       // 3. 回放本地变更（先推后对账：离线期间标记的已读/星标先上服务器，
       //    否则下一步按服务器状态对账会把本地新改动回滚成旧状态）
@@ -2240,6 +2247,7 @@ class AppStore extends EventEmitter {
   _applyReaderItems(accountID, items, idMap) {
     // P2-4：整批单事务（upsertEntry 内层 SAVEPOINT 嵌套安全）——首启全量 200 条
     // 原先每条一事务，一次同步 200 次 WAL fsync。
+    const newIDs = []; // 本轮新灌入的 itemID（F2 规则过滤引擎回传）
     this.database.transaction(() => {
       for (const item of items) {
         if (!item.id) continue;
@@ -2251,6 +2259,7 @@ class AppStore extends EventEmitter {
         const itemID = existingItemID ?? `gr:${accountID}:${stableDigest(item.id)}`;
         const feed = this._feedForReaderItem(accountID, item);
         if (!feed) continue;
+        if (!existingItemID) newIDs.push(itemID);
 
         const publishedAt = item.published ?? item.updated ?? (item.timestampMS ?? item.crawlTimeMS) ?? nowSeconds();
         const contentHTML = item.contentHTML ?? item.summaryContent ?? null;
@@ -2270,6 +2279,7 @@ class AppStore extends EventEmitter {
         });
       }
     });
+    return newIDs;
   }
 
   _feedForReaderItem(accountID, item) {

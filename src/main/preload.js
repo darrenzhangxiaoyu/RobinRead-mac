@@ -78,6 +78,16 @@ contextBridge.exposeInMainWorld('robin', {
   setFulltextFeedMode: (feedID, mode) => invoke('fulltext:setFeedMode', feedID, mode),
   fulltextStats: () => data('fulltext:stats'),
 
+  // 规则过滤引擎（F2：CRUD / 顺序 / 测试器 / 回放 / 最近样本）
+  rulesList: () => data('rules:list'),
+  rulesSave: (payload) => invoke('rules:save', payload),
+  rulesDelete: (id) => invoke('rules:delete', id),
+  rulesSetEnabled: (id, enabled) => invoke('rules:setEnabled', id, enabled),
+  rulesMove: (id, direction) => invoke('rules:move', id, direction),
+  rulesTest: (payload, sample) => data('rules:test', payload, sample),
+  rulesReplay: (opts) => data('rules:replay', opts),
+  rulesSamples: (limit) => data('rules:samples', limit),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

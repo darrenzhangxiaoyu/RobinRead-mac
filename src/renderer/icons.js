@@ -70,6 +70,9 @@ export const icons = {
   store: i('<path d="M2.2 6.2h11.6v8c0 .5-.4.9-.9.9H3.1c-.5 0-.9-.4-.9-.9v-8z"/><path d="M2.4 6.2L3.6 2.9h8.8l1.2 3.3"/><path d="M6 9.4h4"/><path d="M5.8 6.2V4.6a2.2 2.2 0 0 1 4.4 0v1.6"/>'),
   search: i('<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4L14 14"/>'),
   winClose: `<svg viewBox="0 0 10 10" width="10" height="10" stroke="currentColor" stroke-width="1.1"><line x1="0.8" y1="0.8" x2="9.2" y2="9.2"/><line x1="9.2" y1="0.8" x2="0.8" y2="9.2"/></svg>`,
+  funnel: i('<path d="M1.8 2.6h12.4L9.6 8v4.4c0 .4-.4.7-.8.5l-2.4-1.2c-.3-.1-.4-.4-.4-.6V8L1.8 2.6z"/>'),
+  chevronUp: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
+  playCircle: i('<circle cx="8" cy="8" r="6.4"/><path d="M6.6 5.6l4 2.4-4 2.4v-4.8z"/>'),
 };
 
 export function icon(name, extraClass = '') {

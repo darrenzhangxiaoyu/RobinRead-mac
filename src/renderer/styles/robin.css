@@ -5374,3 +5374,59 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 /* R-D5 打回：全屏态预览垂直居中 + 去残影 */
 .modal.cardx-modal.maximized .cardx-preview { align-items: center; }
 .modal.cardx-modal.maximized { box-shadow: none !important; }
+
+/* ===== F2 规则过滤引擎（设置分区 + 规则编辑器 + 测试器）===== */
+.rule-toolbar { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
+.rule-count-note { margin-left: auto; font-size: 11.5px; color: var(--text-tertiary); }
+.rule-list { display: flex; flex-direction: column; }
+.rule-row { display: flex; align-items: center; gap: var(--space-3); padding: 10px var(--space-4); border-top: 1px solid var(--hairline); }
+.rule-row:first-child { border-top: none; }
+.rule-row-label { flex: 1; min-width: 0; }
+.rule-row-title { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-row-desc { font-size: 11.5px; color: var(--text-tertiary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rule-row-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.rule-row-controls .btn.icon-only { width: 28px; height: 28px; }
+.rule-row-controls .btn.icon-only:hover { background: var(--row-hover); }
+.rule-row-controls .rule-danger:hover { color: var(--warm-accent); }
+
+/* 规则编辑器（宽版小弹窗 + 滚动体） */
+.modal.rule-editor { width: min(720px, calc(100vw - 72px)); }
+.rule-editor-body { max-height: min(66vh, 620px); overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-4); }
+.rule-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.rule-block-label { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.rule-feed-pick { display: none; flex-direction: column; gap: 2px; max-height: 168px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: var(--radius-md); padding: var(--space-2); }
+.rule-feed-item { display: flex; align-items: center; gap: var(--space-2); font-size: 12.5px; color: var(--text-secondary); padding: 3px 4px; border-radius: var(--radius-xs); cursor: pointer; }
+.rule-feed-item:hover { background: var(--row-hover); }
+.rule-feed-empty { font-size: 12px; color: var(--text-tertiary); padding: 4px; }
+.rule-cond-rows { display: flex; flex-direction: column; gap: var(--space-2); }
+.rule-cond-row { display: grid; grid-template-columns: minmax(86px, auto) minmax(96px, auto) 1fr 28px; gap: var(--space-2); align-items: center; }
+.rule-cond-row .control { width: 100%; }
+.rule-cond-row .btn.icon-only { width: 28px; height: 28px; }
+.rule-cond-row .rule-regex-error { grid-column: 1 / -1; }
+.rule-add-cond { align-self: flex-start; }
+.control.rule-cond-value.invalid { border-color: var(--warm-accent); }
+.rule-regex-error { display: none; font-size: 11.5px; color: var(--warm-accent); }
+.rule-regex-error:not(:empty) { display: block; }
+.rule-action-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.rule-action-chip {
+  appearance: none; border: 1px solid var(--hairline); background: transparent; color: var(--text-secondary);
+  font-size: 12.5px; padding: 5px 12px; border-radius: var(--radius-full); cursor: pointer;
+  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out);
+}
+.rule-action-chip:hover { background: var(--row-hover); }
+.rule-action-chip.active { background: var(--row-selected); color: var(--text-primary); border-color: color-mix(in srgb, var(--accent) 45%, transparent); font-weight: 600; }
+.rule-tag-input { width: 100%; }
+
+/* 规则测试器 */
+.rule-test-block { border-top: 1px solid var(--hairline); padding-top: var(--space-3); }
+.rule-test-result { display: flex; flex-direction: column; gap: var(--space-2); }
+.rule-test-hint { font-size: 12px; color: var(--text-tertiary); }
+.rule-test-hint.rule-test-invalid { color: var(--warm-accent); }
+.rule-test-verdict { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+.rule-test-verdict.hit { color: var(--accent); }
+.rule-test-verdict.miss { color: var(--text-tertiary); }
+.rule-test-conditions { display: flex; flex-direction: column; gap: 3px; }
+.rule-test-cond { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 8px; border-radius: var(--radius-xs); }
+.rule-test-cond.hit { background: var(--row-selected); color: var(--text-primary); }
+.rule-test-cond.miss { background: var(--row-hover); color: var(--text-tertiary); }
+.rule-test-actions { font-size: 12px; color: var(--text-secondary); padding-left: 2px; }

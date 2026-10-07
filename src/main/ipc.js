@@ -636,6 +636,18 @@ function registerIPCHandlers(store, window) {
   // MARK: 每源全文抓取三态 + 补抓统计（F1）
   handle('fulltext:setFeedMode', (feedID, mode) => store.setFulltextFeedMode(feedID, mode));
   handle('fulltext:stats', () => store.fulltext.feedStats());
+
+  // MARK: 规则过滤引擎（F2：CRUD / 顺序 / 测试器 / 回放 / 样本）
+  const R = () => store.rules;
+  handle('rules:list', () => R().listRules());
+  handle('rules:save', (payload) => R().saveRule(payload || {}));
+  handle('rules:delete', (id) => R().deleteRule(id));
+  handle('rules:setEnabled', (id, enabled) => R().setRuleEnabled(id, enabled));
+  handle('rules:move', (id, direction) => R().moveRule(id, direction));
+  handle('rules:test', (payload, sample) => R().testRule(payload || {}, sample || {}));
+  handle('rules:replay', (opts) => R().replayRecent(opts || {}));
+  handle('rules:samples', (limit) => R().recentSamples(limit));
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
 

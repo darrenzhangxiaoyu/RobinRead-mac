@@ -81,6 +81,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r40-details.js', runner: 'electron', desc: 'R40 细节三连：chips 换行/历史键盘导航/工具条 aria（离线）' },
   { file: 'scripts/diag-card-export.js', runner: 'electron', desc: '精读卡片导出：解析器+模板+离屏截图（离线）' },
   { file: 'scripts/diag-f1-fulltext.js', runner: 'electron', desc: 'F1 全文抓取：三态偏好/后台队列补抓入库/FTS/并发≤2/存量回补/徽标（离线）' },
+  { file: 'scripts/diag-f2-rules.js', runner: 'electron', desc: 'F2 过滤规则：CRUD/灌文规则生效/作用域/操作符/正则安全/测试器/回放幂等/单事务/耗时回归（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];
