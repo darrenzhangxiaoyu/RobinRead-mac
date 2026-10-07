@@ -108,34 +108,40 @@ app.whenReady().then(async () => {
       const countBefore = er.pages.length;
       er._relayout(false);
       const countAfter = er.pages.length;
-      // P7 窄窗淡入（轮询等待 relayout，负载下 resize 事件可能晚到）
+      // P7 窄窗淡入（轮询等待 relayout，隐藏窗口下 resize 事件可能晚到——10s 预算）
       window.resizeTo(600, 800);
       let narrowForm = false;
-      for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 250)); narrowForm = er.pages.length > 0 && er.pages.every(p => p.form !== 'spread'); if (narrowForm) break; }
+      for (let i = 0; i < 40 && !narrowForm; i++) { await new Promise(r => setTimeout(r, 250)); narrowForm = er.pages.length > 0 && er.pages.every(p => p.form !== 'spread'); }
       er._go(er.pages.length > 2 ? 1 : 0);
       await new Promise(r => setTimeout(r, 120));
       const fadeNoLeaf = ov.querySelector('.er-leaf').hidden;
       const bFadein = ov.querySelector('.er-sheet[data-role="b"]').classList.contains('er-fadein');
       await new Promise(r => setTimeout(r, 700));
-      // 还原宽窗再测文章模式（同样轮询等回对开）
+      // 还原宽窗再测文章模式（同样轮询等回对开——10s 预算）
       window.resizeTo(1600, 1000);
-      for (let i = 0; i < 20; i++) { await new Promise(r => setTimeout(r, 250)); if (er.pages.every(p => p.form === 'spread')) break; }
+      for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 250)); if (er.pages.every(p => p.form === 'spread')) break; }
       await new Promise(r => setTimeout(r, 200));
       // P10 文章模式：点击稿件卡 → 正文分页为对开书页
       const editionIndexBefore = er.index;
       const firstCard = ov.querySelector('.er-sheet[data-role="a"] .er-place');
       firstCard.click();
-      await new Promise(r => setTimeout(r, 400));
+      // 轮询等待文章装载完成（装载是异步的：字体就绪+测量分页；固定 400ms 在负载下会抢跑）
+      for (let i = 0; i < 40; i++) { await new Promise(r => setTimeout(r, 250)); if (er.mode === 'article' && er.pages[0] && er.pages[0].template === 'article' && er.index === 0 && !er.turn) break; }
       const artMode = er.mode === 'article';
       const artPages = er.pages.length;
       const artFirstIsArticle = er.pages[0] && er.pages[0].template === 'article';
       const artHeadBack = !!ov.querySelector('.er-sheet[data-role="a"] .er-head-back');
       const artTitleInHead = (ov.querySelector('.er-sheet[data-role="a"] .er-head-title') || {}).textContent || '';
       const artSpread = er.pages.every(p => p.form === 'spread');
-      // 正文内翻页（轮询等待落页，重负载下动画+settle 可能显著超过常规时长；20s 预算）
+      // 正文内翻页（轮询等待落页；隐藏窗口下 settle 偶发卡住时 3.2s 重发一次翻页指令
+      // ——与真实用户「再按一次 →」同语义，_go 对进行中的 settle 翻页会取消改道）
       er._go(1);
       let artPage2 = false;
-      for (let i = 0; i < 50 && !artPage2; i++) { await new Promise(r => setTimeout(r, 400)); artPage2 = er.index === 1; }
+      for (let i = 0; i < 50 && !artPage2; i++) {
+        await new Promise(r => setTimeout(r, 400));
+        if (er.index !== 1 && i > 0 && i % 8 === 0) er._go(1);
+        artPage2 = er.index === 1;
+      }
       // Esc 返回版面且恢复落点
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await new Promise(r => setTimeout(r, 300));

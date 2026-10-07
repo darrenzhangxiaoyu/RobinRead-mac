@@ -2411,9 +2411,16 @@ export class EditionReader {
     if (this.reduceMotion) turn.animDur = Math.min(turn.animDur, 0.12);
     // 帧驱动（R11 性能）：可见窗口用 rAF（与显示器刷新同步，消除 16ms timer 抖动卡顿）；
     // 隐藏窗口 rAF 被冻结，回退 16ms timer（对标上游 clockTask 兜底钟）。合成器走 transform，主线程只写样式。
+    // 看门狗：不可见/高负载窗口 rAF 可能长时间不产帧（隐藏窗口实测会整段停摆），
+    // 200ms 无帧则回退 timer 驱动——settle 最坏掉帧但不冻结，翻页状态机不会永久卡死。
     const schedule = (fn) => {
-      if (document.visibilityState === 'visible') this._raf = requestAnimationFrame(fn);
-      else this._raf = setTimeout(fn, 16);
+      let fired = false;
+      let wdt = 0;
+      const run = () => { if (fired) return; fired = true; clearTimeout(wdt); fn(); };
+      if (document.visibilityState === 'visible') {
+        this._raf = requestAnimationFrame(run);
+        wdt = setTimeout(() => { cancelAnimationFrame(this._raf); run(); }, 200);
+      } else this._raf = setTimeout(run, 16);
     };
     const tick = () => {
       const tn = this.turn;
