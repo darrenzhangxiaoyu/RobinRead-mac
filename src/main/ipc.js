@@ -675,6 +675,18 @@ function registerIPCHandlers(store, window) {
   handle('topics:aggregate', (id) => TP().aggregateTopic(id, { force: true }));
   handle('topics:hits', (id, opts) => TP().hits(id, opts || {}));
 
+  // MARK: Newsletter 收件（F6：邮箱账户 / 白名单发件人 / 测试连接）
+  const ML = () => store.mail;
+  handle('mail:accounts', () => ML().listAccounts());
+  handle('mail:add', (payload) => ML().addAccount(payload || {}));
+  handle('mail:test', (payload) => ML().testConnection(payload || {}));
+  handle('mail:delete', (id) => ML().deleteAccount(id));
+  handle('mail:setEnabled', (id, enabled) => ML().setAccountEnabled(id, enabled === true));
+  handle('mail:setSelfSigned', (id, allow) => ML().setSelfSigned(id, allow === true));
+  handle('mail:senders', (accountID) => ML().listSenders(accountID));
+  handle('mail:addSender', (payload) => ML().addSender(payload || {}));
+  handle('mail:removeSender', (feedID) => ML().removeSender(feedID));
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
 

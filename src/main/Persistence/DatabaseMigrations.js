@@ -635,7 +635,7 @@ const MIGRATIONS = [
       //   feed_url 唯一判重与 is_dead 语义，平台列只作分派与展示用。
       // 加列走幂等 try/catch（v6/v10 同款：列已存在时重入跳过）。
       try {
-        db.exec("ALTER TABLE feeds ADD COLUMN platform TEXT NOT NULL DEFAULT 'web'");
+        db.exec('ALTER TABLE feeds ADD COLUMN platform TEXT NOT NULL DEFAULT \'web\'');
       } catch (_) { /* 列已存在：幂等重入 */ }
       try {
         db.exec('ALTER TABLE feeds ADD COLUMN platform_ref TEXT');
@@ -643,6 +643,34 @@ const MIGRATIONS = [
       db.exec(`
         CREATE INDEX IF NOT EXISTS idx_feeds_platform
         ON feeds(account_id, platform, platform_ref);
+      `);
+    },
+  },
+  {
+    id: 'v16-mail-accounts',
+    up: (db) => {
+      // Newsletter 收件（F6）：IMAP 邮箱账户。
+      // - 密码本体绝不落库：password_ref 指向 CredentialStore（DPAPI 加密文件）的
+      //   key（mail-password-<id>），删账户时随凭据一并清除；
+      // - allow_self_signed：企业内网自签名证书白名单（默认 0 = 严格校验）；
+      // - last_sync：账户级增量游标（SEARCH SINCE 的基准，成功刷新后才推进）；
+      // - 白名单发件人复用 feeds 表（platform='mail'，platform_ref=发件人地址，
+      //   feed_url=mail://<accountId>/<sender>），本表不冗余存发件人。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS mail_accounts (
+            id                TEXT PRIMARY KEY NOT NULL,
+            host              TEXT NOT NULL,
+            port              INTEGER NOT NULL DEFAULT 993,
+            username          TEXT NOT NULL,
+            password_ref      TEXT NOT NULL,
+            allow_self_signed INTEGER NOT NULL DEFAULT 0,
+            enabled           INTEGER NOT NULL DEFAULT 1,
+            last_sync         REAL,
+            created_at        REAL NOT NULL,
+            updated_at        REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_mail_accounts_enabled
+        ON mail_accounts(enabled);
       `);
     },
   },

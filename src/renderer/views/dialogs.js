@@ -14,6 +14,7 @@ const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
   { id: 'general', title: '通用', icon: 'general' },
   { id: 'accounts', title: '账号', icon: 'person' },
+  { id: 'mail', title: '邮件订阅', icon: 'envelopeClosed' },
   { id: 'ai', title: 'AI 功能', icon: 'ai' },
   { id: 'refresh', title: '刷新', icon: 'refresh' },
   { id: 'rules', title: '过滤规则', icon: 'funnel' },
@@ -120,6 +121,7 @@ export class SettingsView {
       case 'appearance': this._appearance(scroll, prefs); break;
       case 'general': this._general(scroll); break;
       case 'accounts': this._accounts(scroll); break;
+      case 'mail': this._mail(scroll); break;
       case 'ai': this._ai(scroll, llm); break;
       case 'refresh': this._refresh(scroll, prefs); break;
       case 'rules': this._rules(scroll); break;
@@ -782,6 +784,181 @@ export class SettingsView {
       rerender();
     });
     host.appendChild(row('', '', logoutBtn));
+  }
+
+  // MARK: 邮件订阅（F6 Newsletter：IMAP 账户 + 发件人白名单）
+
+  async _mail(container) {
+    const accounts = (await window.robin.mailAccounts().catch(() => [])) || [];
+
+    container.appendChild(group(t('邮箱接入'), t('接入 IMAP 邮箱后，把指定发件人的邮件自动转成订阅文章：每个白名单发件人生成一条订阅源，正文在阅读器内干净呈现。密码经系统加密（DPAPI）只保存在本机，最多 3 个账户。'), (() => {
+      const wrap = document.createElement('div');
+      wrap.className = 'setting-control';
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn-text primary';
+      addBtn.innerHTML = `${icon('plus')}<span style="margin-left:5px"></span>`;
+      addBtn.querySelector('span').textContent = t('添加邮箱…');
+      addBtn.addEventListener('click', () => showAddMailAccount(() => { this.handlers.onRefreshState?.(); this.render(); }));
+      wrap.appendChild(addBtn);
+      return [wrap]; // group() 逐个迭代 rows——必须回传数组
+    })()));
+
+    if (!accounts.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:14px 16px;font-size:12px;color:var(--text-secondary);';
+      empty.textContent = t('还没有邮箱账户。常见邮箱（QQ / 163 / Gmail / Outlook）需在邮箱网页设置里开启 IMAP 并使用授权码或应用专用密码。');
+      container.appendChild(plain(empty));
+      return;
+    }
+
+    for (const account of accounts) {
+      const card = document.createElement('div');
+      card.className = 'settings-group';
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 16px;';
+      const iconEl = document.createElement('span');
+      iconEl.className = 'setting-icon';
+      iconEl.innerHTML = icon('envelopeClosed');
+      const title = document.createElement('div');
+      title.style.flex = '1';
+      title.style.minWidth = '0';
+      const titleLine = document.createElement('div');
+      titleLine.style.cssText = 'font-size:13.5px;font-weight:600;';
+      titleLine.textContent = account.username;
+      const descLine = document.createElement('div');
+      descLine.style.cssText = 'font-size:11.5px;color:var(--text-secondary);';
+      const lastSyncText = account.lastSync
+        ? tf('上次同步：%@', new Date(account.lastSync * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+        : t('尚未同步');
+      descLine.textContent = `${account.host}:${account.port} · ${lastSyncText}`;
+      title.append(titleLine, descLine);
+      head.append(iconEl, title, toggleControl(account.enabled, async (value) => {
+        await window.robin.mailSetEnabled(account.id, value);
+      }));
+
+      // 测试连接（用已存凭据）
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;align-items:center;gap:8px;padding:0 16px 10px;flex-wrap:wrap;';
+      const testBtn = document.createElement('button');
+      testBtn.className = 'btn-text bordered';
+      testBtn.textContent = t('测试连接');
+      testBtn.addEventListener('click', async () => {
+        testBtn.disabled = true;
+        testBtn.textContent = t('正在测试…');
+        try {
+          const result = await window.robin.mailTest({ accountID: account.id });
+          testBtn.textContent = result.ok
+            ? tf('连接正常 · 收件箱 %lld 封 · %lldms', result.data?.messageCount ?? 0, result.data?.elapsedMs ?? 0)
+            : t('连接失败');
+          if (!result.ok) await alertBox(t('连接失败'), String(result.error || ''));
+        } catch (err) {
+          testBtn.textContent = t('连接失败');
+          await alertBox(t('连接失败'), String(err?.message || err));
+        }
+        setTimeout(() => { testBtn.disabled = false; testBtn.textContent = t('测试连接'); }, 4000);
+      });
+      const addSenderBtn = document.createElement('button');
+      addSenderBtn.className = 'btn-text bordered';
+      addSenderBtn.textContent = t('添加发件人…');
+      addSenderBtn.addEventListener('click', async () => {
+        const value = await promptBox(t('添加发件人'), {
+          initial: '',
+          placeholder: t('完整地址 name@example.com 或域名后缀 @example.com'),
+        });
+        if (value == null || !value.trim()) return;
+        const result = await window.robin.mailAddSender({ accountID: account.id, sender: value.trim() });
+        if (!result.ok) {
+          await alertBox(t('添加失败'), String(result.error || ''));
+          return;
+        }
+        this.render();
+      });
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'btn icon-only';
+      removeBtn.innerHTML = icon('trash');
+      removeBtn.style.color = '#c93b3b';
+      removeBtn.title = t('删除邮箱');
+      removeBtn.addEventListener('click', async () => {
+        const ok = await confirmBox(t('确认删除邮箱账户？'), {
+          message: t('将删除该邮箱的所有白名单发件人订阅与已收文章，并清除本机保存的密码。邮箱本身不受影响。'),
+          okLabel: t('删除'),
+          danger: true,
+        });
+        if (!ok) return;
+        await window.robin.mailDelete(account.id);
+        this.handlers.onRefreshState?.();
+        this.render();
+      });
+      actions.append(testBtn, addSenderBtn, removeBtn);
+
+      // 自签名开关（风险明示）
+      const selfSignedRow = document.createElement('div');
+      selfSignedRow.style.cssText = 'display:flex;align-items:center;gap:10px;padding:0 16px 10px;font-size:12px;';
+      const selfSignedToggle = toggleControl(account.allowSelfSigned, async (value) => {
+        if (value) {
+          const confirmed = await confirmBox(t('允许自签名证书？'), {
+            message: t('自签名证书无法验证服务器身份，凭据与邮件内容可能被中间人窃取。仅在信任该服务器（如公司内网）时开启。'),
+            okLabel: t('仍然开启'),
+            danger: true,
+          });
+          if (!confirmed) { this.render(); return; }
+        }
+        await window.robin.mailSetSelfSigned(account.id, value);
+        this.render();
+      });
+      const selfSignedLabel = document.createElement('span');
+      selfSignedLabel.style.color = 'var(--text-secondary)';
+      selfSignedLabel.textContent = t('允许自签名证书（有安全风险）');
+      selfSignedRow.append(selfSignedToggle, selfSignedLabel);
+
+      // 白名单发件人列表（异步填充）
+      const senderHost = document.createElement('div');
+      senderHost.style.cssText = 'border-top:1px solid var(--separator);';
+      const senderHead = document.createElement('div');
+      senderHead.style.cssText = 'padding:10px 16px 4px;font-size:12px;font-weight:600;color:var(--text-secondary);';
+      senderHead.textContent = t('发件人白名单');
+      senderHost.appendChild(senderHead);
+      window.robin.mailSenders(account.id).then((senders) => {
+        if (!card.isConnected) return;
+        const list = Array.isArray(senders) ? senders : [];
+        if (!list.length) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'padding:6px 16px 12px;font-size:11.5px;color:var(--text-secondary);';
+          empty.textContent = t('还没有白名单发件人，点「添加发件人…」把指定发件人的邮件转成订阅。');
+          senderHost.appendChild(empty);
+          return;
+        }
+        for (const senderFeed of list) {
+          const line = document.createElement('div');
+          line.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 16px;font-size:12px;';
+          const name = document.createElement('span');
+          name.style.cssText = 'flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+          name.textContent = String(senderFeed.sender || senderFeed.title || '');
+          const count = document.createElement('span');
+          count.style.color = 'var(--text-secondary)';
+          count.textContent = tf('%lld 篇', Number(senderFeed.entryCount) || 0);
+          const del = document.createElement('button');
+          del.className = 'btn icon-only';
+          del.innerHTML = icon('close');
+          del.title = t('移除发件人');
+          del.addEventListener('click', async () => {
+            const ok = await confirmBox(t('移除发件人？'), {
+              message: tf('将移除「%@」订阅及其已收文章。', String(senderFeed.sender || senderFeed.title || '')),
+              okLabel: t('移除'),
+              danger: true,
+            });
+            if (!ok) return;
+            await window.robin.mailRemoveSender(senderFeed.id);
+            this.render();
+          });
+          line.append(name, count, del);
+          senderHost.appendChild(line);
+        }
+      });
+
+      card.append(head, actions, selfSignedRow, senderHost);
+      container.appendChild(card);
+    }
   }
 
   // MARK: AI 功能
@@ -1806,6 +1983,109 @@ export function showFreshRSSAccount(onAdded) {
     onAdded?.();
     return true;
   });
+}
+
+/**
+ * 添加邮箱账户（F6）：IMAP host/port/用户名/密码 + 自签名放行（明示风险）。
+ * 「测试连接」走真实 LOGIN+SELECT+LOGOUT；密码只在添加时传给主进程，落 CredentialStore。
+ */
+export function showAddMailAccount(onAdded) {
+  const { overlay, modal } = smallModal(t('添加邮箱'));
+  const body = modal.querySelector('.sheet-body');
+
+  const hostInput = field(body, t('IMAP 服务器'), 'server', t('例如：imap.qq.com、imap.gmail.com'));
+  const portInput = field(body, t('端口'), 'general', '993');
+  portInput.value = '993';
+  const userInput = field(body, t('账号'), 'person', t('完整邮箱地址'));
+  const passwordInput = field(body, t('密码 / 授权码'), 'general', '', true);
+  const hintEl = hint(body, t('多数邮箱需先在网页版设置开启 IMAP，并使用授权码或应用专用密码登录。密码经系统加密只保存在本机。'));
+
+  // 自签名放行（默认关；开启时把提示换成风险文案）
+  const riskRow = document.createElement('label');
+  riskRow.style.cssText = 'display:flex;align-items:center;gap:8px;padding:2px 2px 0;font-size:12px;color:var(--text-secondary);cursor:pointer;';
+  const riskCheck = document.createElement('input');
+  riskCheck.type = 'checkbox';
+  const riskText = document.createElement('span');
+  riskText.textContent = t('允许自签名证书（仅限可信内网，有安全风险）');
+  riskRow.append(riskCheck, riskText);
+  body.appendChild(riskRow);
+  riskCheck.addEventListener('change', () => {
+    hintEl.textContent = riskCheck.checked
+      ? t('已选择信任自签名证书：该服务器身份无法被验证，凭据与邮件可能被中间人窃取。仅在你明确信任该服务器时开启。')
+      : t('多数邮箱需先在网页版设置开启 IMAP，并使用授权码或应用专用密码登录。密码经系统加密只保存在本机。');
+  });
+
+  const status = document.createElement('div');
+  status.style.cssText = 'font-size:12px;min-height:16px;color:var(--text-secondary);padding:6px 2px 0;';
+  body.appendChild(status);
+
+  const collect = () => ({
+    host: hostInput.value.trim(),
+    port: Number(portInput.value.trim()) || 993,
+    username: userInput.value.trim(),
+    password: passwordInput.value,
+    allowSelfSigned: riskCheck.checked,
+  });
+
+  const cancelButton = document.createElement('button');
+  cancelButton.type = 'button';
+  cancelButton.className = 'btn-text';
+  cancelButton.textContent = t('取消');
+  cancelButton.addEventListener('click', () => overlay.remove());
+
+  const testButton = document.createElement('button');
+  testButton.type = 'button';
+  testButton.className = 'btn-text bordered';
+  testButton.textContent = t('测试连接');
+  testButton.addEventListener('click', async () => {
+    const payload = collect();
+    if (!payload.host || !payload.username || !payload.password) {
+      status.textContent = t('请先填写服务器、账号与密码。');
+      return;
+    }
+    testButton.disabled = true;
+    status.textContent = t('正在连接…');
+    try {
+      const result = await window.robin.mailTest(payload);
+      status.textContent = result.ok
+        ? tf('连接正常 · 收件箱 %lld 封 · %lldms', result.data?.messageCount ?? 0, result.data?.elapsedMs ?? 0)
+        : t('连接失败：') + String(result.error || '');
+    } catch (err) {
+      status.textContent = t('连接失败：') + String(err?.message || err);
+    } finally {
+      testButton.disabled = false;
+    }
+  });
+
+  const addButton = document.createElement('button');
+  addButton.type = 'button';
+  addButton.className = 'btn-text primary';
+  addButton.textContent = t('添加');
+  addButton.addEventListener('click', async () => {
+    const payload = collect();
+    if (!payload.host || !payload.username || !payload.password) {
+      status.textContent = t('请先填写服务器、账号与密码。');
+      return;
+    }
+    addButton.disabled = true;
+    try {
+      const result = await window.robin.mailAdd(payload);
+      if (!result.ok) {
+        await alertBox(t('添加失败'), String(result.error || ''));
+        addButton.disabled = false;
+        return;
+      }
+      onAdded?.();
+      overlay.remove();
+    } catch (err) {
+      await alertBox(t('添加失败'), String(err?.message || err));
+      addButton.disabled = false;
+    }
+  });
+
+  const footer = modal.querySelector('.modal-footer');
+  footer.append(cancelButton, testButton, addButton);
+  setTimeout(() => hostInput.focus(), 50);
 }
 
 // MARK: - 构建工具

@@ -34,6 +34,7 @@ const { RulesEngine } = require('./RulesEngine');
 const { MediaService } = require('./MediaService');
 const { TopicService } = require('./TopicService');
 const { PlatformService } = require('./PlatformService');
+const { MailService } = require('./MailService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -148,6 +149,7 @@ class AppStore extends EventEmitter {
     this.media = new MediaService(this, userDataPath); // 媒体中心（F3）：enclosure 入库/进度/队列/离线下载
     this.topics = new TopicService(this); // 话题盯梢（F4）：关键词三路聚合专属信息流
     this.platforms = new PlatformService(this); // 中文平台适配器（F5）：B 站 UP 主 / 微博用户 → 平台源
+    this.mail = new MailService(this); // Newsletter 收件（F6）：IMAP 邮箱 + 发件人白名单 → 平台源同构合成 feed
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -846,9 +848,12 @@ class AppStore extends EventEmitter {
     return this.feedsRepo.feed(feed.id);
   }
 
-  /** F5：抓取分派——平台源走 PlatformService，普通源走 FeedService（返回结构同构）。 */
+  /** F5/F6：抓取分派——平台源走 PlatformService，邮件源走 MailService，普通源走 FeedService（返回结构同构）。 */
   _fetchForFeed(feed, { force = false } = {}) {
-    if (PlatformService.isPlatformFeed(feed)) return this.platforms.fetchFeed(feed, { force });
+    if (PlatformService.isPlatformFeed(feed)) {
+      if (feed.platform === 'mail') return this.mail.fetchFeed(feed, { force });
+      return this.platforms.fetchFeed(feed, { force });
+    }
     return fetchFeed(feed, { force });
   }
 

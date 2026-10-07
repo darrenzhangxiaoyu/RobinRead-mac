@@ -72,6 +72,19 @@ class CredentialStore {
     this._write(`freshrss-password-${accountID}`, null);
   }
 
+  /** Newsletter 收件（F6）：IMAP 邮箱密码，同样 DPAPI 落盘、mail_accounts 只存 key 引用。 */
+  mailPassword(accountID) {
+    return this._read(`mail-password-${accountID}`);
+  }
+
+  setMailPassword(accountID, password) {
+    this._write(`mail-password-${accountID}`, password);
+  }
+
+  deleteMailPassword(accountID) {
+    this._write(`mail-password-${accountID}`, null);
+  }
+
   /** 账号登录 JWT（会员服务），同样只存本机。 */
   authToken() {
     return this._read('auth-token') || '';

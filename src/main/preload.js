@@ -113,6 +113,17 @@ contextBridge.exposeInMainWorld('robin', {
   topicsAggregate: (id) => invoke('topics:aggregate', id),
   topicsHits: (id, opts) => data('topics:hits', id, opts),
 
+  // Newsletter 收件（F6：邮箱账户 / 白名单发件人 / 测试连接）
+  mailAccounts: () => data('mail:accounts'),
+  mailAdd: (payload) => invoke('mail:add', payload),
+  mailTest: (payload) => invoke('mail:test', payload),
+  mailDelete: (id) => invoke('mail:delete', id),
+  mailSetEnabled: (id, enabled) => invoke('mail:setEnabled', id, enabled === true),
+  mailSetSelfSigned: (id, allow) => invoke('mail:setSelfSigned', id, allow === true),
+  mailSenders: (accountID) => data('mail:senders', accountID),
+  mailAddSender: (payload) => invoke('mail:addSender', payload),
+  mailRemoveSender: (feedID) => invoke('mail:removeSender', feedID),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 
