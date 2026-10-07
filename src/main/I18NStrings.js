@@ -1373,6 +1373,20 @@ const STRINGS = {
   "黛蓝": { zh: "黛蓝", en: "Slate Blue" },
   "胭脂": { zh: "胭脂", en: "Rouge" },
   "青莲": { zh: "青莲", en: "Violet" },
+  "全文抓取": { zh: "全文抓取", en: "Full-Text Fetch" },
+  "默认（关）": { zh: "默认（关）", en: "Default (Off)" },
+  "开": { zh: "开", en: "On" },
+  "仅新文章": { zh: "仅新文章", en: "New Articles Only" },
+  "不支持的全文抓取模式。": { zh: "不支持的全文抓取模式。", en: "Unsupported full-text fetching mode." },
+  "此源将自动补抓全文（新文章即时补，手动刷新回补存量）": { zh: "此源将自动补抓全文（新文章即时补，手动刷新回补存量）", en: "Full text will be fetched for this feed (new articles on refresh; manual refresh backfills the archive)" },
+  "此源仅对新文章补抓全文，存量不回补": { zh: "此源仅对新文章补抓全文，存量不回补", en: "Only new articles of this feed get full text; the archive is left as is" },
+  "此源全文抓取已关闭": { zh: "此源全文抓取已关闭", en: "Full-text fetching is off for this feed" },
+  "正在后台补抓全文": { zh: "正在后台补抓全文", en: "Fetching full text in the background" },
+  "为只输出摘要的订阅源在刷新时后台补抓全文入库，列表、搜索与期刊直接可读；默认关闭，按源开启。": { zh: "为只输出摘要的订阅源在刷新时后台补抓全文入库，列表、搜索与期刊直接可读；默认关闭，按源开启。", en: "Fetch full text in the background for summary-only feeds after each refresh, so lists, search and editions read the whole article. Off by default; enable per feed." },
+  "启用后刷新不打断界面；补抓完成后列表「全文」徽标自动消失。": { zh: "启用后刷新不打断界面；补抓完成后列表「全文」徽标自动消失。", en: "Refreshing stays smooth; the Full-Text badge on the list disappears once fetching completes." },
+  "已补抓 %lld 篇": { zh: "已补抓 %lld 篇", en: "%lld articles fetched" },
+  "还没有订阅源。": { zh: "还没有订阅源。", en: "No feeds yet." },
+  "同步账户（FreshRSS / Miniflux）的源由服务端提供正文，暂不参与自动补抓。": { zh: "同步账户（FreshRSS / Miniflux）的源由服务端提供正文，暂不参与自动补抓。", en: "Feeds from synced accounts (FreshRSS / Miniflux) get full text from the server and are not auto-fetched." },
 
 };
 

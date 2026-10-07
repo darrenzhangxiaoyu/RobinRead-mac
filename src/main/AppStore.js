@@ -29,6 +29,7 @@ const { KnowledgeEngine } = require('./KnowledgeEngine');
 const { EvolutionEngine } = require('./EvolutionEngine');
 const { AihotService } = require('./AihotService');
 const { ExploreService } = require('./ExploreService');
+const { FullTextService } = require('./FullTextService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -138,6 +139,7 @@ class AppStore extends EventEmitter {
     this.evolution = new EvolutionEngine(this);
     this.aihot = new AihotService();
     this.explore = new ExploreService(this);
+    this.fulltext = new FullTextService(this); // 全文抓取引擎（F1）：刷新后后台补抓摘要型源全文
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -425,6 +427,8 @@ class AppStore extends EventEmitter {
       sidebarWidth: this.preferences.get(PreferenceKey.sidebarWidth, 240),
       readerLayout: this.readerLayout(),
       filterRules: this.filterRules(),
+      // 每源全文抓取三态偏好（F1）：off（默认）/ on / newOnly，列表徽标与设置页用
+      fulltextFeedModes: this.fulltext.feedModes(),
       listWidth: this.preferences.get(PreferenceKey.listWidth, 340),
     };
   }
@@ -767,6 +771,7 @@ class AppStore extends EventEmitter {
     this._applyParsedEntries(feed, result.parsed.entries);
     this.feedsRepo.updateFeed(feed.id, (f) => ({ ...f, lastRefreshedAt: nowSeconds() }));
     this._invalidatePrepared(); // 订阅结构变更：宁可多失效
+    this.fulltext.kick(); // 新订阅首批文章按源设置后台补抓全文
     this._emitState();
     return this.feedsRepo.feed(feed.id);
   }
@@ -820,6 +825,8 @@ class AppStore extends EventEmitter {
     });
     if (newUnread.length > 200) newUnread = newUnread.slice(0, 200);
     if (newUnread.length) this._bumpListSet();
+    // 全文抓取（F1）：灌文事务提交后只登记 ID，筛选与网络由 fulltext.kick() 异步接力
+    this.fulltext.noteNewEntries(feed.id, newUnread);
     // 后台预抓 AIHOT item 页（异步串行，不阻塞刷新；失败静默）
     if (toPrefetch.length) this._prefetchArticles(toPrefetch);
     return newUnread;
@@ -1207,6 +1214,9 @@ class AppStore extends EventEmitter {
     }
     if (result.notModified) {
       this.feedsRepo.updateFeed(feedID, (f) => ({ ...f, lastRefreshedAt: nowSeconds() }));
+      // 手动刷新 = 强制全量补抓（F1）：源无新文章时存量无缓存篇目同样回补
+      this.fulltext.backfillFeed(feedID);
+      this.fulltext.kick();
       return { newEntries: 0 };
     }
     const newIDs = this._applyParsedEntries(feed, result.parsed.entries);
@@ -1221,6 +1231,9 @@ class AppStore extends EventEmitter {
     }));
     this._invalidatePrepared(); // 单源刷新可能新增文章：宁可多失效
     this._maybePruneFeed(feedID); // 存储治理：保留期限开启时顺手淘汰该源超期已读（节流）
+    // 手动刷新 = 强制全量补抓（F1）：'on' 模式下存量无缓存篇目回补；'newOnly' 只补本轮新文章
+    this.fulltext.backfillFeed(feedID);
+    this.fulltext.kick();
     this._emitState();
     return { newEntries: newIDs.length };
   }
@@ -1354,6 +1367,7 @@ class AppStore extends EventEmitter {
           f.site_url AS site_url, f.feed_url AS feed_url,
           a.published_at AS published_at,
           COALESCE(s.is_read, 0) AS is_read, COALESCE(s.is_starred, 0) AS is_starred,
+          CASE WHEN c.item_id IS NULL THEN 0 ELSE 1 END AS has_body_cache,
           snippet(articles_fts, 4, '', '', '…', 24) AS fts_snip
       FROM articles_fts
       INNER JOIN items i ON i.id = articles_fts.item_id
@@ -1361,6 +1375,7 @@ class AppStore extends EventEmitter {
       LEFT JOIN accounts acc ON acc.id = i.account_id
       LEFT JOIN articles a ON a.item_id = i.id
       LEFT JOIN article_states s ON s.item_id = i.id
+      LEFT JOIN article_caches c ON c.item_id = i.id
       WHERE articles_fts MATCH ? AND f.is_deleted = 0
       ORDER BY rank
       LIMIT ?
@@ -1388,6 +1403,7 @@ class AppStore extends EventEmitter {
           f.site_url AS site_url, f.feed_url AS feed_url,
           a.published_at AS published_at,
           COALESCE(s.is_read, 0) AS is_read, COALESCE(s.is_starred, 0) AS is_starred,
+          CASE WHEN c.item_id IS NULL THEN 0 ELSE 1 END AS has_body_cache,
           COALESCE(c.text, '') AS body_text
       FROM items i
       INNER JOIN feeds f ON f.id = i.feed_id
@@ -1970,6 +1986,7 @@ class AppStore extends EventEmitter {
       this.refreshStatus = { state: 'failed', message: errorMessage(err), finishedAt: nowSeconds() };
     }
     this._invalidatePrepared(); // 刷新可能新增/删除/改状态：宁可多失效（成功失败都清）
+    this.fulltext.kick(); // 全文抓取（F1）：灌文全部落地、状态推送之后再异步起队列
     this._emitState();
   }
 
@@ -3142,6 +3159,11 @@ class AppStore extends EventEmitter {
   }
 
   getTranslateSkipped() { return this._prefJSONMap('RobinRead.translate.skippedArticles'); }
+
+  /** 每源全文抓取三态（F1）：off（默认关）/ on / newOnly；存偏好 JSON，详见 FullTextService。 */
+  setFulltextFeedMode(feedID, mode) {
+    return this.fulltext.setFeedMode(feedID, mode);
+  }
 
   /**
    * 抓取图片字节（深色纸面插图反相的像素分析用）。

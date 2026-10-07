@@ -16,6 +16,17 @@ import { feedIconURL } from './sidebar.js';
 
 const PAGE_SIZE = 100;
 
+/**
+ * 全文抓取徽标（F1）：该源启用了全文抓取（开/仅新文章）且此篇尚无正文缓存 →
+ * 显示「全文」小徽标（表示后台将补抓/正在补抓）；补抓落库后随 hasBodyCache 消失。
+ * 模式表随状态快照下发（app.js 维护 window.__robinFulltextModes）。
+ */
+function fulltextPending(item) {
+  if (item.hasBodyCache === true) return false;
+  const mode = (window.__robinFulltextModes || {})[item.feedID];
+  return mode === 'on' || mode === 'newOnly';
+}
+
 export class ListView {
   constructor(scrollEl, handlers) {
     this.scrollEl = scrollEl;
@@ -344,6 +355,7 @@ export class ListView {
           ${favicon}
           <span class="entry-source" title="${attr(item.sourceTitle || '')}"></span>
           ${badge ? `<span class="entry-account-badge"></span>` : ''}
+          ${fulltextPending(item) ? `<span class="entry-fulltext-badge" title="${attr(t('正在后台补抓全文'))}">${escapeHTML(t('全文'))}</span>` : ''}
           ${item.isLater ? `<span class="later-mini" title="${attr(t('稍后读'))}">${icon('clock')}</span>` : ''}
           ${item.isStarred ? `<span class="star-mini" title="${attr(t('已收藏'))}">${icon('starFilled')}</span>` : ''}
           <span class="read-min-slot">${readMinutesChip(item)}</span>
@@ -1165,6 +1177,30 @@ export class ListView {
       } else if (!next.isLater && laterMini) {
         laterMini.remove();
       }
+    }
+    // 全文徽标（F1）：整行数据（updateItems）携带 feedID/hasBodyCache 时重算显隐——
+    // 补抓完成（缓存落库）或用户切换源模式后，徽标即时消失/出现，不重建列表
+    if (next.feedID !== undefined && next.hasBodyCache !== undefined) {
+      this._syncFulltextBadge(row, next);
+    }
+  }
+
+  /** 全文徽标增删（渲染与补丁共用锚点：账户徽标之后 / 稍后读之前）。 */
+  _syncFulltextBadge(row, item) {
+    const existing = row.querySelector('.entry-fulltext-badge');
+    if (fulltextPending(item)) {
+      if (!existing) {
+        const meta = row.querySelector('.entry-meta');
+        if (meta) {
+          const el = document.createElement('span');
+          el.className = 'entry-fulltext-badge';
+          el.title = t('正在后台补抓全文');
+          el.textContent = t('全文');
+          meta.insertBefore(el, meta.querySelector('.later-mini') || meta.querySelector('.star-mini') || meta.querySelector('.entry-time'));
+        }
+      }
+    } else if (existing) {
+      existing.remove();
     }
   }
 

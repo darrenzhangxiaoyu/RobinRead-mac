@@ -632,6 +632,10 @@ function registerIPCHandlers(store, window) {
   // MARK: 每源翻译模式 + 单篇自动翻译记忆
   handle('translate:setFeedMode', (feedID, mode) => store.setTranslateFeedMode(feedID, mode));
   handle('translate:skipArticle', (entryID) => store.skipArticleTranslate(entryID));
+
+  // MARK: 每源全文抓取三态 + 补抓统计（F1）
+  handle('fulltext:setFeedMode', (feedID, mode) => store.setFulltextFeedMode(feedID, mode));
+  handle('fulltext:stats', () => store.fulltext.feedStats());
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => { store.preferences.set('RobinRead.list.titleZh', on === true); return on === true; });
 

@@ -1137,6 +1137,71 @@ export class SettingsView {
         return button;
       })()),
     ]));
+    this._fulltextFeeds(container, prefs);
+  }
+
+  /**
+   * 全文抓取（F1）按源批量开关：简单列表，每源三态（默认关 / 开 / 仅新文章）。
+   * 统计（已补抓篇数）来自 feed_fulltext_stats（fulltext:stats 通道），打开分区时拉一次。
+   */
+  _fulltextFeeds(container, prefs) {
+    const modes = prefs.fulltextFeedModes || {};
+    const feeds = [];
+    let syncFeedCount = 0;
+    for (const account of this.state.sidebar || []) {
+      const isLocal = !account.account || !account.account.type || account.account.type === 'local';
+      for (const feed of account.allFeeds || []) {
+        if (isLocal) feeds.push(feed);
+        else syncFeedCount += 1;
+      }
+    }
+    const fulltextGroup = group(
+      t('全文抓取'),
+      t('启用后刷新不打断界面；补抓完成后列表「全文」徽标自动消失。'),
+      [],
+    );
+    if (syncFeedCount > 0) {
+      const note = document.createElement('div');
+      note.style.cssText = 'padding:2px 16px 8px;font-size:11.5px;color:var(--text-tertiary);';
+      note.textContent = t('同步账户（FreshRSS / Miniflux）的源由服务端提供正文，暂不参与自动补抓。');
+      fulltextGroup.appendChild(note);
+    }
+    container.appendChild(fulltextGroup);
+    const host = fulltextGroup.querySelector('.group-rows');
+    const modeControl = (feedID) => segmented(
+      [['off', t('默认（关）')], ['on', t('开')], ['newOnly', t('仅新文章')]],
+      modes[feedID] === 'on' || modes[feedID] === 'newOnly' ? modes[feedID] : 'off',
+      async (value) => {
+        await window.robin.setFulltextFeedMode(feedID, value);
+        this.handlers.onRefreshState?.();
+      },
+    );
+    if (!feeds.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:4px 16px 10px;font-size:12px;color:var(--text-tertiary);';
+      empty.textContent = t('还没有订阅源。');
+      host.appendChild(empty);
+      return;
+    }
+    // 每源一行：标题（含已补抓统计） + 三态分段开关；统计异步补进描述位
+    const rendered = feeds.map((feed) => {
+      const rowEl = row(feed.title || feed.id, '', modeControl(feed.id));
+      host.appendChild(rowEl);
+      return rowEl;
+    });
+    window.robin.fulltextStats().then((statsMap) => {
+      if (!this.overlay) return; // 分区已关闭：放弃补写
+      const statByFeed = statsMap || {};
+      feeds.forEach((feed, index) => {
+        const stat = statByFeed[feed.id];
+        if (!stat || !(stat.fetched > 0)) return;
+        const desc = rendered[index]?.querySelector('.desc');
+        if (desc) {
+          desc.textContent = t('已补抓 %lld 篇').replace('%lld', String(stat.fetched));
+          desc.style.display = '';
+        }
+      });
+    }).catch(() => { /* 统计拉取失败：开关仍可用，仅无统计文案 */ });
   }
 
   _language(container, prefs) {

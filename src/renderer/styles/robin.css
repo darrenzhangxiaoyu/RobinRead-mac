@@ -533,6 +533,17 @@ body.zen .list-top-inset { display: none; }
   max-width: 90px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* 全文抓取徽标（F1）：启用全文的源 + 尚无正文缓存 →「全文」；补抓完成即消失 */
+.entry-meta .entry-fulltext-badge {
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 1px 5px;
+  border-radius: var(--radius-full);
+  background: var(--row-hover);
+  color: var(--accent);
+  flex: 0 0 auto;
+  letter-spacing: 0.02em;
+}
 .entry-meta .star-mini { color: var(--warm-accent); flex: 0 0 auto; display: inline-flex; }
 .entry-meta .star-mini svg { width: 10px; height: 10px; }
 .entry-time { margin-left: auto; flex: 0 0 auto; font-variant-numeric: tabular-nums; }

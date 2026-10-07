@@ -494,6 +494,27 @@ const MIGRATIONS = [
       db.exec('CREATE INDEX IF NOT EXISTS idx_articles_url_norm ON articles(url_norm);');
     },
   },
+
+  {
+    id: 'v11-feed-fulltext-stats',
+    up: (db) => {
+      // 全文抓取引擎（F1）每源指标：已补抓篇数 / 失败数 / 最近补抓时间。
+      // 订阅源体检仪表盘（F11）后续直接读该表；源删除级联清行。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS feed_fulltext_stats (
+            feed_id         TEXT PRIMARY KEY NOT NULL,
+            fetched_count   INTEGER NOT NULL DEFAULT 0,
+            failed_count    INTEGER NOT NULL DEFAULT 0,
+            last_fetched_at REAL,
+            updated_at      REAL NOT NULL,
+
+            FOREIGN KEY(feed_id)
+                REFERENCES feeds(id)
+                ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

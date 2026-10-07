@@ -244,6 +244,9 @@ if (!IS_PROBE) {
   app.on('will-quit', () => {
     if (!store) return;
     try {
+      store.fulltext?.dispose(); // F1：全文抓取队列清空，退出不再发起新提取
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
       store.preferences.flushSync();
       store.database.close();
     } catch (_) { /* 退出路径不抛错 */ }

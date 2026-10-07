@@ -90,6 +90,7 @@ async function bootstrap() {
   syncCustomTheme(snapshot);
   window.__robinFeedTypography = snapshot?.preferences?.feedTypography || {};
   window.__robinListTitleZh = snapshot?.preferences?.titleZh === true;
+  window.__robinFulltextModes = snapshot?.preferences?.fulltextFeedModes || {};
   applyReaderLayout(snapshot.preferences?.readerLayout);
   restoreSidebarCollapsed();
 
@@ -1726,6 +1727,7 @@ function onFeedContext(event, { feed, selectedFeedIDs }) {
     { label: t('全部已读'), icon: 'checkAll', onClick: () => window.robin.markAllRead({ kind: 'feed', feedID: feed.id }) },
     { label: t('复制订阅'), icon: 'copy', onClick: () => navigator.clipboard.writeText(feed.feedURL) },
     { label: t('此源排版偏好…'), icon: 'appearance', onClick: () => showFeedTypographyDialog(feed) },
+    { label: t('全文抓取'), icon: 'docText', children: fulltextMenuItems(feed) },
     { label: t('AI 精读翻译'), icon: 'spark', children: [
       { label: t('跟随默认'), onClick: async () => { await window.robin.setTranslateFeedMode(feed.id, 'auto'); showToast(t('此源翻译已改为跟随默认')); } },
       { label: t('总是翻译'), onClick: async () => { await window.robin.setTranslateFeedMode(feed.id, 'always'); showToast(t('打开此源文章将自动 AI 精读翻译')); } },
@@ -1745,6 +1747,26 @@ function feedFolderName(feed) {
     }
   }
   return null;
+}
+
+/**
+ * 每源全文抓取三态（F1）：默认（关）/ 开 / 仅新文章。
+ * 模式随状态快照下发（preferences.fulltextFeedModes）；切换后刷新快照，
+ * 列表「全文」徽标立即按新模式显示/隐藏。
+ */
+function fulltextMenuItems(feed) {
+  const current = (state.snapshot?.preferences?.fulltextFeedModes || {})[feed.id] || 'off';
+  const applyMode = async (mode, message) => {
+    await window.robin.setFulltextFeedMode(feed.id, mode);
+    showToast(message);
+    await refreshState();
+    views.list.updateItems(state.listItems, state.selectedEntryID); // 徽标按新模式即时增减
+  };
+  return [
+    { label: t('默认（关）'), checked: current === 'off', onClick: () => applyMode('off', t('此源全文抓取已关闭')) },
+    { label: t('开'), checked: current === 'on', onClick: () => applyMode('on', t('此源将自动补抓全文（新文章即时补，手动刷新回补存量）')) },
+    { label: t('仅新文章'), checked: current === 'newOnly', onClick: () => applyMode('newOnly', t('此源仅对新文章补抓全文，存量不回补')) },
+  ];
 }
 
 function onFolderContext(event, { folder }) {
@@ -1963,6 +1985,7 @@ async function refreshState() {
   state.snapshot = result.data;
   configure({ lang: result.data.language });
   syncLLMGlobals(result.data);
+  window.__robinFulltextModes = result.data?.preferences?.fulltextFeedModes || {};
   applyFontSize(result.data.preferences.articleFontSize);
   updateToolbarState();
 }
@@ -1992,6 +2015,7 @@ function bindEvents() {
     if (customThemeTokens) syncCustomTheme(snapshot);
     window.__robinFeedTypography = snapshot?.preferences?.feedTypography || {};
   window.__robinListTitleZh = snapshot?.preferences?.titleZh === true;
+  window.__robinFulltextModes = snapshot?.preferences?.fulltextFeedModes || {};
   applyReaderLayout(snapshot.preferences?.readerLayout);
     if (languageChanged) {
       configure({ lang: snapshot.language });

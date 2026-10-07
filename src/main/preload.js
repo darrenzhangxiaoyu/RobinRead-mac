@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld('robin', {
   setTranslateFeedMode: (feedID, mode) => invoke('translate:setFeedMode', feedID, mode),
   skipArticleTranslate: (entryID) => invoke('translate:skipArticle', entryID),
 
+  // 每源全文抓取三态（F1：off/on/newOnly）+ 每源补抓统计
+  setFulltextFeedMode: (feedID, mode) => invoke('fulltext:setFeedMode', feedID, mode),
+  fulltextStats: () => data('fulltext:stats'),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 
