@@ -36,6 +36,7 @@ const { TopicService } = require('./TopicService');
 const { PlatformService } = require('./PlatformService');
 const { MailService } = require('./MailService');
 const { SyncService } = require('./SyncService');
+const { ResearchService } = require('./ResearchService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -152,6 +153,7 @@ class AppStore extends EventEmitter {
     this.platforms = new PlatformService(this); // 中文平台适配器（F5）：B 站 UP 主 / 微博用户 → 平台源
     this.mail = new MailService(this); // Newsletter 收件（F6）：IMAP 邮箱 + 发件人白名单 → 平台源同构合成 feed
     this.sync = new SyncService(this, userDataPath); // WebDAV 多设备同步（F7）：本地优先快照合并
+    this.research = new ResearchService(this); // AI 深度研究（F8）：素材聚合 + 流式带引用报告 + 追问
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}

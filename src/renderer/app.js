@@ -641,6 +641,7 @@ function buildPaletteCommands() {
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
     { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', action: openKnowledgeCenter },
+    { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
     { label: t('从链接精读…'), keywords: 'url link 链接 精读 extract openUrl', icon: 'globe', action: () => readFromUrlPrompt() },
     { label: t('设置'), keywords: 'settings 设置 preference open', icon: 'gear', action: () => showSettings('appearance') },
@@ -1857,8 +1858,36 @@ function openKnowledgeCenter() {
       kc.dismiss();
       runSmartFolderSearch(name, query);
     },
+    // AI 研究来源浮层：无本地条目的素材（AIHOT 等）走任意链接精读（F4 同款通路）
+    onOpenURL: (url) => {
+      kc.dismiss();
+      openLinkReader(url);
+    },
   });
   kc.present();
+}
+
+/** AI 深度研究（F8）：知识中心「AI 研究」标签页直达（主题输入 + 历史研究）。 */
+function openResearchView() {
+  const kc = new KnowledgeCenter({
+    onOpenArticle: (itemID) => {
+      kc.dismiss();
+      handleEntrySelect(itemID, { isRead: true, isStarred: false });
+    },
+    onFilterTag: (tag) => {
+      kc.dismiss();
+      handleScopeSelect({ kind: 'tag', tag });
+    },
+    onOpenSmartFolder: ({ name, query }) => {
+      kc.dismiss();
+      runSmartFolderSearch(name, query);
+    },
+    onOpenURL: (url) => {
+      kc.dismiss();
+      openLinkReader(url);
+    },
+  });
+  kc.present('research');
 }
 
 /** 智能文件夹：任一关键词命中即收录（OR 语义），列表头显示文件夹名。 */

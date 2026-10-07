@@ -674,6 +674,31 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v17-research-reports',
+    up: (db) => {
+      // AI 深度研究（F8）：带引用编号的流式研究报告 + 追问问答对。
+      // - keywords_json: string[]（检索关键词，当前即主题本身）；
+      // - report_md: 报告 Markdown 正文；追问问答对以固定分隔标记「### 追问」区段追加；
+      // - sources_json: 素材条目数组（{title, source, snippet, url, entryID, lane}），
+      //   引用编号 [n] 与数组下标 +1 严格对应；
+      // - is_complete: 0 = 草稿（生成中被取消/中断，已收到的部分保留），1 = 完整报告。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS research_reports (
+            id            TEXT PRIMARY KEY NOT NULL,
+            topic         TEXT NOT NULL,
+            keywords_json TEXT NOT NULL DEFAULT '[]',
+            report_md     TEXT NOT NULL DEFAULT '',
+            sources_json  TEXT NOT NULL DEFAULT '[]',
+            is_complete   INTEGER NOT NULL DEFAULT 0,
+            created_at    REAL NOT NULL,
+            updated_at    REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_research_reports_created
+        ON research_reports(created_at DESC);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

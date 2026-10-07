@@ -134,6 +134,16 @@ contextBridge.exposeInMainWorld('robin', {
   reportSyncProgress: (entries) => ipcRenderer.send('sync:reportProgress', entries),
   onSyncProgress: (listener) => subscribe('sync:progress', listener),
 
+  // AI 深度研究（F8：列表 / 详情 / 删除 / 流式生成 / 追问 / 取消；onResearchDelta 收流式分片）
+  researchList: () => data('research:list'),
+  researchGet: (id) => data('research:get', id),
+  researchDelete: (id) => invoke('research:delete', id),
+  researchGenerate: (topic) => invoke('research:generate', topic),
+  researchFollowUp: (id, question) => invoke('research:followUp', id, question),
+  researchCancel: () => invoke('research:cancel'),
+  onResearchDelta: (listener) => subscribe('research:delta', listener),
+  onResearchStatus: (listener) => subscribe('research:status', listener),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

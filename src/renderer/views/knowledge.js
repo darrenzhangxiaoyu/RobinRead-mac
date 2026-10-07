@@ -22,6 +22,7 @@ const TABS = [
   { id: 'tags', label: '标签', icon: 'globe' },
   { id: 'graph', label: '图谱', icon: 'ai' },
   { id: 'ask', label: '问知识库', icon: 'spark' },
+  { id: 'research', label: 'AI 研究', icon: 'spark' },
 ];
 
 function timeAgo(seconds) {
@@ -44,13 +45,16 @@ function downloadText(filename, content, mime = 'text/plain') {
 }
 
 export class KnowledgeCenter {
-  constructor({ onOpenArticle, onOpenSmartFolder, onFilterTag }) {
-    this.handlers = { onOpenArticle, onOpenSmartFolder, onFilterTag };
+  constructor({ onOpenArticle, onOpenSmartFolder, onFilterTag, onOpenURL }) {
+    this.handlers = { onOpenArticle, onOpenSmartFolder, onFilterTag, onOpenURL };
     this.tab = 'highlights';
     this.data = {};
+    // AI 研究（F8）会话态：流式运行标记 + 订阅退订器
+    this._research = { running: false, mode: null, unsubscribe: null, seq: 0 };
   }
 
-  present() {
+  present(initialTab = null) {
+    if (initialTab && TABS.some((x) => x.id === initialTab)) this.tab = initialTab;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) this.dismiss(); });
@@ -95,6 +99,7 @@ export class KnowledgeCenter {
       tags: async () => window.robin.kbTags(),
       graph: async () => window.robin.kbGraph(240),
       ask: async () => ({}),
+      research: async () => window.robin.researchList(),
     };
     const loader = loads[this.tab];
     if (!loader) return;
@@ -184,6 +189,7 @@ export class KnowledgeCenter {
       case 'tags': this._renderTags(data || []); break;
       case 'graph': this._renderGraph(data || {}); break;
       case 'ask': this._renderAsk(); break;
+      case 'research': this._renderResearch(Array.isArray(data) ? data : []); break;
     }
   }
 
@@ -736,6 +742,9 @@ export class KnowledgeCenter {
     if (this._sessionKeys) document.removeEventListener('keydown', this._sessionKeys, true);
     this._sessionKeys = null;
     this._reviewSession = null;
+    // AI 研究（F8）：离开页面时退订流式分片（后台生成继续，报告照常落库）
+    if (this._research?.unsubscribe) { this._research.unsubscribe(); this._research.unsubscribe = null; }
+    if (this._research) { this._research.running = false; this._research.mode = null; }
   }
 
   _endReviewSession() {
@@ -1282,6 +1291,394 @@ export class KnowledgeCenter {
     };
     askBtn.addEventListener('click', submit);
     input.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); });
+  }
+
+  // ── AI 研究（F8）：主题输入 + 历史列表 + 流式带引用报告 + 追问 ──
+
+  /** rAF 合帧渲染器（今日简报同款）：高频 delta 一帧至多一次重建。 */
+  _rafPainter(render) {
+    let rafPending = false;
+    return () => {
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        render();
+      });
+    };
+  }
+
+  /** 订阅流式分片与阶段推送（seq 守卫：过期会话的事件全部忽略）。返回统一退订器。 */
+  _subscribeResearchEvents(seq, { onDelta, onStatus }) {
+    const offDelta = window.robin.onResearchDelta?.((p) => {
+      if (this._research.running && this._research.seq === seq) onDelta?.(p);
+    });
+    const offStatus = window.robin.onResearchStatus?.((p) => {
+      if (this._research.running && this._research.seq === seq) onStatus?.(p);
+    });
+    return () => { offDelta?.(); offStatus?.(); };
+  }
+
+  /** 结束一次研究运行：退订 + 释放单飞标记。 */
+  _endResearchRun(unsubscribe) {
+    if (unsubscribe) unsubscribe();
+    if (this._research.unsubscribe === unsubscribe) this._research.unsubscribe = null;
+    this._research.running = false;
+    this._research.mode = null;
+  }
+
+  _renderResearch(list) {
+    const wrap = document.createElement('div');
+    const head = document.createElement('div');
+    head.className = 'kb-graph-head';
+    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('AI 研究'))}</span><span class="kb-graph-legend">${escapeHTML(t('聚合你的订阅库与 AIHOT 素材，生成带引用编号的研究报告，可继续追问。'))}</span>`;
+    wrap.appendChild(head);
+
+    const inputRow = document.createElement('div');
+    inputRow.className = 'kb-ask-row nj-research-row';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'kb-ask-input nj-research-input';
+    input.placeholder = t('输入研究主题，如：端侧大模型的最新进展');
+    const goBtn = document.createElement('button');
+    goBtn.className = 'btn-text primary kb-ask-btn nj-research-go';
+    goBtn.textContent = t('开始研究');
+    inputRow.append(input, goBtn);
+    wrap.appendChild(inputRow);
+
+    const statusBar = document.createElement('div');
+    statusBar.className = 'nj-research-status';
+    statusBar.style.display = 'none';
+    wrap.appendChild(statusBar);
+
+    const liveHost = document.createElement('div');
+    liveHost.className = 'nj-research-live';
+    liveHost.style.display = 'none';
+    wrap.appendChild(liveHost);
+
+    const errBox = document.createElement('div');
+    errBox.className = 'nj-research-error';
+    errBox.style.display = 'none';
+    wrap.appendChild(errBox);
+
+    const lbl = document.createElement('div');
+    lbl.className = 'td-section-label';
+    lbl.textContent = t('历史研究');
+    wrap.appendChild(lbl);
+    const listHost = document.createElement('div');
+    wrap.appendChild(listHost);
+    this.contentHost.appendChild(wrap);
+
+    const setBusy = (busy) => { goBtn.disabled = busy; input.disabled = busy; };
+    const phaseText = (phase) => ({
+      gather: t('正在聚合素材…'),
+      generate: t('正在生成报告…'),
+      followup: t('正在回答追问…'),
+    }[phase] || '');
+
+    const submit = async () => {
+      const topic = input.value.trim();
+      if (!topic || this._research.running) return;
+      this._research.running = true;
+      this._research.mode = 'generate';
+      this._research.seq = (this._research.seq || 0) + 1;
+      const seq = this._research.seq;
+      setBusy(true);
+      errBox.style.display = 'none';
+      errBox.textContent = '';
+      liveHost.style.display = '';
+      liveHost.innerHTML = '';
+      statusBar.style.display = '';
+      statusBar.textContent = t('正在聚合素材…');
+      let streamed = '';
+      const paint = this._rafPainter(() => {
+        if (seq !== this._research.seq || !document.body.contains(liveHost)) return;
+        liveHost.innerHTML = renderMarkdown(streamed);
+      });
+      const unsubscribe = this._subscribeResearchEvents(seq, {
+        onDelta: (p) => { streamed += p?.delta || ''; paint(); },
+        onStatus: (p) => { const txt = phaseText(p?.phase); if (txt) statusBar.textContent = txt; },
+      });
+      this._research.unsubscribe = unsubscribe;
+      try {
+        const res = await window.robin.researchGenerate(topic);
+        if (seq !== this._research.seq) return; // 页面已切走：后台照常落库
+        if (!res || res.ok === false) throw new Error(res?.error || t('生成失败'));
+        const { report, cancelled } = res.data || {};
+        const fresh = report?.id ? ((await window.robin.researchGet(report.id)) || report) : report;
+        this._endResearchRun(unsubscribe);
+        if (fresh) this._openResearchDetail(fresh, { draft: cancelled || !fresh.isComplete });
+      } catch (error) {
+        if (seq !== this._research.seq) return;
+        liveHost.style.display = 'none';
+        errBox.style.display = '';
+        // 无 Key / AI 失败：明确降级提示（不隐藏功能，输入框在 finally 里恢复可用）
+        errBox.textContent = String(error?.message || error) || t('生成失败');
+      } finally {
+        this._endResearchRun(unsubscribe);
+        if (seq === this._research.seq) {
+          statusBar.style.display = 'none';
+          setBusy(false);
+        }
+      }
+    };
+    goBtn.addEventListener('click', submit);
+    input.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); });
+    setTimeout(() => input.focus(), 50);
+
+    if (!list.length) {
+      const empty = document.createElement('div');
+      empty.className = 'nj-topic-empty';
+      empty.innerHTML = `<div class="glyph">${icon('spark')}</div><h3></h3><p></p>`;
+      empty.querySelector('h3').textContent = t('还没有研究报告');
+      empty.querySelector('p').textContent = t('输入一个主题，开始第一次研究。');
+      listHost.appendChild(empty);
+      return;
+    }
+    for (const item of list) listHost.appendChild(this._researchRow(item));
+  }
+
+  _researchRow(item) {
+    const row = document.createElement('div');
+    row.className = 'nj-research-item';
+    const main = document.createElement('div');
+    main.className = 'nj-research-item-main';
+    const title = document.createElement('div');
+    title.className = 'nj-research-item-topic';
+    title.textContent = item.topic;
+    const meta = document.createElement('div');
+    meta.className = 'nj-research-item-meta';
+    meta.textContent = [
+      item.isComplete ? '' : t('草稿 · 未完成'),
+      tf('%lld 条素材', item.sourceCount || 0),
+      timeAgo(item.updatedAt),
+    ].filter(Boolean).join(' · ');
+    main.append(title, meta);
+    const del = document.createElement('button');
+    del.className = 'btn icon-only';
+    del.innerHTML = icon('trash');
+    del.title = t('删除报告');
+    del.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const ok = await confirmBox(t('删除报告'), { message: t('确定删除这份研究报告吗？此操作无法撤销。'), okLabel: t('删除'), danger: true });
+      if (!ok) return;
+      await window.robin.researchDelete(item.id);
+      this._load();
+    });
+    row.append(main, del);
+    row.addEventListener('click', async () => {
+      const report = await window.robin.researchGet(item.id);
+      if (report) this._openResearchDetail(report, { draft: !report.isComplete });
+    });
+    return row;
+  }
+
+  /** 报告详情：Markdown 渲染 + [n] 引用芯片 + 追问输入（流式追加）。 */
+  _openResearchDetail(report, { draft = false } = {}) {
+    if (!report) return;
+    this._research.seq = (this._research.seq || 0) + 1;
+    this.contentHost.innerHTML = '';
+    const back = document.createElement('button');
+    back.className = 'btn-text bordered';
+    back.style.marginBottom = '12px';
+    back.innerHTML = `${icon('chevronMenuRight')}<span style="margin-left:4px">${escapeHTML(t('返回列表'))}</span>`;
+    back.addEventListener('click', () => this._load());
+    this.contentHost.appendChild(back);
+
+    if (draft || !report.isComplete) {
+      const note = document.createElement('div');
+      note.className = 'nj-research-draft-note';
+      note.textContent = t('未完成草稿：生成被取消，已收到的部分已保留。');
+      this.contentHost.appendChild(note);
+    }
+
+    const head = document.createElement('div');
+    head.className = 'nj-research-detail-head';
+    const title = document.createElement('h3');
+    title.className = 'nj-research-detail-topic';
+    title.textContent = report.topic;
+    const meta = document.createElement('div');
+    meta.className = 'nj-research-detail-meta';
+    meta.textContent = [tf('%lld 条素材', (report.sources || []).length), t('点击 [n] 查看来源')].filter(Boolean).join(' · ');
+    head.append(title, meta);
+    this.contentHost.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'nj-research-report';
+    body.innerHTML = renderMarkdown(report.reportMd || t('（空报告）'));
+    this._linkifyCitations(body, report.sources || []);
+    this.contentHost.appendChild(body);
+
+    const followRow = document.createElement('div');
+    followRow.className = 'kb-ask-row nj-research-follow';
+    const followInput = document.createElement('input');
+    followInput.type = 'text';
+    followInput.className = 'kb-ask-input nj-research-follow-input';
+    followInput.placeholder = t('继续追问这份报告…');
+    const followBtn = document.createElement('button');
+    followBtn.className = 'btn-text primary kb-ask-btn nj-research-follow-btn';
+    followBtn.textContent = t('追问');
+    followRow.append(followInput, followBtn);
+    this.contentHost.appendChild(followRow);
+
+    const followLive = document.createElement('div');
+    followLive.className = 'nj-research-live';
+    followLive.style.display = 'none';
+    this.contentHost.appendChild(followLive);
+    const followErr = document.createElement('div');
+    followErr.className = 'nj-research-error';
+    followErr.style.display = 'none';
+    this.contentHost.appendChild(followErr);
+
+    const submitFollow = async () => {
+      const q = followInput.value.trim();
+      if (!q || this._research.running) return;
+      this._research.running = true;
+      this._research.mode = 'followUp';
+      this._research.seq = (this._research.seq || 0) + 1;
+      const seq = this._research.seq;
+      followBtn.disabled = true;
+      followInput.disabled = true;
+      followErr.style.display = 'none';
+      followErr.textContent = '';
+      followLive.style.display = '';
+      followLive.innerHTML = `<div class="nj-research-status">${escapeHTML(t('正在回答追问…'))}</div>`;
+      let streamed = '';
+      const paint = this._rafPainter(() => {
+        if (seq !== this._research.seq || !document.body.contains(followLive)) return;
+        followLive.innerHTML = renderMarkdown(streamed);
+      });
+      const unsubscribe = this._subscribeResearchEvents(seq, {
+        onDelta: (p) => { streamed += p?.delta || ''; paint(); },
+        onStatus: (p) => {
+          if (p?.phase === 'followup' && seq === this._research.seq && !streamed) {
+            followLive.innerHTML = `<div class="nj-research-status">${escapeHTML(t('正在回答追问…'))}</div>`;
+          }
+        },
+      });
+      this._research.unsubscribe = unsubscribe;
+      try {
+        const res = await window.robin.researchFollowUp(report.id, q);
+        if (seq !== this._research.seq) return;
+        if (!res || res.ok === false) throw new Error(res?.error || t('生成失败'));
+        const fresh = res.data?.report || await window.robin.researchGet(report.id);
+        this._endResearchRun(unsubscribe);
+        if (fresh) this._openResearchDetail(fresh, { draft: !fresh.isComplete });
+      } catch (error) {
+        if (seq !== this._research.seq) return;
+        followLive.style.display = 'none';
+        followErr.style.display = '';
+        followErr.textContent = String(error?.message || error) || t('生成失败');
+      } finally {
+        this._endResearchRun(unsubscribe);
+        if (seq === this._research.seq) {
+          followBtn.disabled = false;
+          followInput.disabled = false;
+        }
+      }
+    };
+    followBtn.addEventListener('click', submitFollow);
+    followInput.addEventListener('keydown', (event) => { if (event.key === 'Enter') submitFollow(); });
+    setTimeout(() => followInput.focus(), 50);
+  }
+
+  /** [n] 引用编号 → 可点击来源芯片（严格只链接素材列表内的编号）。 */
+  _linkifyCitations(host, sources) {
+    if (!host || !Array.isArray(sources)) return;
+    const total = sources.length;
+    const re = /\[(\d{1,3})\]/g;
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    for (const node of textNodes) {
+      const text = node.nodeValue || '';
+      re.lastIndex = 0;
+      if (!re.test(text)) continue;
+      re.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const n = Number(m[1]);
+        if (n >= 1 && n <= total) {
+          const chip = document.createElement('button');
+          chip.className = 'dg-ref';
+          chip.type = 'button';
+          chip.textContent = String(n);
+          chip.title = sources[n - 1]?.title || '';
+          chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._showSourcePopover(sources[n - 1], chip);
+          });
+          frag.appendChild(chip);
+        } else {
+          frag.appendChild(document.createTextNode(m[0]));
+        }
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  /** 素材原文浮层：snippet + 打开原文（entryID → 阅读器 / url → 外链精读，F4 双通路）。 */
+  _showSourcePopover(material, anchor) {
+    if (!material) return;
+    document.querySelectorAll('.nj-research-pop').forEach((n) => n.remove());
+    const pop = document.createElement('div');
+    pop.className = 'nj-research-pop';
+    const laneLabels = { local: t('本库'), knowledge: t('知识库'), aihot: 'AIHOT' };
+    const head = document.createElement('div');
+    head.className = 'nj-research-pop-head';
+    const badge = document.createElement('span');
+    badge.className = `nj-topic-lane-badge lane-${material.lane || 'local'}`;
+    badge.textContent = laneLabels[material.lane] || material.lane || '';
+    const src = document.createElement('span');
+    src.className = 'nj-research-pop-source';
+    src.textContent = material.source || '';
+    head.append(badge, src);
+    const title = document.createElement('div');
+    title.className = 'nj-research-pop-title';
+    title.textContent = material.title || '';
+    const snip = document.createElement('div');
+    snip.className = 'nj-research-pop-snippet';
+    snip.textContent = material.snippet || t('（无摘要）');
+    pop.append(head, title, snip);
+    if (material.entryID || material.url) {
+      const open = document.createElement('button');
+      open.className = 'btn-text primary nj-research-pop-open';
+      open.textContent = t('打开原文');
+      open.addEventListener('click', () => {
+        cleanup();
+        if (material.entryID) this.handlers.onOpenArticle?.(material.entryID);
+        else if (material.url) this.handlers.onOpenURL?.(material.url);
+      });
+      pop.appendChild(open);
+    }
+    document.body.appendChild(pop);
+    const rect = anchor.getBoundingClientRect();
+    const pw = pop.offsetWidth || 300;
+    const ph = pop.offsetHeight || 160;
+    pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - pw - 12))}px`;
+    pop.style.top = `${Math.min(rect.bottom + 6, window.innerHeight - ph - 12)}px`;
+    const cleanup = () => {
+      document.removeEventListener('mousedown', onDown, true);
+      document.removeEventListener('keydown', onKey, true);
+      pop.remove();
+    };
+    const onDown = (e) => { if (!pop.contains(e.target)) cleanup(); };
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        e.preventDefault();
+        e.stopImmediatePropagation(); // 只关浮层，不让知识中心 modal 一起退场
+        cleanup();
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('mousedown', onDown, true);
+      document.addEventListener('keydown', onKey, true);
+    }, 0);
   }
 
   _renderTags(tags) {

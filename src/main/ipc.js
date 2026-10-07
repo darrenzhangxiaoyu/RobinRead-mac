@@ -704,6 +704,23 @@ function registerIPCHandlers(store, window) {
   handle('sync:setAuto', (enabled) => (store.sync ? SY().setAutoEnabled(enabled === true) : null));
   handle('sync:now', () => (store.sync ? SY().syncNow({ origin: 'manual' }) : null));
 
+  // MARK: AI 深度研究（F8：素材聚合 / 流式生成 / 追问 / 历史 / 取消）
+  // 流式分片与阶段经推送通道下行（research:delta / research:status），最终结果走信封返回。
+  const RS = () => store.research;
+  handle('research:list', () => RS().listReports());
+  handle('research:get', (id) => RS().report(id));
+  handle('research:delete', (id) => RS().deleteReport(id));
+  handle('research:generate', (topic) => RS().generate(String(topic || ''), {
+    onDelta: (delta) => send('research:delta', { delta }),
+    onStatus: (phase) => send('research:status', { phase }),
+  }));
+  handle('research:followUp', (id, question) => RS().followUp(id, String(question || ''), {
+    onDelta: (delta) => send('research:delta', { delta }),
+    onStatus: (phase) => send('research:status', { phase }),
+  }));
+  handle('research:cancel', () => RS().cancelActive());
+  handle('research:snapshot', () => RS().snapshot());
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => {
     store.preferences.set('RobinRead.list.titleZh', on === true);
