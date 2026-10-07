@@ -1531,6 +1531,7 @@ const STRINGS = {
   "立即聚合": { zh: "立即聚合", en: "Gather Now" },
   "马上按关键词聚合一次": { zh: "马上按关键词聚合一次", en: "Gather matching articles right now" },
   "聚合完成": { zh: "聚合完成", en: "Gathered" },
+  "聚合失败": { zh: "聚合失败", en: "Gather failed" },
   "删除话题": { zh: "删除话题", en: "Delete Topic" },
   "确定删除话题「%@」吗？命中记录会一并删除。": { zh: "确定删除话题「%@」吗？命中记录会一并删除。", en: "Delete topic “%@”? Its gathered articles will be removed too." },
   "话题已更新": { zh: "话题已更新", en: "Topic updated" },

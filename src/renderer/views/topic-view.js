@@ -94,6 +94,9 @@ export class TopicView {
     this.currentTopic = null;
     const modal = this.modal;
     if (!modal) return;
+    // 时序 token：快速交替切换时，旧 IPC 返回不再写回新页面（M2 串数据/卡片翻倍）
+    const seq = this._seq = (this._seq || 0) + 1;
+    const stale = () => !this.overlay || this.modal !== modal || seq !== this._seq;
     modal.innerHTML = '';
     const head = el('div', 'nj-topic-head');
     const title = el('h3', null, t('话题盯梢'));
@@ -120,7 +123,7 @@ export class TopicView {
       const res = await window.robin.topicsList();
       topics = Array.isArray(res) ? res : [];
     } catch (_) { /* 列表失败给空态 */ }
-    if (!this.overlay) return;
+    if (stale()) return;
 
     if (!topics.length) {
       const empty = el('div', 'nj-topic-empty');
@@ -169,24 +172,32 @@ export class TopicView {
     };
     actions.appendChild(mk(t('打开信息流'), 'btn-text primary', () => this._showStream(topic)));
     actions.appendChild(mk(t('立即聚合'), 'btn-text', async () => {
-      const res = await window.robin.topicsAggregate(topic.id);
-      const summary = res && res.inserted != null ? ` +${res.inserted}` : '';
-      this.deps.toast?.(t('聚合完成') + summary);
-      this._showManage();
+      try {
+        const res = await window.robin.topicsAggregate(topic.id);
+        const summary = res && res.inserted != null ? ` +${res.inserted}` : '';
+        this.deps.toast?.(t('聚合完成') + summary);
+        this._showManage();
+      } catch (e) {
+        this.deps.toast?.(t('聚合失败') + '：' + String(e && e.message || e));
+      }
     }, t('马上按关键词聚合一次')));
     actions.appendChild(mk(t('编辑'), 'btn-text', () => this._showForm({
       id: topic.id, name: topic.name, keywordsText: topic.keywords.join(', '),
       lanes: topic.lanes, frequency: topic.frequency, aiFilter: topic.aiFilter,
     })));
     actions.appendChild(mk(t('删除'), 'btn-text danger', async () => {
-      const { confirmBox } = await import('./ui-prompt.js');
+      const { confirmBox } = await import('../ui-prompt.js');
       const ok = await confirmBox(t('删除话题'), {
         message: tf('确定删除话题「%@」吗？命中记录会一并删除。', topic.name),
         confirmLabel: t('删除'),
       });
       if (!ok) return;
-      await window.robin.topicsDelete(topic.id);
-      this._showManage();
+      try {
+        await window.robin.topicsDelete(topic.id);
+        this._showManage();
+      } catch (e) {
+        this.deps.toast?.(String(e && e.message || e));
+      }
     }));
     card.appendChild(actions);
     return card;
@@ -296,6 +307,7 @@ export class TopicView {
           try { await window.robin.topicsAggregate(saved.id); } catch (_) { /* 首聚合失败不阻塞 */ }
         }
       } catch (e) {
+        // 服务端校验错误（关键词/来源/配额/名称）如实回显——preload 对写通道走 invoke（reject）
         err.textContent = String(e && e.message || e);
       } finally {
         save.disabled = false;
@@ -312,6 +324,8 @@ export class TopicView {
     this.currentTopic = topic;
     const modal = this.modal;
     if (!modal) return;
+    const seq = this._seq = (this._seq || 0) + 1;
+    const stale = () => !this.overlay || this.modal !== modal || seq !== this._seq;
     modal.innerHTML = '';
     const head = el('div', 'nj-topic-head');
     const back = el('button', 'btn icon-only');
@@ -331,7 +345,12 @@ export class TopicView {
       try {
         const res = await window.robin.topicsAggregate(topic.id);
         this.deps.toast?.(t('聚合完成') + (res && res.inserted != null ? ` +${res.inserted}` : ''));
-        await this._showStream(this.currentTopic || topic);
+        // 仍停留在同一话题的信息流页才重载（聚合在途时用户可能已返回列表/切页）
+        if (!stale() && this.mode === 'stream' && this.currentTopic?.id === topic.id) {
+          await this._showStream(topic);
+        }
+      } catch (e) {
+        this.deps.toast?.(t('聚合失败') + '：' + String(e && e.message || e));
       } finally { refresh.disabled = false; }
     });
     const close = el('button', 'btn icon-only');
@@ -350,7 +369,7 @@ export class TopicView {
       const res = await window.robin.topicsHits(topic.id, { limit: 100 });
       hits = Array.isArray(res) ? res : [];
     } catch (_) { /* 读失败给空态 */ }
-    if (!this.overlay) return;
+    if (stale()) return;
 
     if (!hits.length) {
       const empty = el('div', 'nj-topic-empty');

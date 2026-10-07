@@ -102,12 +102,12 @@ contextBridge.exposeInMainWorld('robin', {
   mediaDownloadDelete: (entryID) => data('media:download:delete', entryID),
   onMediaDownloadProgress: (listener) => subscribe('media:download-progress', listener),
 
-  // 话题盯梢（F4：CRUD / 聚合 / 信息流）
+  // 话题盯梢（F4：CRUD / 聚合 / 信息流）——写通道走 invoke（失败 reject，渲染层可回显错误）
   topicsList: () => data('topics:list'),
-  topicsSave: (payload) => data('topics:save', payload),
-  topicsDelete: (id) => data('topics:delete', id),
-  topicsSetEnabled: (id, enabled) => data('topics:setEnabled', id, enabled === true),
-  topicsAggregate: (id) => data('topics:aggregate', id),
+  topicsSave: (payload) => invoke('topics:save', payload),
+  topicsDelete: (id) => invoke('topics:delete', id),
+  topicsSetEnabled: (id, enabled) => invoke('topics:setEnabled', id, enabled === true),
+  topicsAggregate: (id) => invoke('topics:aggregate', id),
   topicsHits: (id, opts) => data('topics:hits', id, opts),
 
   // 图片字节抓取（深色插图反相分析）

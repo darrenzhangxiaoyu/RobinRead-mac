@@ -265,8 +265,6 @@ class TopicService {
   /** 本库路：订阅源文章标题/摘要关键词命中（近 14 天，最新优先）。 */
   _localLane(topic) {
     const since = Date.now() / 1000 - 14 * 86400;
-    const likes = topic.keywords.map(() => '1').join(',');
-    void likes;
     const conditions = topic.keywords.map(() => `(IFNULL(a.title,'') LIKE ? ESCAPE '\\' OR IFNULL(a.summary,'') LIKE ? ESCAPE '\\')`).join(' OR ');
     const params = [];
     for (const kw of topic.keywords) {
