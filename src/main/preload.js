@@ -144,6 +144,18 @@ contextBridge.exposeInMainWorld('robin', {
   onResearchDelta: (listener) => subscribe('research:delta', listener),
   onResearchStatus: (listener) => subscribe('research:status', listener),
 
+  // 全库 RAG 问答（F9：会话列表/详情/流式问答/纯检索/取消/删除/重命名；onRagDelta 收流式分片）
+  ragSessions: () => data('rag:sessions'),
+  ragSession: (id) => data('rag:session', id),
+  ragGather: (question) => data('rag:gather', question),
+  ragAsk: (sessionID, question) => invoke('rag:ask', sessionID, question),
+  ragCancel: () => invoke('rag:cancel'),
+  ragDelete: (id) => invoke('rag:delete', id),
+  ragRename: (id, title) => invoke('rag:rename', id, title),
+  ragSources: (messageID) => data('rag:sources', messageID),
+  onRagDelta: (listener) => subscribe('rag:delta', listener),
+  onRagStatus: (listener) => subscribe('rag:status', listener),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

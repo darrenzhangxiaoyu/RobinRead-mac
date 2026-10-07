@@ -699,6 +699,43 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v18-rag-sessions',
+    up: (db) => {
+      // 全库 RAG 问答（F9）：多轮问答会话与消息流。
+      // - rag_sessions：会话元数据（title=首问前 40 字，可重命名；updated_at 随新消息推进，
+      //   历史列表按它倒序——索引建在该列上）；
+      // - rag_messages：user|assistant 消息（FK ON DELETE CASCADE 级联删除）；
+      //   assistant 行的 sources_json 存本次回答引用的素材数组
+      //   （[{kind,title,source,snippet,entryID,url}]，[n] 与数组下标 +1 严格对应），
+      //   重开会话后引用芯片与素材浮层据此还原；内容照存——取消保留的已流部分
+      //   即「未完成」语义，不另设标记列。
+      //   INDEX(session_id, created_at)：会话内消息按时间取窗（多轮上下文）走索引。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS rag_sessions (
+            id         TEXT PRIMARY KEY NOT NULL,
+            title      TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_rag_sessions_updated
+        ON rag_sessions(updated_at DESC);
+        CREATE TABLE IF NOT EXISTS rag_messages (
+            id           TEXT PRIMARY KEY NOT NULL,
+            session_id   TEXT NOT NULL,
+            role         TEXT NOT NULL CHECK (role IN ('user','assistant')),
+            content      TEXT NOT NULL DEFAULT '',
+            sources_json TEXT NOT NULL DEFAULT '[]',
+            created_at   REAL NOT NULL,
+            FOREIGN KEY(session_id)
+                REFERENCES rag_sessions(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_rag_messages_session
+        ON rag_messages(session_id, created_at);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

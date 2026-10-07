@@ -5735,3 +5735,86 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 .nj-research-pop-title { font-weight: 600; margin-top: 8px; line-height: 1.5; }
 .nj-research-pop-snippet { margin-top: 6px; color: var(--text-secondary); line-height: 1.6; max-height: 130px; overflow-y: auto; }
 .nj-research-pop-open { margin-top: 10px; }
+
+/* ── 全库 RAG 问答（F9）：会话侧栏 / 消息气泡 / 纯检索素材列表（全令牌） ── */
+.nj-rag-layout { display: flex; gap: 14px; align-items: stretch; }
+.nj-rag-side {
+  width: 188px; flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px;
+  border-right: 1px solid var(--hairline); padding-right: 12px;
+}
+.nj-rag-sessions { overflow-y: auto; max-height: 54vh; }
+.nj-rag-no-session { font-size: 12px; color: var(--text-tertiary); padding: 8px 6px; }
+.nj-rag-session {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer;
+}
+.nj-rag-session:hover { background: var(--row-hover); }
+.nj-rag-session.active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.nj-rag-session-main { min-width: 0; flex: 1; }
+.nj-rag-session-title {
+  font-size: 12.5px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nj-rag-session:hover .nj-rag-session-title, .nj-rag-session.active .nj-rag-session-title { color: var(--accent); }
+.nj-rag-session-meta { font-size: 10.5px; color: var(--text-tertiary); margin-top: 2px; }
+.nj-rag-session-actions { display: flex; gap: 2px; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.nj-rag-session:hover .nj-rag-session-actions, .nj-rag-session.active .nj-rag-session-actions { opacity: 1; }
+.nj-rag-session-actions .btn.icon-only { width: 22px; height: 22px; }
+.nj-rag-chat { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nj-rag-stream {
+  display: flex; flex-direction: column; gap: 10px;
+  overflow-y: auto; max-height: 54vh; padding: 4px 2px;
+}
+.nj-rag-empty { padding: 30px 10px; }
+.nj-rag-msg {
+  max-width: 88%; padding: 10px 13px;
+  border-radius: var(--radius-lg);
+  font-size: 13px; line-height: 1.7; color: var(--text-primary);
+  overflow-wrap: break-word;
+}
+.nj-rag-msg.user {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  white-space: pre-wrap;
+}
+.nj-rag-msg.assistant {
+  align-self: flex-start;
+  background: var(--note-background);
+  border: 1px solid var(--hairline);
+}
+.nj-rag-msg.assistant p { margin: 6px 0; }
+.nj-rag-msg.assistant p:first-child { margin-top: 0; }
+.nj-rag-msg.assistant p:last-child { margin-bottom: 0; }
+.nj-rag-msg.assistant h1, .nj-rag-msg.assistant h2, .nj-rag-msg.assistant h3 { margin: 10px 0 6px; font-size: 13.5px; }
+.nj-rag-msg.assistant ul, .nj-rag-msg.assistant ol { margin: 6px 0; padding-left: 18px; }
+.nj-rag-msg.assistant blockquote { margin: 8px 0; padding: 4px 12px; border-left: 3px solid var(--accent); color: var(--text-secondary); }
+.nj-rag-msg.assistant .robin-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--row-selected); border-top-color: var(--accent);
+  border-radius: 50%; animation: rotate 0.8s linear infinite; margin: 12px auto; display: block;
+}
+.nj-rag-msg-error { border-color: color-mix(in srgb, var(--danger, #c93b3b) 40%, var(--hairline)); }
+.nj-rag-cancel-note { margin-top: 8px; font-size: 12px; color: var(--warm-accent); }
+.nj-rag-retrieval-label { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.nj-rag-materials {
+  margin-top: 6px; border: 1px solid var(--hairline);
+  border-radius: var(--radius-md); overflow: hidden;
+}
+.nj-rag-material {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  border: none; background: transparent; text-align: left; cursor: pointer;
+  padding: 7px 10px; font: inherit; color: inherit;
+}
+.nj-rag-material + .nj-rag-material { border-top: 1px solid var(--hairline); }
+.nj-rag-material:hover { background: var(--row-hover); }
+.nj-rag-material-n { flex: 0 0 auto; font-size: 11px; color: var(--accent); font-weight: 700; }
+.nj-rag-material-body { min-width: 0; }
+.nj-rag-material-body b {
+  display: block; font-size: 12px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nj-rag-material-body i {
+  display: block; margin-top: 2px; font-style: normal; font-size: 11.5px;
+  color: var(--text-tertiary); line-height: 1.5;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}

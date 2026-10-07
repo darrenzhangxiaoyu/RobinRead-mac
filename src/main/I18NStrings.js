@@ -1731,6 +1731,30 @@ const STRINGS = {
   "请输入追问内容。": { zh: "请输入追问内容。", en: "Please type a follow-up question." },
   "报告不存在或已被删除。": { zh: "报告不存在或已被删除。", en: "The report does not exist or has been deleted." },
 
+  // F9 全库 RAG 问答
+  "全库问答": { zh: "全库问答", en: "Library Q&A" },
+  "全库 RAG：检索订阅全文、高亮与笔记，多轮问答，[n] 引用可跳原文。": { zh: "全库 RAG：检索订阅全文、高亮与笔记，多轮问答，[n] 引用可跳原文。", en: "Full-library RAG: searches article bodies, highlights and notes, with multi-turn chat and clickable [n] citations." },
+  "新建会话": { zh: "新建会话", en: "New Chat" },
+  "还没有会话": { zh: "还没有会话", en: "No chats yet" },
+  "无标题会话": { zh: "无标题会话", en: "Untitled chat" },
+  "删除会话": { zh: "删除会话", en: "Delete Chat" },
+  "重命名会话": { zh: "重命名会话", en: "Rename Chat" },
+  "确定删除这个问答会话吗？全部消息将一并删除，此操作无法撤销。": { zh: "确定删除这个问答会话吗？全部消息将一并删除，此操作无法撤销。", en: "Delete this chat? All messages in it will be removed. This cannot be undone." },
+  "输入问题，从全库检索作答…": { zh: "输入问题，从全库检索作答…", en: "Ask anything — answers come from your library…" },
+  "正在检索全库素材…": { zh: "正在检索全库素材…", en: "Searching your library…" },
+  "正在回答…": { zh: "正在回答…", en: "Answering…" },
+  "取消生成": { zh: "取消生成", en: "Cancel" },
+  "回答已取消，已收到的部分已保留。": { zh: "回答已取消，已收到的部分已保留。", en: "Answer cancelled — the part already received has been kept." },
+  "已找到 %lld 条相关素材（未配置 AI，仅检索模式）": { zh: "已找到 %lld 条相关素材（未配置 AI，仅检索模式）", en: "Found %lld relevant sources (AI not configured — retrieval-only mode)" },
+  "（无标题）": { zh: "（无标题）", en: "(untitled)" },
+  "问点什么吧": { zh: "问点什么吧", en: "Ask something" },
+  "问题会先在你的订阅全文、高亮与笔记里检索，再由 AI 作答。": { zh: "问题会先在你的订阅全文、高亮与笔记里检索，再由 AI 作答。", en: "Your question is searched across article bodies, highlights and notes first, then answered by AI." },
+  "问题内容过长（最多 2000 字）。": { zh: "问题内容过长（最多 2000 字）。", en: "The question is too long (max 2000 characters)." },
+  "已有一个问答正在进行，请等它完成或先取消。": { zh: "已有一个问答正在进行，请等它完成或先取消。", en: "A Q&A run is already in progress. Wait for it or cancel it first." },
+  "会话不存在或已被删除。": { zh: "会话不存在或已被删除。", en: "The chat does not exist or has been deleted." },
+  "请输入会话标题。": { zh: "请输入会话标题。", en: "Please type a chat title." },
+  "标题过长（最多 120 字）。": { zh: "标题过长（最多 120 字）。", en: "The title is too long (max 120 characters)." },
+
 };
 
 module.exports = { STRINGS };

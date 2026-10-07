@@ -88,6 +88,7 @@ const OFFLINE = [
   { file: 'scripts/diag-f6-mail.js', runner: 'electron', desc: 'F6 邮件订阅：v16迁移/密码DPAPI不落库/IMAP客户端(mock IMAPS真TLS)/MIME解码/账户与白名单/刷新增量与幂等/正文消毒/断线恢复/并发≤2/耗时回归（离线）' },
   { file: 'scripts/diag-f7-sync.js', runner: 'electron', desc: 'F7 WebDAV 同步：客户端PROPFIND/GET/PUT/MKCOL/MOVE与错误分类/超时/快照roundtrip与8MB与5000护栏/合并幂等并集新者胜/双设备端到端假DAV/本地优先红线/自动同步节流/冲突不上传/凭据DPAPI/设置分区与命令面板/刷新不受影响（离线）' },
   { file: 'scripts/diag-f8-research.js', runner: 'electron', desc: 'F8 AI 研究：v17迁移与老库升级/gather本地FTS相关度与AIHOT注入与去重与上限/AIHOT失败降级/流式生成落库/引用编号约束提示词/取消草稿保留与再次覆盖/追问追加区段/历史重开删除/单飞锁/无Key降级/知识中心tab与命令面板与引用芯片UI（离线）' },
+  { file: 'scripts/diag-f9-rag.js', runner: 'electron', desc: 'F9 全库 RAG：v18迁移与老库升级/gather四路(FTS文章+知识库+正文缓存命中段截窗+AIHOT)与去重与上限30/正文检索限集EXPLAIN与200篇10MB级耗时<300ms/ask流式落库与sources_json与引用编号约束prompt/多轮上下文同会话含首轮QA新会话隔离/无Key明确报错与纯检索不调LLM/单飞锁与取消保留已流/会话列表重开删除级联重命名/知识中心会话侧栏与消息气泡与引用芯片与素材浮层与取消按钮UI/旧kb:ask入口与tab切换清理订阅回归（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

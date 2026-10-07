@@ -721,6 +721,23 @@ function registerIPCHandlers(store, window) {
   handle('research:cancel', () => RS().cancelActive());
   handle('research:snapshot', () => RS().snapshot());
 
+  // MARK: 全库 RAG 问答（F9：会话 / 流式问答 / 纯检索 / 取消 / 重命名 / 素材）
+  // 流式分片与阶段经推送通道下行（rag:delta / rag:status），最终结果走信封返回；
+  // 纯检索模式（无 Key）走 rag:gather——不调 LLM，只聚合本地素材。
+  const RG = () => store.rag;
+  handle('rag:sessions', () => RG().listSessions());
+  handle('rag:session', (id) => RG().session(id));
+  handle('rag:gather', (question) => RG().gatherRAG(String(question || '')));
+  handle('rag:ask', (sessionID, question) => RG().ask(sessionID, String(question || ''), {
+    onDelta: (delta) => send('rag:delta', { delta }),
+    onStatus: (phase) => send('rag:status', { phase }),
+  }));
+  handle('rag:cancel', () => RG().cancelActive());
+  handle('rag:delete', (id) => RG().deleteSession(id));
+  handle('rag:rename', (id, title) => RG().renameSession(id, String(title || '')));
+  handle('rag:sources', (messageID) => RG().sources(messageID));
+  handle('rag:snapshot', () => RG().snapshot());
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => {
     store.preferences.set('RobinRead.list.titleZh', on === true);

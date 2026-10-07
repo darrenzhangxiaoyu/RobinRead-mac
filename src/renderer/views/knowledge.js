@@ -21,7 +21,7 @@ const TABS = [
   { id: 'stats', label: '统计', icon: 'general' },
   { id: 'tags', label: '标签', icon: 'globe' },
   { id: 'graph', label: '图谱', icon: 'ai' },
-  { id: 'ask', label: '问知识库', icon: 'spark' },
+  { id: 'ask', label: '全库问答', icon: 'spark' },
   { id: 'research', label: 'AI 研究', icon: 'spark' },
 ];
 
@@ -51,6 +51,8 @@ export class KnowledgeCenter {
     this.data = {};
     // AI 研究（F8）会话态：流式运行标记 + 订阅退订器
     this._research = { running: false, mode: null, unsubscribe: null, seq: 0 };
+    // 全库问答（F9）会话态：当前会话 ID + 流式运行标记 + 订阅退订器
+    this._rag = { running: false, mode: null, unsubscribe: null, seq: 0, sessionID: null };
   }
 
   present(initialTab = null) {
@@ -98,7 +100,7 @@ export class KnowledgeCenter {
       stats: async () => window.robin.kbStats(30),
       tags: async () => window.robin.kbTags(),
       graph: async () => window.robin.kbGraph(240),
-      ask: async () => ({}),
+      ask: async () => ({ sessions: (await window.robin.ragSessions()) || [] }),
       research: async () => window.robin.researchList(),
     };
     const loader = loads[this.tab];
@@ -188,7 +190,7 @@ export class KnowledgeCenter {
       case 'stats': this._renderStats(data || {}); break;
       case 'tags': this._renderTags(data || []); break;
       case 'graph': this._renderGraph(data || {}); break;
-      case 'ask': this._renderAsk(); break;
+      case 'ask': this._renderAsk(data || {}); break;
       case 'research': this._renderResearch(Array.isArray(data) ? data : []); break;
     }
   }
@@ -745,6 +747,9 @@ export class KnowledgeCenter {
     // AI 研究（F8）：离开页面时退订流式分片（后台生成继续，报告照常落库）
     if (this._research?.unsubscribe) { this._research.unsubscribe(); this._research.unsubscribe = null; }
     if (this._research) { this._research.running = false; this._research.mode = null; }
+    // 全库问答（F9）：离开页面时退订流式分片（后台回答继续，消息照常落库）
+    if (this._rag?.unsubscribe) { this._rag.unsubscribe(); this._rag.unsubscribe = null; }
+    if (this._rag) { this._rag.running = false; this._rag.mode = null; }
   }
 
   _endReviewSession() {
@@ -1222,75 +1227,304 @@ export class KnowledgeCenter {
     canvas.addEventListener('pointerup', () => { dragging = null; });
   }
 
-  // ── 问知识库（知识增强）：以高亮 + 笔记为材料的流式问答 ──
-  _renderAsk() {
-    const el = document.createElement('div');
+  // ── 全库问答（F9）：全库 RAG——会话侧栏 + 消息流 + 引用芯片 + 素材浮层 ──
+
+  /** 订阅问答流式分片与阶段推送（seq 守卫：过期会话的事件全部忽略）。返回统一退订器。 */
+  _subscribeRagEvents(seq, { onDelta, onStatus }) {
+    const offDelta = window.robin.onRagDelta?.((p) => {
+      if (this._rag.running && this._rag.seq === seq) onDelta?.(p);
+    });
+    const offStatus = window.robin.onRagStatus?.((p) => {
+      if (this._rag.running && this._rag.seq === seq) onStatus?.(p);
+    });
+    return () => { offDelta?.(); offStatus?.(); };
+  }
+
+  /** 结束一次问答运行：退订 + 释放单飞标记。 */
+  _endRagRun(unsubscribe) {
+    if (unsubscribe) unsubscribe();
+    if (this._rag.unsubscribe === unsubscribe) this._rag.unsubscribe = null;
+    this._rag.running = false;
+    this._rag.mode = null;
+  }
+
+  _renderAsk(data) {
+    const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+    const wrap = document.createElement('div');
     const head = document.createElement('div');
     head.className = 'kb-graph-head';
-    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('问知识库'))}</span><span class="kb-graph-legend">${escapeHTML(t('以你的高亮与笔记为材料作答，句末 [n] 可点击跳来源'))}</span>`;
-    el.appendChild(head);
+    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('全库问答'))}</span><span class="kb-graph-legend">${escapeHTML(t('全库 RAG：检索订阅全文、高亮与笔记，多轮问答，[n] 引用可跳原文。'))}</span>`;
+    wrap.appendChild(head);
+
+    const layout = document.createElement('div');
+    layout.className = 'nj-rag-layout';
+
+    // 会话侧栏：新建 + 历史列表
+    const side = document.createElement('div');
+    side.className = 'nj-rag-side';
+    const newBtn = document.createElement('button');
+    newBtn.type = 'button';
+    newBtn.className = 'btn-text bordered nj-rag-new';
+    newBtn.innerHTML = `${icon('spark')}<span style="margin-left:5px"></span>`;
+    newBtn.querySelector('span').textContent = t('新建会话');
+    side.appendChild(newBtn);
+    const sessionsHost = document.createElement('div');
+    sessionsHost.className = 'nj-rag-sessions';
+    side.appendChild(sessionsHost);
+    layout.appendChild(side);
+
+    // 聊天区：消息流 + 状态/取消 + 输入行
+    const chat = document.createElement('div');
+    chat.className = 'nj-rag-chat';
+    const streamHost = document.createElement('div');
+    streamHost.className = 'nj-rag-stream';
+    chat.appendChild(streamHost);
+
+    const statusBar = document.createElement('div');
+    statusBar.className = 'nj-research-status nj-rag-status';
+    statusBar.style.display = 'none';
+    // 阶段文本独立 span：textContent 直写 statusBar 会连带清掉子级取消按钮
+    const statusText = document.createElement('span');
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn-text nj-rag-cancel';
+    cancelBtn.style.display = 'none';
+    cancelBtn.style.marginLeft = '8px';
+    cancelBtn.textContent = t('取消生成');
+    cancelBtn.addEventListener('click', () => { try { window.robin.ragCancel(); } catch (_) { /* 服务层取消，已流部分照存 */ } });
+    statusBar.append(statusText, cancelBtn);
+    chat.appendChild(statusBar);
 
     const inputRow = document.createElement('div');
-    inputRow.className = 'kb-ask-row';
+    inputRow.className = 'kb-ask-row nj-rag-row';
     const input = document.createElement('input');
     input.type = 'text';
-    input.className = 'kb-ask-input';
-    input.placeholder = t('例如：我收藏过哪些关于写作的建议？');
+    input.className = 'kb-ask-input nj-rag-input';
+    input.placeholder = t('输入问题，从全库检索作答…');
     const askBtn = document.createElement('button');
-    askBtn.className = 'btn-text primary kb-ask-btn';
+    askBtn.className = 'btn-text primary kb-ask-btn nj-rag-go';
     askBtn.textContent = t('提问');
     inputRow.append(input, askBtn);
-    el.appendChild(inputRow);
+    chat.appendChild(inputRow);
+    layout.appendChild(chat);
+    wrap.appendChild(layout);
+    this.contentHost.appendChild(wrap);
 
-    const answer = document.createElement('div');
-    answer.className = 'kb-ask-answer';
-    el.appendChild(answer);
-    const refsHost = document.createElement('div');
-    refsHost.className = 'kb-ask-refs';
-    el.appendChild(refsHost);
-    this.contentHost.appendChild(el);
+    const scrollBottom = () => { streamHost.scrollTop = streamHost.scrollHeight; };
+    const setBusy = (busy) => { askBtn.disabled = busy; input.disabled = busy; };
+    const setStreaming = (on) => {
+      statusBar.style.display = on ? '' : 'none';
+      cancelBtn.style.display = on ? '' : 'none';
+    };
 
-    let busy = false;
+    /** 单条消息气泡：user 纯文本；assistant 走 renderMarkdown + [n] 引用芯片。 */
+    const renderMessage = (msg) => {
+      const bubble = document.createElement('div');
+      bubble.className = `nj-rag-msg ${msg.role === 'user' ? 'user' : 'assistant'}`;
+      if (msg.role === 'user') bubble.textContent = msg.content || '';
+      else {
+        bubble.innerHTML = renderMarkdown(msg.content || t('（空回答）'));
+        this._linkifyCitations(bubble, Array.isArray(msg.sources) ? msg.sources : []);
+      }
+      return bubble;
+    };
+
+    const renderEmptyHint = () => {
+      streamHost.innerHTML = '';
+      const empty = document.createElement('div');
+      empty.className = 'list-empty nj-rag-empty';
+      empty.innerHTML = `<div class="glyph">${icon('spark')}</div><h3></h3><p></p>`;
+      empty.querySelector('h3').textContent = t('问点什么吧');
+      empty.querySelector('p').textContent = t('问题会先在你的订阅全文、高亮与笔记里检索，再由 AI 作答。');
+      streamHost.appendChild(empty);
+    };
+
+    /** 会话侧栏列表（active 高亮当前会话；行内重命名/删除）。 */
+    const renderSessionList = (list) => {
+      sessionsHost.innerHTML = '';
+      if (!list.length) {
+        const hint = document.createElement('div');
+        hint.className = 'nj-rag-no-session';
+        hint.textContent = t('还没有会话');
+        sessionsHost.appendChild(hint);
+        return;
+      }
+      for (const s of list) {
+        const row = document.createElement('div');
+        row.className = 'nj-rag-session' + (s.id === this._rag.sessionID ? ' active' : '');
+        const main = document.createElement('div');
+        main.className = 'nj-rag-session-main';
+        const title = document.createElement('div');
+        title.className = 'nj-rag-session-title';
+        title.textContent = s.title || t('无标题会话');
+        title.title = s.title || '';
+        const meta = document.createElement('div');
+        meta.className = 'nj-rag-session-meta';
+        meta.textContent = timeAgo(s.updatedAt);
+        main.append(title, meta);
+        const actions = document.createElement('span');
+        actions.className = 'nj-rag-session-actions';
+        const rename = document.createElement('button');
+        rename.className = 'btn icon-only';
+        rename.innerHTML = icon('pencil');
+        rename.title = t('重命名会话');
+        rename.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const name = await promptBox(t('重命名会话'), { initial: s.title || '' });
+          if (name === null || !name.trim() || name.trim() === s.title) return;
+          await window.robin.ragRename(s.id, name.trim());
+          renderSessionList((await window.robin.ragSessions()) || []);
+        });
+        const del = document.createElement('button');
+        del.className = 'btn icon-only';
+        del.innerHTML = icon('trash');
+        del.title = t('删除会话');
+        del.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const ok = await confirmBox(t('删除会话'), { message: t('确定删除这个问答会话吗？全部消息将一并删除，此操作无法撤销。'), okLabel: t('删除'), danger: true });
+          if (!ok) return;
+          await window.robin.ragDelete(s.id);
+          if (s.id === this._rag.sessionID) { this._rag.sessionID = null; renderEmptyHint(); }
+          renderSessionList((await window.robin.ragSessions()) || []);
+        });
+        actions.append(rename, del);
+        row.append(main, actions);
+        row.addEventListener('click', async () => {
+          if (this._rag.running) return;
+          const full = await window.robin.ragSession(s.id);
+          if (!full) { renderSessionList((await window.robin.ragSessions()) || []); return; }
+          this._rag.sessionID = s.id;
+          streamHost.innerHTML = '';
+          for (const m of full.messages || []) streamHost.appendChild(renderMessage(m));
+          if (!(full.messages || []).length) renderEmptyHint();
+          renderSessionList(list);
+          scrollBottom();
+        });
+        sessionsHost.appendChild(row);
+      }
+    };
+    renderSessionList(sessions);
+    renderEmptyHint();
+
+    const refreshSessionList = async () => renderSessionList((await window.robin.ragSessions()) || []);
+
     const submit = async () => {
       const question = input.value.trim();
-      if (!question || busy) return;
-      busy = true;
-      askBtn.disabled = true;
-      answer.className = 'kb-ask-answer';
-      answer.innerHTML = '<div class="robin-spinner"></div>';
-      refsHost.innerHTML = '';
+      if (!question || this._rag.running) return;
+      this._rag.running = true;
+      this._rag.mode = 'ask';
+      this._rag.seq = (this._rag.seq || 0) + 1;
+      const seq = this._rag.seq;
+      input.value = '';
+      setBusy(true);
+      setStreaming(true);
+      statusText.textContent = t('正在检索全库素材…');
+      if (streamHost.querySelector('.nj-rag-empty')) streamHost.innerHTML = '';
+
+      // user 气泡 + assistant 流式气泡
+      streamHost.appendChild(renderMessage({ role: 'user', content: question }));
+      const bubble = document.createElement('div');
+      bubble.className = 'nj-rag-msg assistant';
+      bubble.innerHTML = '<div class="robin-spinner"></div>';
+      streamHost.appendChild(bubble);
+      scrollBottom();
+
       let streamed = '';
-      const unsubscribe = window.robin.onAIDelta?.((payload) => {
-        if (payload?.key !== 'kb:ask') return;
-        streamed += payload.delta || '';
-        answer.innerHTML = renderMarkdown(streamed);
+      // 首个分片同步上屏（首 token 零延迟 + 隐藏窗口 rAF 节流时仍可见），后续 rAF 合帧
+      let rafPending = false;
+      let paintedOnce = false;
+      const applyPaint = () => {
+        bubble.innerHTML = renderMarkdown(streamed);
+        streamHost.scrollTop = streamHost.scrollHeight;
+      };
+      const paint = () => {
+        if (seq !== this._rag.seq || !bubble.isConnected) return;
+        if (!paintedOnce) { paintedOnce = true; applyPaint(); return; }
+        if (rafPending) return;
+        rafPending = true;
+        requestAnimationFrame(() => { rafPending = false; applyPaint(); });
+      };
+      const unsubscribe = this._subscribeRagEvents(seq, {
+        onDelta: (p) => { streamed += p?.delta || ''; paint(); },
+        onStatus: (p) => {
+          if (seq !== this._rag.seq || streamed) return;
+          statusText.textContent = p?.phase === 'gather' ? t('正在检索全库素材…') : t('正在回答…');
+        },
       });
+      this._rag.unsubscribe = unsubscribe;
       try {
-        const result = await window.robin.kbAsk(question);
-        if (result && result.ok === false) throw new Error(result.error || t('生成失败'));
-        const content = result?.content || streamed;
-        answer.className = 'kb-ask-answer';
-        answer.innerHTML = renderMarkdown(content);
-        for (const ref of result?.refs || []) {
-          const chip = document.createElement('button');
-          chip.className = 'dg-ref';
-          chip.textContent = String(ref.n);
-          chip.title = `${ref.kind} · ${ref.title || ''}`;
-          chip.addEventListener('click', () => this.handlers.onOpenArticle?.(ref.itemID));
-          refsHost.appendChild(chip);
+        const res = await window.robin.ragAsk(this._rag.sessionID, question);
+        if (seq !== this._rag.seq) return; // 页面已切走：后台照常落库
+        if (!res || res.ok === false) throw new Error(res?.error || t('生成失败'));
+        const d = res.data || {};
+        this._rag.sessionID = d.sessionID || this._rag.sessionID;
+        bubble.innerHTML = renderMarkdown(d.content || t('（空回答）'));
+        this._linkifyCitations(bubble, Array.isArray(d.materials) ? d.materials : []);
+        if (d.cancelled) {
+          const note = document.createElement('div');
+          note.className = 'nj-rag-cancel-note';
+          note.textContent = t('回答已取消，已收到的部分已保留。');
+          bubble.appendChild(note);
         }
-        if (!content.trim()) answer.textContent = t('（空回答）');
+        refreshSessionList(); // 新会话标题/排序更新（不抢消息流）
       } catch (error) {
-        answer.className = 'kb-ask-answer kb-ask-error';
-        answer.textContent = String(error?.message || error) || t('生成失败');
+        if (seq !== this._rag.seq) return;
+        const msg = String(error?.message || error) || t('生成失败');
+        bubble.classList.add('nj-rag-msg-error');
+        bubble.innerHTML = '';
+        // 无 Key：明确降级提示 + 纯检索素材列表（gather 不依赖 AI）
+        if (/API Key/i.test(msg)) {
+          const err = document.createElement('div');
+          err.className = 'nj-research-error';
+          err.textContent = msg;
+          bubble.appendChild(err);
+          try {
+            const g = await window.robin.ragGather(question);
+            const materials = g?.materials || [];
+            if (materials.length) {
+              const label = document.createElement('div');
+              label.className = 'nj-rag-retrieval-label';
+              label.textContent = tf('已找到 %lld 条相关素材（未配置 AI，仅检索模式）', materials.length);
+              bubble.appendChild(label);
+              const list = document.createElement('div');
+              list.className = 'nj-rag-materials';
+              materials.forEach((m, i) => {
+                const item = document.createElement('button');
+                item.type = 'button';
+                item.className = 'nj-rag-material';
+                item.innerHTML = `<span class="nj-rag-material-n"></span><span class="nj-rag-material-body"><b></b><i></i></span>`;
+                item.querySelector('.nj-rag-material-n').textContent = String(i + 1);
+                item.querySelector('.nj-rag-material-body b').textContent = m.title || t('（无标题）');
+                item.querySelector('.nj-rag-material-body i').textContent = m.snippet || '';
+                item.addEventListener('click', (e) => { e.stopPropagation(); this._showSourcePopover(m, item); });
+                list.appendChild(item);
+              });
+              bubble.appendChild(list);
+            }
+          } catch (_) { /* 纯检索也失败：仅保留错误提示 */ }
+        } else {
+          bubble.textContent = msg;
+        }
       } finally {
-        unsubscribe?.();
-        busy = false;
-        askBtn.disabled = false;
+        this._endRagRun(unsubscribe);
+        if (seq === this._rag.seq) {
+          setStreaming(false);
+          setBusy(false);
+          scrollBottom();
+        }
       }
     };
     askBtn.addEventListener('click', submit);
     input.addEventListener('keydown', (event) => { if (event.key === 'Enter') submit(); });
+
+    newBtn.addEventListener('click', () => {
+      if (this._rag.running) return;
+      this._rag.sessionID = null;
+      renderEmptyHint();
+      renderSessionList(sessions);
+      input.focus();
+    });
+    setTimeout(() => input.focus(), 50);
   }
 
   // ── AI 研究（F8）：主题输入 + 历史列表 + 流式带引用报告 + 追问 ──
@@ -1350,6 +1584,8 @@ export class KnowledgeCenter {
     const statusBar = document.createElement('div');
     statusBar.className = 'nj-research-status';
     statusBar.style.display = 'none';
+    // 阶段文本独立 span：textContent 直写 statusBar 会连带清掉子级取消按钮（F9 修复顺带）
+    const statusText = document.createElement('span');
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
     cancelBtn.className = 'btn-text nj-research-cancel';
@@ -1357,7 +1593,7 @@ export class KnowledgeCenter {
     cancelBtn.style.marginLeft = '8px';
     cancelBtn.textContent = t('取消生成');
     cancelBtn.addEventListener('click', () => { try { window.robin.researchCancel(); } catch (_) { /* 服务层取消，草稿保留 */ } });
-    statusBar.appendChild(cancelBtn);
+    statusBar.append(statusText, cancelBtn);
     wrap.appendChild(statusBar);
 
     const liveHost = document.createElement('div');
@@ -1398,7 +1634,7 @@ export class KnowledgeCenter {
       liveHost.style.display = '';
       liveHost.innerHTML = '';
       statusBar.style.display = '';
-      statusBar.textContent = t('正在聚合素材…');
+      statusText.textContent = t('正在聚合素材…');
       cancelBtn.style.display = '';
       let streamed = '';
       const paint = this._rafPainter(() => {
@@ -1407,7 +1643,7 @@ export class KnowledgeCenter {
       });
       const unsubscribe = this._subscribeResearchEvents(seq, {
         onDelta: (p) => { streamed += p?.delta || ''; paint(); },
-        onStatus: (p) => { const txt = phaseText(p?.phase); if (txt) statusBar.textContent = txt; },
+        onStatus: (p) => { const txt = phaseText(p?.phase); if (txt) statusText.textContent = txt; },
       });
       this._research.unsubscribe = unsubscribe;
       try {
@@ -1637,18 +1873,21 @@ export class KnowledgeCenter {
     }
   }
 
-  /** 素材原文浮层：snippet + 打开原文（entryID → 阅读器 / url → 外链精读，F4 双通路）。 */
+  /** 素材原文浮层：snippet + 打开原文（entryID → 阅读器 / url → 外链精读，F4 双通路）。
+   *  F9 全库问答素材用 kind（article/highlight/note/hot），F8 研究素材用 lane——两者归一到 lane 徽标。 */
   _showSourcePopover(material, anchor) {
     if (!material) return;
     document.querySelectorAll('.nj-research-pop').forEach((n) => n.remove());
+    const kindToLane = { article: 'local', highlight: 'knowledge', note: 'knowledge', hot: 'aihot' };
+    const lane = material.lane || kindToLane[material.kind] || 'local';
     const pop = document.createElement('div');
     pop.className = 'nj-research-pop';
     const laneLabels = { local: t('本库'), knowledge: t('知识库'), aihot: 'AIHOT' };
     const head = document.createElement('div');
     head.className = 'nj-research-pop-head';
     const badge = document.createElement('span');
-    badge.className = `nj-topic-lane-badge lane-${material.lane || 'local'}`;
-    badge.textContent = laneLabels[material.lane] || material.lane || '';
+    badge.className = `nj-topic-lane-badge lane-${lane}`;
+    badge.textContent = laneLabels[lane] || lane || '';
     const src = document.createElement('span');
     src.className = 'nj-research-pop-source';
     src.textContent = material.source || '';

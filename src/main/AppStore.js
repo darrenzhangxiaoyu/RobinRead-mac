@@ -37,6 +37,7 @@ const { PlatformService } = require('./PlatformService');
 const { MailService } = require('./MailService');
 const { SyncService } = require('./SyncService');
 const { ResearchService } = require('./ResearchService');
+const { RAGService } = require('./RAGService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -154,6 +155,7 @@ class AppStore extends EventEmitter {
     this.mail = new MailService(this); // Newsletter 收件（F6）：IMAP 邮箱 + 发件人白名单 → 平台源同构合成 feed
     this.sync = new SyncService(this, userDataPath); // WebDAV 多设备同步（F7）：本地优先快照合并
     this.research = new ResearchService(this); // AI 深度研究（F8）：素材聚合 + 流式带引用报告 + 追问
+    this.rag = new RAGService(this); // 全库 RAG 问答（F9）：全库检索 + 多轮会话 + 引用跳转
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
