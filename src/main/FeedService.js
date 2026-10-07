@@ -91,4 +91,4 @@ async function fetchFeed(feed, { force = false } = {}) {
   }
 }
 
-module.exports = { fetchFeed, httpStream, HTTPStatusError, useNetFetch };
+module.exports = { fetchFeed, httpFetch, httpStream, HTTPStatusError, useNetFetch };

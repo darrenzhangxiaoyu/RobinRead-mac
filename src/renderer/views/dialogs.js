@@ -1492,48 +1492,231 @@ export class SettingsView {
 
 // MARK: - Sheet 对话框（AddFeed / AddFolder / RenameFolder / FreshRSS 账号）
 
+/**
+ * 「添加订阅」三 tab：RSS / B 站 UP 主 / 微博用户（F5 中文平台适配器）。
+ * 平台 tab：输入 UID 或主页链接 → 试抓预览前 3 条 → 确认添加（feed 落 platform/platform_ref）。
+ */
 export function showAddFeed(folders, onDone) {
   const { overlay, modal } = smallModal(t('添加订阅'));
   const body = modal.querySelector('.sheet-body');
+  const footer = modal.querySelector('.modal-footer');
+  let active = 'rss';
+  // 时序 token（topic-view 同款）：快速切 tab 时，旧 tab 的异步返回不再写回新页面
+  let seq = 0;
 
-  const urlInput = field(body, t('订阅地址'), 'link', 'https://example.com/feed.xml');
-  let httpWarn = null;
-  urlInput.addEventListener('input', () => {
-    const insecure = urlInput.value.trim().toLowerCase().startsWith('http://');
-    if (insecure && !httpWarn) {
-      httpWarn = document.createElement('div');
-      httpWarn.className = 'http-warning';
-      httpWarn.innerHTML = `${icon('info')}<span></span>`;
-      httpWarn.querySelector('span').textContent = t('这是未加密的 HTTP 地址，内容可能被网络中间人篡改。仅在你信任该来源时使用。');
-      body.insertBefore(httpWarn, urlInput.closest('.sheet-field').nextSibling);
-    } else if (!insecure && httpWarn) {
-      httpWarn.remove();
-      httpWarn = null;
-    }
-  });
-  const folderSelect = selectField(body, t('可选分类'), 'folder',
-    [['', t('无分类')], ...folders.map((f) => [f.name, f.name])]);
-  hint(body, t('保存后会立即抓取一次 Feed。RobinRead 只保存订阅地址、文章和阅读状态。'));
+  const TABS = [
+    ['rss', t('RSS')],
+    ['bilibili', t('B 站 UP 主')],
+    ['weibo', t('微博用户')],
+  ];
+  const tabs = document.createElement('div');
+  tabs.className = 'segmented';
+  tabs.style.cssText = 'margin:2px 0 10px;';
+  for (const [id, label] of TABS) {
+    const tabButton = document.createElement('button');
+    tabButton.type = 'button';
+    tabButton.textContent = label;
+    tabButton.dataset.tab = id;
+    tabButton.addEventListener('click', () => {
+      active = id;
+      renderTab();
+    });
+    tabs.appendChild(tabButton);
+  }
+  body.appendChild(tabs);
 
-  submitBar(modal, t('取消'), t('添加'), async () => {
-    const url = urlInput.value.trim();
-    if (!url) return false;
-    const result = await window.robin.addFeed(url, folderSelect.value || null);
-    if (!result.ok) {
-      // 免费版订阅源达上限 → 转升级引导（比报错更清晰的路径）
-      if (/会员/.test(String(result.error))) {
-        overlay.remove();
-        const { showUpgradeGate } = await import('./account.js');
-        showUpgradeGate({ message: String(result.error) });
-        return true;
+  const content = document.createElement('div');
+  body.appendChild(content);
+
+  const cancelButton = () => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn-text';
+    b.textContent = t('取消');
+    b.addEventListener('click', () => overlay.remove());
+    return b;
+  };
+  const setFooter = (buttons) => {
+    footer.innerHTML = '';
+    for (const b of buttons) footer.appendChild(b);
+  };
+  const folderOptions = () => [['', t('无分类')], ...folders.map((f) => [f.name, f.name])];
+  const platformTitle = (platform) => (platform === 'bilibili' ? t('B 站 UP 主') : t('微博用户'));
+
+  function renderTab() {
+    seq += 1;
+    for (const b of tabs.children) b.classList.toggle('active', b.dataset.tab === active);
+    content.innerHTML = '';
+    if (active === 'rss') renderRSSBody();
+    else renderPlatformBody(active);
+  }
+
+  // ── RSS tab：与既有单表单流程逐字段一致 ──
+  function renderRSSBody() {
+    const urlInput = field(content, t('订阅地址'), 'link', 'https://example.com/feed.xml');
+    let httpWarn = null;
+    urlInput.addEventListener('input', () => {
+      const insecure = urlInput.value.trim().toLowerCase().startsWith('http://');
+      if (insecure && !httpWarn) {
+        httpWarn = document.createElement('div');
+        httpWarn.className = 'http-warning';
+        httpWarn.innerHTML = `${icon('info')}<span></span>`;
+        httpWarn.querySelector('span').textContent = t('这是未加密的 HTTP 地址，内容可能被网络中间人篡改。仅在你信任该来源时使用。');
+        content.insertBefore(httpWarn, urlInput.closest('.sheet-field').nextSibling);
+      } else if (!insecure && httpWarn) {
+        httpWarn.remove();
+        httpWarn = null;
       }
-      await alertBox(t('添加失败'), String(result.error));
-      return false;
-    }
-    onDone?.();
-    return true;
-  });
-  setTimeout(() => urlInput.focus(), 50);
+    });
+    const folderSelect = selectField(content, t('可选分类'), 'folder', folderOptions());
+    hint(content, t('保存后会立即抓取一次 Feed。RobinRead 只保存订阅地址、文章和阅读状态。'));
+
+    const confirmButton = document.createElement('button');
+    confirmButton.type = 'button';
+    confirmButton.className = 'btn-text primary';
+    confirmButton.textContent = t('添加');
+    confirmButton.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      confirmButton.disabled = true;
+      try {
+        const result = await window.robin.addFeed(url, folderSelect.value || null);
+        if (!result.ok) {
+          // 免费版订阅源达上限 → 转升级引导（比报错更清晰的路径）
+          if (/会员/.test(String(result.error))) {
+            overlay.remove();
+            const { showUpgradeGate } = await import('./account.js');
+            showUpgradeGate({ message: String(result.error) });
+            return;
+          }
+          await alertBox(t('添加失败'), String(result.error));
+          return;
+        }
+        onDone?.();
+        overlay.remove();
+      } finally {
+        confirmButton.disabled = false;
+      }
+    });
+    setFooter([cancelButton(), confirmButton]);
+    setTimeout(() => urlInput.focus(), 50);
+  }
+
+  // ── 平台 tab（B 站 / 微博）：UID/链接 → 试抓预览 3 条 → 确认添加 ──
+  function renderPlatformBody(platform) {
+    const isBili = platform === 'bilibili';
+    const input = field(content,
+      isBili ? t('UP 主 UID 或主页链接') : t('用户 UID 或主页链接'),
+      isBili ? 'playCircle' : 'person',
+      isBili ? t('例如：123456 或 https://space.bilibili.com/123456') : t('例如：789 或 https://weibo.com/u/789'));
+    const folderSelect = selectField(content, t('可选分类'), 'folder', folderOptions());
+    hint(content, isBili
+      ? t('保存后会按 UP 主投稿自动刷新，视频在阅读器内直接播放。')
+      : t('保存后按微博时间线自动刷新；接口被风控时会自动重试。'));
+
+    const previewBox = document.createElement('div');
+    content.appendChild(previewBox);
+
+    const previewButton = document.createElement('button');
+    previewButton.type = 'button';
+    previewButton.className = 'btn-text bordered';
+    previewButton.textContent = t('试抓预览');
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'btn-text primary';
+    addButton.textContent = t('添加');
+    addButton.disabled = true;
+    setFooter([cancelButton(), previewButton, addButton]);
+
+    const my = seq;
+    let selectedRef = null;
+
+    previewButton.addEventListener('click', async () => {
+      const inputText = input.value.trim();
+      if (!inputText) return;
+      const ticket = ++seq;
+      previewButton.disabled = true;
+      addButton.disabled = true;
+      previewBox.innerHTML = '';
+      previewBox.appendChild(previewStatus(t('正在试抓…')));
+      try {
+        const result = await window.robin.platformPreview({ platform, input: inputText });
+        if (ticket !== seq || !overlay.isConnected) return; // 已切 tab / 关闭：丢弃旧返回
+        if (!result.ok) throw new Error(String(result.error || t('预览失败')));
+        selectedRef = result.data?.ref || null;
+        previewBox.innerHTML = '';
+        const entries = Array.isArray(result.data?.entries) ? result.data.entries : [];
+        if (!selectedRef || !entries.length) {
+          previewBox.appendChild(previewStatus(t('没有抓到最近投稿，请确认 UID 或链接后重试。')));
+          return;
+        }
+        previewBox.appendChild(previewHeader(platformTitle(platform), result.data.title));
+        for (const entry of entries.slice(0, 3)) previewBox.appendChild(previewRow(entry));
+        addButton.disabled = false;
+      } catch (err) {
+        if (ticket !== seq || !overlay.isConnected) return;
+        previewBox.innerHTML = '';
+        previewBox.appendChild(previewStatus(String(err?.message || err)));
+      } finally {
+        if (ticket === seq && overlay.isConnected) previewButton.disabled = false;
+      }
+    });
+
+    addButton.addEventListener('click', async () => {
+      if (!selectedRef) return;
+      addButton.disabled = true;
+      try {
+        const result = await window.robin.addPlatformFeed({
+          platform, ref: selectedRef, folder: folderSelect.value || null,
+        });
+        if (!result.ok) {
+          await alertBox(t('添加失败'), String(result.error));
+          addButton.disabled = false;
+          return;
+        }
+        onDone?.();
+        overlay.remove();
+      } catch (err) {
+        await alertBox(t('添加失败'), String(err?.message || err));
+        addButton.disabled = false;
+      }
+    });
+    setTimeout(() => input.focus(), 50);
+  }
+
+  renderTab();
+}
+
+function previewStatus(text) {
+  const el = document.createElement('div');
+  el.className = 'platform-preview-status';
+  el.style.cssText = 'font-size:12px;color:var(--text-secondary);padding:6px 2px;';
+  el.textContent = text;
+  return el;
+}
+
+function previewHeader(platformName, title) {
+  const el = document.createElement('div');
+  el.style.cssText = 'font-size:12.5px;font-weight:700;padding:6px 2px 2px;color:var(--text-primary);';
+  el.textContent = `${platformName} · ${title || ''}`;
+  return el;
+}
+
+function previewRow(entry) {
+  const row = document.createElement('div');
+  row.className = 'platform-preview-row';
+  row.style.cssText = 'display:flex;flex-direction:column;gap:2px;padding:7px 10px;margin:4px 0;border:1px solid var(--separator);border-radius:8px;';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  title.textContent = entry.title || '';
+  const meta = document.createElement('div');
+  meta.style.cssText = 'font-size:11px;color:var(--text-secondary);';
+  const when = Number(entry.publishedAt) > 0
+    ? new Date(Number(entry.publishedAt) * 1000).toLocaleDateString()
+    : '';
+  meta.textContent = when;
+  row.append(title, meta);
+  return row;
 }
 
 export function showAddFolder(onDone) {

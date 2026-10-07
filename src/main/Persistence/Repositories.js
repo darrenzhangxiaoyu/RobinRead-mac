@@ -24,6 +24,9 @@ function feedRowToFeed(row) {
     updatedAt: row.updated_at,
     storedIconURL: row.stored_icon_url ?? null,
     sortOrder: row.sort_order ?? 0,
+    // F5 中文平台适配器：platform（'web' 默认）+ platform_ref（UID），v15 迁移列
+    platform: row.platform ?? 'web',
+    platformRef: row.platform_ref ?? null,
   };
 }
 
@@ -193,13 +196,20 @@ class FeedRepository {
     ).get(accountID, externalID));
   }
 
-  insertFeed({ accountID, externalID = null, title, siteURL = null, feedURL, storedIconURL = null }) {
+  /** F5：按平台 + 平台身份查源（添加去重的正主键；feed_url 合成串是它的镜像）。 */
+  feedByPlatformRef(accountID, platform, platformRef) {
+    return feedRowToFeed(this.db.prepare(
+      "SELECT * FROM feeds WHERE account_id = ? AND platform = ? AND platform_ref = ? AND is_deleted = 0"
+    ).get(accountID, platform, String(platformRef)));
+  }
+
+  insertFeed({ accountID, externalID = null, title, siteURL = null, feedURL, storedIconURL = null, platform = 'web', platformRef = null }) {
     const id = uuid();
     const now = nowSeconds();
     this.db.prepare(`
-      INSERT INTO feeds (id, account_id, external_id, title, site_url, feed_url, updated_at, stored_icon_url, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-    `).run(id, accountID, externalID, title || '未命名订阅', siteURL, feedURL, now, storedIconURL);
+      INSERT INTO feeds (id, account_id, external_id, title, site_url, feed_url, updated_at, stored_icon_url, sort_order, platform, platform_ref)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(id, accountID, externalID, title || '未命名订阅', siteURL, feedURL, now, storedIconURL, platform || 'web', platformRef);
     return this.feed(id);
   }
 
@@ -209,11 +219,13 @@ class FeedRepository {
     const next = { ...current, ...mutate(current) };
     this.db.prepare(`
       UPDATE feeds SET title = ?, site_url = ?, etag = ?, last_modified = ?,
-        last_refreshed_at = ?, is_deleted = ?, updated_at = ?, stored_icon_url = ?, sort_order = ?
+        last_refreshed_at = ?, is_deleted = ?, updated_at = ?, stored_icon_url = ?, sort_order = ?,
+        platform = ?, platform_ref = ?
       WHERE id = ?
     `).run(
       next.title, next.siteURL, next.etag, next.lastModified,
       next.lastRefreshedAt, next.isDeleted ? 1 : 0, nowSeconds(), next.storedIconURL, next.sortOrder,
+      next.platform || 'web', next.platformRef ?? null,
       feedID
     );
     return this.feed(feedID);

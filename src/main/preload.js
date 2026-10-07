@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('robin', {
 
   // Feeds / 文件夹
   addFeed: (url, folder) => invoke('feeds:add', url, folder),
+  // 中文平台适配器（F5）：B 站/微博 试抓预览 + 平台源添加
+  platformPreview: (payload) => invoke('platforms:preview', payload),
+  addPlatformFeed: (payload) => invoke('feeds:addPlatform', payload),
   deleteFeeds: (ids) => invoke('feeds:delete', ids),
   setFeedFolder: (ids, folder) => invoke('feeds:setFolder', ids, folder),
   reorderFeeds: (orderedIDs) => invoke('feeds:reorder', orderedIDs),

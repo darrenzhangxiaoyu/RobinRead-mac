@@ -84,6 +84,7 @@ const OFFLINE = [
   { file: 'scripts/diag-f2-rules.js', runner: 'electron', desc: 'F2 过滤规则：CRUD/灌文规则生效/作用域/操作符/正则安全/测试器/回放幂等/单事务/耗时回归（离线）' },
   { file: 'scripts/diag-f3-media.js', runner: 'electron', desc: 'F3 媒体中心：enclosure入库/媒体视图筛选/单实例/进度续播/倍速/队列连播/离线下载/TTS互斥/查询耗时（离线）' },
   { file: 'scripts/diag-f4-topics.js', runner: 'electron', desc: 'F4 话题盯梢：CRUD/三路聚合/AI精筛降级/滚动保留/频率/视图渲染/触点（离线）' },
+  { file: 'scripts/diag-f5-platform.js', runner: 'electron', desc: 'F5 平台适配：v15迁移/B站与微博适配器(mock)/UID提取/添加UI三tab/试抓预览/刷新分派/媒体联动/去重/耗时回归（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

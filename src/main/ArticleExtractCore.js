@@ -148,7 +148,11 @@ function isTwitterAvatarTag(rawAttributes) {
 }
 
 function sanitizedHTML(html, baseURL = null) {
-  const stripped = stripNoiseBlocks(html);
+  // F5 中文平台适配器：白名单域（player.bilibili.com）的嵌入播放器 iframe 先摘出来
+  // 存证（只留 src，其余属性一律不继承），占位 token 随正文走完消毒管线后原位重建——
+  // 既不让任意网页 iframe 穿透 stripExecutableBlocks，又让平台适配器组装的播放器存活。
+  const { staged, embeds } = preserveEmbeddedIframes(html);
+  const stripped = stripNoiseBlocks(staged);
   const withoutExecutable = stripExecutableBlocks(stripped)
     .replace(/<!--[\s\S]*?-->/g, '');
 
@@ -177,7 +181,54 @@ function sanitizedHTML(html, baseURL = null) {
     }
   }
   result += withoutExecutable.slice(cursor);
-  return wrappingTopLevelTextRuns(result.trim());
+  const restored = restoreEmbeddedIframes(result, embeds);
+  return wrappingTopLevelTextRuns(restored.trim());
+}
+
+// MARK: 白名单嵌入播放器（F5：B 站 iframe 播放器过消毒管线）
+
+/** 允许内嵌的播放器域（https only）。只收适配器自己组装的播放器，不开放给任意 feed。 */
+const EMBED_PLAYER_HOSTS = new Set(['player.bilibili.com']);
+const EMBED_TOKEN_RE = /ROBINEMBED(\d+)END/g;
+
+/** src 是否指向白名单播放器域（协议相对 // 与 https 都收，http 拒绝）。 */
+function isEmbeddedPlayerURL(rawValue) {
+  const normalized = htmlEntityDecoded(String(rawValue ?? '')).trim();
+  if (!normalized) return false;
+  try {
+    const url = new URL(normalized.startsWith('//') ? `https:${normalized}` : normalized);
+    return url.protocol === 'https:' && EMBED_PLAYER_HOSTS.has(url.hostname.toLowerCase());
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * 第一遍：把白名单 iframe 换成纯文本 token（能原样穿过 stripExecutableBlocks、
+ * 注释剔除与标签白名单三道闸）。非白名单 iframe 原样保留，交给既有管线剥除。
+ */
+function preserveEmbeddedIframes(html) {
+  const embeds = [];
+  const staged = String(html ?? '').replace(
+    /<iframe\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>[\s\S]*?<\/iframe>/gi,
+    (whole, dq, sq, uq) => {
+      const src = dq ?? sq ?? uq ?? '';
+      if (!isEmbeddedPlayerURL(src)) return whole;
+      embeds.push(htmlEntityDecoded(src).trim().replace(/^\/\//, 'https://'));
+      return `ROBINEMBED${embeds.length - 1}END`;
+    },
+  );
+  return { staged, embeds };
+}
+
+/** 重建只带安全属性的播放器 iframe（src 白名单域 + 懒加载；不回抄源标签任何其他属性）。 */
+function restoreEmbeddedIframes(html, embeds) {
+  if (!embeds.length) return html;
+  return html.replace(EMBED_TOKEN_RE, (token, index) => {
+    const src = embeds[Number(index)];
+    if (!src || !isEmbeddedPlayerURL(src)) return '';
+    return `<iframe src="${escapeAttribute(src)}" width="100%" height="360" scrolling="no" frameborder="no" allowfullscreen="true" loading="lazy"></iframe>`;
+  });
 }
 
 const BLOCK_TAGS = new Set([

@@ -559,6 +559,9 @@ function registerIPCHandlers(store, window) {
 
   // MARK: Feed / 文件夹
   handle('feeds:add', (url, folder) => store.addFeed(url, folder));
+  // 中文平台适配器（F5）：试抓预览（添加对话框 B 站/微博 tab）+ 平台源添加
+  handle('platforms:preview', (payload) => store.platforms.preview(payload || {}));
+  handle('feeds:addPlatform', (payload) => store.addPlatformFeed(payload || {}));
   handle('feeds:delete', (feedIDs) => store.deleteFeeds(feedIDs));
   handle('feeds:setFolder', (feedIDs, folderName) => store.setFeedFolder(feedIDs, folderName));
   handle('feeds:reorder', (orderedIDs) => store.reorderFeeds(orderedIDs));

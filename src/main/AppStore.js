@@ -33,6 +33,7 @@ const { FullTextService } = require('./FullTextService');
 const { RulesEngine } = require('./RulesEngine');
 const { MediaService } = require('./MediaService');
 const { TopicService } = require('./TopicService');
+const { PlatformService } = require('./PlatformService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -146,6 +147,7 @@ class AppStore extends EventEmitter {
     this.rules = new RulesEngine(this); // 规则过滤引擎（F2）：灌文后按用户规则自动执行动作
     this.media = new MediaService(this, userDataPath); // 媒体中心（F3）：enclosure 入库/进度/队列/离线下载
     this.topics = new TopicService(this); // 话题盯梢（F4）：关键词三路聚合专属信息流
+    this.platforms = new PlatformService(this); // 中文平台适配器（F5）：B 站 UP 主 / 微博用户 → 平台源
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -789,6 +791,67 @@ class AppStore extends EventEmitter {
     return this.feedsRepo.feed(feed.id);
   }
 
+  /**
+   * F5 中文平台适配器：添加平台源（B 站 UP 主 / 微博用户）。
+   * 与 addFeed 同款门控与查重；feed_url 存合成 URL（bilibili://user/:uid 等），
+   * platform/platform_ref 落 v15 迁移列；首抓成功即灌文（试抓预览已在对话框先行）。
+   */
+  async addPlatformFeed({ platform, ref, folder = null } = {}) {
+    const adapter = this.platforms.adapter(String(platform || ''));
+    if (!adapter) throw new Error(i18n.localized('不支持的平台类型。'));
+    // ref 接受纯数字 UID 或主页链接（parseRef 统一归一）
+    const uid = String(adapter.parseRef(ref) || '').trim();
+    if (!/^\d+$/.test(uid)) throw new Error(i18n.localized('无法识别的用户 ID，请输入纯数字 UID 或主页链接。'));
+
+    const feedURL = adapter.feedURL(uid);
+    const existing = this.feedsRepo.feedByURL(LOCAL_ACCOUNT_ID, feedURL)
+      || this.feedsRepo.feedByPlatformRef(LOCAL_ACCOUNT_ID, adapter.id, uid);
+    if (existing) throw new Error(i18n.localized('这个订阅已经存在。'));
+
+    // 订阅源数量门控（与手动添加/商店订阅同一闸口）
+    if (this.accountGate) {
+      const gate = this.accountGate.canAddFeeds(this.feedsRepo.allFeeds().length);
+      if (!gate.ok) throw gate.error;
+    }
+
+    const result = await this.platforms.fetchFeed(this.platforms.pseudoFeed(adapter.id, uid), { force: true });
+
+    // 二次查重（与 addFeed 同理：抓取窗口内的双击/并发）
+    const raced = this.feedsRepo.feedByURL(LOCAL_ACCOUNT_ID, feedURL)
+      || this.feedsRepo.feedByPlatformRef(LOCAL_ACCOUNT_ID, adapter.id, uid);
+    if (raced) throw new Error(i18n.localized('这个订阅已经存在。'));
+
+    let folderID = null;
+    if (folder && String(folder).trim()) {
+      folderID = this.feedsRepo.ensureFolder(LOCAL_ACCOUNT_ID, String(folder).trim()).id;
+    }
+
+    const feed = this.feedsRepo.insertFeed({
+      accountID: LOCAL_ACCOUNT_ID,
+      title: result.parsed?.title || `${adapter.id === 'bilibili' ? 'B站UP主' : '微博用户'} ${uid}`,
+      siteURL: result.parsed?.siteURL || null,
+      feedURL,
+      storedIconURL: result.parsed?.iconURL || null,
+      platform: adapter.id,
+      platformRef: uid,
+    });
+    if (folderID) this.feedsRepo.setFeedFolder(feed.id, folderID);
+
+    this._applyParsedEntries(feed, result.parsed?.entries || []);
+    this.feedsRepo.updateFeed(feed.id, (f) => ({
+      ...f, etag: result.etag ?? f.etag, lastModified: result.lastModified ?? f.lastModified, lastRefreshedAt: nowSeconds(),
+    }));
+    this._invalidatePrepared();
+    this._emitState();
+    return this.feedsRepo.feed(feed.id);
+  }
+
+  /** F5：抓取分派——平台源走 PlatformService，普通源走 FeedService（返回结构同构）。 */
+  _fetchForFeed(feed, { force = false } = {}) {
+    if (PlatformService.isPlatformFeed(feed)) return this.platforms.fetchFeed(feed, { force });
+    return fetchFeed(feed, { force });
+  }
+
   _applyParsedEntries(feed, parsedEntries) {
     const cutoff = nowSeconds() - 90 * 24 * 3600; // 90 天保留窗口
     let newUnread = [];
@@ -846,8 +909,9 @@ class AppStore extends EventEmitter {
     if (newUnread.length) this.rules.applyToNewEntries(newUnread);
     if (newUnread.length > 200) newUnread = newUnread.slice(0, 200);
     if (newUnread.length) this._bumpListSet();
-    // 全文抓取（F1）：灌文事务提交后只登记 ID，筛选与网络由 fulltext.kick() 异步接力
-    this.fulltext.noteNewEntries(feed.id, newUnread);
+    // 全文抓取（F1）：灌文事务提交后只登记 ID，筛选与网络由 fulltext.kick() 异步接力。
+    // F5：平台源正文已是完整组装（描述+封面+iframe 播放器），不做全文提取补抓。
+    if (!PlatformService.isPlatformFeed(feed)) this.fulltext.noteNewEntries(feed.id, newUnread);
     // 后台预抓 AIHOT item 页（异步串行，不阻塞刷新；失败静默）
     if (toPrefetch.length) this._prefetchArticles(toPrefetch);
     return newUnread;
@@ -1170,6 +1234,7 @@ class AppStore extends EventEmitter {
   articleContent(entryID) {
     const entry = this.articlesRepo.entry(entryID);
     if (!entry) return null;
+    const feedEntry = this.feedsRepo.feed(entry.feedID);
     const cache = this.cachesRepo.cache(entryID);
     const sourceText = entry.contentHTML ? plainText(entry.contentHTML) : plainText(entry.summary || '');
     if (cache) {
@@ -1197,7 +1262,9 @@ class AppStore extends EventEmitter {
       html,
       text: sourceText,
       fromCache: false,
-      needsExtraction: ArticleExtractor.needsExtraction(entry),
+      // F5：平台源（B 站/微博）正文由适配器组装成成品（描述/图片/iframe 播放器），
+      // 永不进全文提取——提取器抓回的视频页壳会顶掉播放器。
+      needsExtraction: !PlatformService.isPlatformFeed(feedEntry) && ArticleExtractor.needsExtraction(entry),
     };
   }
 
@@ -1232,12 +1299,11 @@ class AppStore extends EventEmitter {
       await this.syncFreshRSS(feed.accountID, { origin: 'manual' });
       return { synced: true };
     }
-    const { fetchFeed } = require('./FeedService');
     let result;
     try {
       // 用户显式刷新：强制全量拉取（跳过条件请求头），防桥接/CDN 缓存错误 304
-      // 导致「源明明有新文章却刷不出来」
-      result = await fetchFeed(feed, { force: true });
+      // 导致「源明明有新文章却刷不出来」。F5：平台源经 _fetchForFeed 分派。
+      result = await this._fetchForFeed(feed, { force: true });
     } catch (err) {
       if (/wechat2rss/.test(feed.feedURL) && !/^HTTP /.test(String(err.message || ''))) {
         // 连接级失败（连接被重置/超时）：第三方桥被网络屏蔽的典型表现
@@ -1264,8 +1330,9 @@ class AppStore extends EventEmitter {
     }));
     this._invalidatePrepared(); // 单源刷新可能新增文章：宁可多失效
     this._maybePruneFeed(feedID); // 存储治理：保留期限开启时顺手淘汰该源超期已读（节流）
-    // 手动刷新 = 强制全量补抓（F1）：'on' 模式下存量无缓存篇目回补；'newOnly' 只补本轮新文章
-    this.fulltext.backfillFeed(feedID);
+    // 手动刷新 = 强制全量补抓（F1）：'on' 模式下存量无缓存篇目回补；'newOnly' 只补本轮新文章。
+    // F5：平台源（B 站/微博）正文由适配器组装、播放器走 iframe，全文提取只会抓回页面壳——跳过。
+    if (!PlatformService.isPlatformFeed(feed)) this.fulltext.backfillFeed(feedID);
     this.fulltext.kick();
     this._emitState();
     return { newEntries: newIDs.length };
@@ -2054,14 +2121,15 @@ class AppStore extends EventEmitter {
   async _refreshLocalFeed(feed) {
     let result;
     try {
-      result = await fetchFeed(feed);
+      result = await this._fetchForFeed(feed); // F5：平台源分派给 PlatformService
     } catch (err) {
       // 瞬时网络抖动（连接重置/超时等非 HTTP 状态错误）自动重试一次，再失败才计入失败
       const message = err?.message || String(err);
-      if (!/^HTTP /.test(message)) {
+      const noRetry = /^HTTP /.test(message) || (err && err.statusCode != null);
+      if (!noRetry) {
         await new Promise((resolve) => setTimeout(resolve, 900));
         try {
-          result = await fetchFeed(feed);
+          result = await this._fetchForFeed(feed);
         } catch (retryErr) {
           this.evolution.recordFetch({ feedID: feed.id, ok: false, error: retryErr?.message || String(retryErr) });
           throw retryErr;

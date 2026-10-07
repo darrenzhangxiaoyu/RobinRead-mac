@@ -625,6 +625,27 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v15-platform-feeds',
+    up: (db) => {
+      // 中文平台适配器（F5）：平台源 = 由平台适配器抓取的合成订阅流。
+      // - platform: 'web'（默认，普通 RSS/Atom/JSON Feed）| 'bilibili' | 'weibo'；
+      // - platform_ref: 平台内身份（UP 主 UID / 微博 UID），普通源为 NULL；
+      // - feed_url 存合成 URL（bilibili://user/:uid / weibo://user/:uid），沿用既有
+      //   feed_url 唯一判重与 is_dead 语义，平台列只作分派与展示用。
+      // 加列走幂等 try/catch（v6/v10 同款：列已存在时重入跳过）。
+      try {
+        db.exec("ALTER TABLE feeds ADD COLUMN platform TEXT NOT NULL DEFAULT 'web'");
+      } catch (_) { /* 列已存在：幂等重入 */ }
+      try {
+        db.exec('ALTER TABLE feeds ADD COLUMN platform_ref TEXT');
+      } catch (_) { /* 列已存在：幂等重入 */ }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_feeds_platform
+        ON feeds(account_id, platform, platform_ref);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */
