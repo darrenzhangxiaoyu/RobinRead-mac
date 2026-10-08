@@ -84,7 +84,7 @@ const OFFLINE = [
   { file: 'scripts/diag-f2-rules.js', runner: 'electron', desc: 'F2 过滤规则：CRUD/灌文规则生效/作用域/操作符/正则安全/测试器/回放幂等/单事务/耗时回归（离线）' },
   { file: 'scripts/diag-f3-media.js', runner: 'electron', desc: 'F3 媒体中心：enclosure入库/媒体视图筛选/单实例/进度续播/倍速/队列连播/离线下载/TTS互斥/查询耗时（离线）' },
   { file: 'scripts/diag-f4-topics.js', runner: 'electron', desc: 'F4 话题盯梢：CRUD/三路聚合/AI精筛降级/滚动保留/频率/视图渲染/触点（离线）' },
-  { file: 'scripts/diag-f5-platform.js', runner: 'electron', desc: 'F5 平台适配：v15迁移/B站与微博适配器(mock)/UID提取/添加UI三tab/试抓预览/刷新分派/媒体联动/去重/耗时回归（离线）' },
+  { file: 'scripts/diag-f5-platform.js', runner: 'electron', desc: 'F5 平台适配：v15迁移/B站与微博适配器(mock)/UID提取/添加UI四tab(含网页追更)/试抓预览/刷新分派/媒体联动/去重/耗时回归（离线）' },
   { file: 'scripts/diag-f6-mail.js', runner: 'electron', desc: 'F6 邮件订阅：v16迁移/密码DPAPI不落库/IMAP客户端(mock IMAPS真TLS)/MIME解码/账户与白名单/刷新增量与幂等/正文消毒/断线恢复/并发≤2/耗时回归（离线）' },
   { file: 'scripts/diag-f7-sync.js', runner: 'electron', desc: 'F7 WebDAV 同步：客户端PROPFIND/GET/PUT/MKCOL/MOVE与错误分类/超时/快照roundtrip与8MB与5000护栏/合并幂等并集新者胜/双设备端到端假DAV/本地优先红线/自动同步节流/冲突不上传/凭据DPAPI/设置分区与命令面板/刷新不受影响（离线）' },
   { file: 'scripts/diag-f8-research.js', runner: 'electron', desc: 'F8 AI 研究：v17迁移与老库升级/gather本地FTS相关度与AIHOT注入与去重与上限/AIHOT失败降级/流式生成落库/引用编号约束提示词/取消草稿保留与再次覆盖/追问追加区段/历史重开删除/单飞锁/无Key降级/知识中心tab与命令面板与引用芯片UI（离线）' },
@@ -96,6 +96,8 @@ const OFFLINE = [
   { file: 'scripts/diag-f15-tags.js', runner: 'electron', desc: 'F15 AI 自动标签：继承打标(v20)/AI 批量打标(mock LLM)/解析失败静默/每小时节流注入时间/复核过滤 chips/图谱含 AI 标签/无 Key 静默/开关持久化+设置知识分区（离线）' },
   { file: 'scripts/diag-f16-dashboard.js', runner: 'electron', desc: 'F16 源体检仪表盘：指标聚合与健康分(A>B,B红)/总览三计数/缓存 60s 注入时钟/建议文案/详情接口/UI tab 渲染与过滤/203 源 <300ms 无 N+1（离线）' },
   { file: 'scripts/diag-f12-books.js', runner: 'electron', desc: 'F12 文集成书：v19迁移与幂等与老库无损/文集CRUD与右键加入文集菜单/60篇成书EPUB结构(mimetype/nav/3月分章/60篇/源icon封面与纯色回退)/1000篇5卷每卷200确定性/自动成书24h节流与有新文章才成与manual不自动/书架UI列表待取徽标按钮/打开目录showItemInFolder与待取清除/200篇<2s/feed_ids持久化独立连接回读/删除清理自动目录且用户pickSavePath书保留（离线）' },
+  { file: 'scripts/diag-f17-windows.js', runner: 'electron', desc: 'F17 多窗并读：弹出窗创建与标题/同 entryID 聚焦去重/上限4窗第5拒/主窗关闭级联/弹出窗 reader 渲染+已读批注写回同库/右键与工具栏入口/TTS媒体构造选项禁用（离线）' },
+  { file: 'scripts/diag-f18-monitor.js', runner: 'electron', desc: 'F18 网页追更：v21迁移与级联与幂等/首抓只存基线零文章/变化合成文章含ins高亮与缓存通路/段落删除折叠N段已移除/无变化零文章/追更源列表侧栏正常/更改选择器重建hash与重抓基线/停止追更不再抓取/30min节流注入时间与force跳过/500KB提取diff<1s（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

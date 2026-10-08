@@ -74,6 +74,10 @@ export const icons = {
   chevronUp: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
   playCircle: i('<circle cx="8" cy="8" r="6.4"/><path d="M6.6 5.6l4 2.4-4 2.4v-4.8z"/>'),
   books: i('<rect x="2" y="2.6" width="3.6" height="10.8" rx="0.8"/><rect x="7" y="2.6" width="3.6" height="10.8" rx="0.8"/><path d="M11.6 3.7l3.2-.9 2 10.5-3.2.9z"/>'),
+  // F17 多窗并读：文章弹出到独立窗口
+  popout: i('<rect x="1.8" y="4.4" width="9" height="9" rx="1.2"/><path d="M8.4 7.6L14 2M10.2 1.8H14v3.8"/>'),
+  // F18 网页追更：页面 + 时钟盯梢
+  monitorPage: i('<rect x="1.8" y="2.4" width="12.4" height="9.4" rx="1.2"/><path d="M4.4 5.4h7.2M4.4 7.6h7.2M4.4 9.8h4.4"/><circle cx="11.4" cy="12" r="3"/><path d="M11.4 10.6V12l1 .8"/>'),
 };
 
 export function icon(name, extraClass = '') {

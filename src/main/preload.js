@@ -380,6 +380,15 @@ contextBridge.exposeInMainWorld('robin', {
   winIsMaximized: () => invoke('window:isMaximized'),
   onWindowMaxChanged: (listener) => subscribe('window:maximized-changed', listener),
 
+  // 多窗并读（F17：弹出独立阅读窗口；同 entryID 聚焦既有窗口 / 上限 4 窗）
+  openReaderWindow: (entryID) => invoke('readerWindow:open', entryID),
+
+  // 网页追更（F18：试抓预览 / 添加 / 更改选择器 / 停止追更）
+  monitorPreview: (payload) => invoke('monitor:preview', payload),
+  monitorAdd: (payload) => invoke('monitor:add', payload),
+  monitorSetSelector: (feedID, selector) => invoke('monitor:setSelector', feedID, selector),
+  monitorStop: (feedID) => invoke('monitor:stop', feedID),
+
   // 桌面通用（关闭到托盘 / 新文章通知 / 开机自启）
   getGeneral: () => data('prefs:getGeneral'),
   setGeneral: (patch) => invoke('prefs:setGeneral', patch),

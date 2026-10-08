@@ -6092,3 +6092,100 @@ body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24
   padding: 4px var(--space-3); margin-bottom: 6px;
 }
 
+/* ==========================================================================
+   F17 多窗并读 — 独立阅读窗口（reader-window.html）
+   ========================================================================== */
+
+.rw-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--page-background);
+}
+
+.rw-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--separator);
+  background: var(--chrome-background);
+  flex: 0 0 auto;
+}
+
+.rw-toolbar .btn.icon-only { flex: 0 0 auto; }
+
+.rw-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.rw-toolbar .tb-spring { flex: 1 1 auto; }
+
+.rw-theme-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  background: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+
+.rw-theme-dot[data-mode='dark'] { background: var(--text-primary); }
+.rw-theme-dot[data-mode='light'] { background: var(--warm-accent); }
+
+.rw-reader {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.rw-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(8px);
+  background: var(--text-primary);
+  color: var(--page-background);
+  font-size: 12.5px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+  z-index: 90;
+}
+
+.rw-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ==========================================================================
+   F18 网页追更 — diff 高亮标记（合成文章正文内）
+   ========================================================================== */
+
+.robin-body ins.monitor-add {
+  display: block;
+  text-decoration: none;
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  border-left: 2px solid color-mix(in oklch, var(--accent) 60%, transparent);
+  border-radius: var(--radius-xs);
+  padding: 2px var(--space-2);
+  margin: var(--space-1) 0;
+}
+
+.robin-body .monitor-del-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  border-left: 2px solid var(--separator);
+  padding-left: var(--space-2);
+  margin: var(--space-2) 0;
+}
+

@@ -165,6 +165,14 @@ if (!IS_PROBE) {
     mainWindow = createMainWindow(store);
     registerIPCHandlers(store, mainWindow);
 
+    // F17 多窗并读：主窗口关闭 → 级联关闭全部弹出阅读窗口。
+    // 「关闭到托盘」时 close 被 ipc.js preventDefault（仅 hide）——defaultPrevented
+    // 置位时弹出窗保留，与应用一起驻留托盘；app quit 路径窗口随进程销毁，无需处理。
+    mainWindow.on('close', (event) => {
+      if (event.defaultPrevented) return;
+      try { require('./ReaderWindows').readerWindows.closeAll(); } catch (_) { /* 退出路径不抛错 */ }
+    });
+
     createTray();
 
     // 启动时自动刷新（默认开启）

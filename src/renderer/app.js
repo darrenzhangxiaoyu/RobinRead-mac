@@ -376,6 +376,7 @@ function buildToolbar() {
   set('cap-highlight', icon('marker'), t('高亮：选中文字快速高亮（H）；无选区打开批注面板'));
   set('cap-note', icon('noteSticky'), t('批注面板：本篇高亮与笔记'));
   set('cap-review', icon('refresh'), t('加入复习'));
+  set('cap-popout', icon('popout'), t('在独立窗口打开'));
   set('cap-browser', icon('globe'), t('打开原网页'));
   set('wc-min', icon('winMinimize'), t('最小化'));
   updateCapBrowserState();
@@ -450,6 +451,7 @@ function bindToolbar() {
   document.getElementById('cap-deepread').addEventListener('click', () => dispatchReaderAction('deepRead'));
   document.getElementById('cap-rsummary').addEventListener('click', () => dispatchReaderAction('richSummary'));
   document.getElementById('cap-star').addEventListener('click', () => toggleStarWithGuide());
+  document.getElementById('cap-popout').addEventListener('click', () => openReaderWindow(state.selectedEntryID));
   document.getElementById('cap-zen').addEventListener('click', toggleZenMode);
   document.getElementById('cap-autoscroll').addEventListener('click', () => views.reader?.toggleAutoScroll?.());
   document.getElementById('cap-focus').addEventListener('click', toggleFocusMode);
@@ -1773,6 +1775,17 @@ function setupSplitter(splitterID, columnID, min, max) {
 
 // MARK: - 右键菜单
 
+/**
+ * F17 多窗并读：在独立窗口打开当前文章。
+ * 主进程 ReaderWindows 负责：同文章去重聚焦 / 上限 4 窗 / 标题与位置记忆。
+ */
+function openReaderWindow(entryID) {
+  if (!entryID) return;
+  window.robin.openReaderWindow(entryID).then((result) => {
+    if (!result.ok) showToast(String(result.error || t('打开失败')));
+  }).catch(() => {});
+}
+
 /** 书架文集缓存（F12）：右键菜单打开前按需拉取一次（文集量小，直接拉全量）。 */
 async function fetchBooksForMenu() {
   try {
@@ -1880,6 +1893,7 @@ async function onFeedContext(event, { feed, selectedFeedIDs }) {
     { label: t('全部已读'), icon: 'checkAll', onClick: () => window.robin.markAllRead({ kind: 'feed', feedID: feed.id }) },
     { label: t('复制订阅'), icon: 'copy', onClick: () => navigator.clipboard.writeText(feed.feedURL) },
     { label: t('此源排版偏好…'), icon: 'appearance', onClick: () => showFeedTypographyDialog(feed) },
+    ...(feed.platform === 'monitor' ? monitorFeedMenuItems(feed) : []),
     { label: t('全文抓取'), icon: 'docText', children: fulltextMenuItems(feed) },
     { label: t('AI 精读翻译'), icon: 'spark', children: [
       { label: t('跟随默认'), onClick: async () => { await window.robin.setTranslateFeedMode(feed.id, 'auto'); showToast(t('此源翻译已改为跟随默认')); } },
@@ -1923,6 +1937,47 @@ function fulltextMenuItems(feed) {
   ];
 }
 
+/**
+ * F18 网页追更：追更源右键专属操作——更改选择器 / 停止追更。
+ * 更改选择器：ui-prompt 输入（frameless 禁 window.prompt），确认后主进程重建
+ * feedURL（monitor://hash）并立即重抓基线；停止追更：转 monitor-stopped 不再自动抓取。
+ */
+function monitorFeedMenuItems(feed) {
+  return [
+    {
+      label: t('更改选择器…'), icon: 'pencil',
+      onClick: async () => {
+        const selector = await promptBox(t('更改选择器'), {
+          placeholder: t('CSS 选择器（可选，留空取正文主体）'),
+          initial: feed.platformRef || '',
+        });
+        if (selector == null) return; // 取消
+        const result = await window.robin.monitorSetSelector(feed.id, selector.trim());
+        if (result.ok) {
+          showToast(t('选择器已更新，正在重抓基线'));
+          await refreshState();
+        } else {
+          showToast(String(result.error || t('更新失败')));
+        }
+      },
+    },
+    {
+      label: t('停止追更'), icon: 'close',
+      onClick: async () => {
+        const ok = await confirmBox(t('停止追更'), { message: t('停止后将不再自动抓取该网页，已有文章保留。'), okLabel: t('停止') });
+        if (!ok) return;
+        const result = await window.robin.monitorStop(feed.id);
+        if (result.ok) {
+          showToast(t('已停止追更'));
+          await refreshState();
+        } else {
+          showToast(String(result.error || t('操作失败')));
+        }
+      },
+    },
+  ];
+}
+
 function onFolderContext(event, { folder }) {
   ContextMenu.show(event.clientX, event.clientY, [
     {
@@ -1952,6 +2007,11 @@ async function showListRowContext(event, item) {
     {
       label: t(item.isStarred ? '取消收藏' : '收藏'), icon: 'star',
       onClick: () => window.robin.toggleStar(item.id),
+    },
+    {
+      // F17 多窗并读：右键直接弹出独立阅读窗口
+      label: t('在独立窗口打开'), icon: 'popout',
+      onClick: () => openReaderWindow(item.id),
     },
     {
       label: t('盯梢这类内容'), icon: 'search',

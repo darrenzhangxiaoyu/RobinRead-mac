@@ -782,6 +782,35 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v21-monitor-baselines',
+    up: (db) => {
+      // 网页追更（F18）：无 RSS 页面的 diff 基线。
+      // - feed_id 与 feeds 主键同构（monitor 源 = platform='monitor' 的合成 feed），
+      //   PK 即「一源一基线」，源删除级联清行；
+      // - content_hash：基线正文的 sha1（快速无变化短路，不做逐段 diff）；
+      // - baseline_text：上次抓取的正文纯文本（截 512KB，段落 diff 的左操作数）；
+      // - page_url / selector：抓取地址与选择器（feeds.site_url/platform_ref 亦存，
+      //   此处冗余存证，changeSelector 审计可查）；
+      // - checked_at：最近一次实际抓取时间（≥30min 节流的基准，与 updated_at 分离——
+      //   无变化时基线不更新，但 checked_at 必须推进）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS monitor_baselines (
+            feed_id      TEXT PRIMARY KEY NOT NULL,
+            content_hash TEXT NOT NULL DEFAULT '',
+            baseline_text TEXT NOT NULL DEFAULT '',
+            page_url     TEXT,
+            selector     TEXT,
+            checked_at   REAL,
+            updated_at   REAL NOT NULL,
+
+            FOREIGN KEY(feed_id)
+                REFERENCES feeds(id)
+                ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

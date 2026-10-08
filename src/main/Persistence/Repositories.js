@@ -235,6 +235,12 @@ class FeedRepository {
     this.db.prepare('DELETE FROM feeds WHERE id = ?').run(feedID);
   }
 
+  /** 专用 feed_url 更新（F18 更改选择器重建 monitor:// 地址；updateFeed 不含该列，保持既有调用零影响）。 */
+  updateFeedURL(feedID, feedURL) {
+    this.db.prepare('UPDATE feeds SET feed_url = ?, updated_at = ? WHERE id = ?')
+      .run(String(feedURL), nowSeconds(), feedID);
+  }
+
   setFeedFolder(feedID, folderID) {
     this.db.prepare('DELETE FROM feed_folders WHERE feed_id = ?').run(feedID);
     if (folderID != null) {

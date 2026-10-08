@@ -12,6 +12,7 @@ const { app, BrowserWindow, ipcMain, dialog, nativeTheme, clipboard, session, na
 const { checkForUpdate } = require('./UpdateCheckService');
 const { UpdaterService } = require('./UpdaterService');
 const { errorMessage } = require('./AppStore');
+const { readerWindows } = require('./ReaderWindows'); // F17 多窗并读
 const ArticleExtractor = require('./ArticleExtractor');
 const { NeuralTTSService, NEURAL_VOICES } = require('./NeuralTTSService');
 let neuralTTS = null;
@@ -772,6 +773,15 @@ function registerIPCHandlers(store, window) {
   // MARK: 订阅源体检仪表盘（F16：总览（60s 缓存）/ 单源详情）
   handle('dash:overview', () => store.dash.overview());
   handle('dash:feed', (feedID) => store.dash.feedDetail(String(feedID || '')));
+
+  // MARK: 多窗并读（F17：弹出独立阅读窗口；同 entryID 聚焦既有窗口 / 上限 4 窗）
+  handle('readerWindow:open', (entryID) => readerWindows.open(store, window, String(entryID || '')));
+
+  // MARK: 网页追更（F18：试抓预览 / 添加 / 更改选择器 / 停止追更）
+  handle('monitor:preview', (payload) => store.monitor.preview(payload || {}));
+  handle('monitor:add', (payload) => store.addMonitorFeed(payload || {}));
+  handle('monitor:setSelector', (feedID, selector) => store.monitor.changeSelector(String(feedID || ''), selector));
+  handle('monitor:stop', (feedID) => store.monitor.stopMonitor(String(feedID || '')));
 
   // MARK: AI 深度研究（F8：素材聚合 / 流式生成 / 追问 / 历史 / 取消）
   // 流式分片与阶段经推送通道下行（research:delta / research:status），最终结果走信封返回。

@@ -44,6 +44,7 @@ const { BooksService } = require('./BooksService');
 const { SimilarService } = require('./SimilarService');
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
+const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -171,6 +172,7 @@ class AppStore extends EventEmitter {
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
+    this.monitor = new PageMonitorService(this); // 网页追更（F18）：URL+选择器 → diff 合成源（≥30min 节流）
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -908,8 +910,68 @@ class AppStore extends EventEmitter {
     return this.feedsRepo.feed(feed.id);
   }
 
-  /** F5/F6：抓取分派——平台源走 PlatformService，邮件源走 MailService，普通源走 FeedService（返回结构同构）。 */
+  /**
+   * F18 网页追更：添加追更网页（F4 话题盯梢同款入口模式）。
+   * 与 addPlatformFeed 同款门控与查重；feed_url 存 monitor://<hash(url+selector)>，
+   * platform='monitor'、site_url=原页 URL、platform_ref=选择器；
+   * 首抓只存基线不生成文章（captureBaseline，试抓预览已在对话框先行）。
+   */
+  async addMonitorFeed({ url, selector, folder = null } = {}) {
+    const pageURL = this.monitor.normalizeURL(url);
+    const cleanSelector = String(selector || '').trim().slice(0, 200);
+    if (cleanSelector && !/^([.#][A-Za-z0-9_-]+|[a-z][a-z0-9]*)$/i.test(cleanSelector)) {
+      throw new Error(i18n.localized('选择器仅支持 #id、.class 或标签名（如 article）。'));
+    }
+    const feedURL = PageMonitorService.monitorFeedURL(pageURL, cleanSelector);
+    const existing = this.feedsRepo.feedByURL(LOCAL_ACCOUNT_ID, feedURL);
+    if (existing) throw new Error(i18n.localized('这个网页已在追更中。'));
+
+    // 订阅源数量门控（与手动添加/商店订阅同一闸口）
+    if (this.accountGate) {
+      const gate = this.accountGate.canAddFeeds(this.feedsRepo.allFeeds().length);
+      if (!gate.ok) throw gate.error;
+    }
+
+    // 试抓（添加对话框已预览过，这里作首抓数据源 + 失败早退）
+    const previewData = await this.monitor.preview({ url: pageURL, selector: cleanSelector });
+
+    // 二次查重（抓取窗口内的双击/并发）
+    const raced = this.feedsRepo.feedByURL(LOCAL_ACCOUNT_ID, feedURL);
+    if (raced) throw new Error(i18n.localized('这个网页已在追更中。'));
+
+    let folderID = null;
+    if (folder && String(folder).trim()) {
+      folderID = this.feedsRepo.ensureFolder(LOCAL_ACCOUNT_ID, String(folder).trim()).id;
+    }
+
+    const feed = this.feedsRepo.insertFeed({
+      accountID: LOCAL_ACCOUNT_ID,
+      title: previewData.title || new URL(pageURL).host,
+      siteURL: pageURL,
+      feedURL,
+      storedIconURL: null,
+      platform: 'monitor',
+      platformRef: cleanSelector,
+    });
+    if (folderID) this.feedsRepo.setFeedFolder(feed.id, folderID);
+
+    // 首抓 = 只存基线，不生成文章（fail-safe：失败时源已建，下轮刷新自动补基线）
+    try {
+      await this.monitor.captureBaseline(feed.id, pageURL, cleanSelector);
+    } catch (_) { /* 基线首抓失败不阻塞添加：下轮刷新补 */ }
+
+    this._invalidatePrepared();
+    this._emitState();
+    return this.feedsRepo.feed(feed.id);
+  }
+
+  /**
+   * F5/F6/F18：抓取分派——追更源走 PageMonitorService，平台源走 PlatformService，
+   * 邮件源走 MailService，普通源走 FeedService（返回结构同构）。
+   * 停止态（monitor-stopped）仍进 monitor 分支：服务内部直接 notModified（不再自动抓）。
+   */
   _fetchForFeed(feed, { force = false } = {}) {
+    if (PageMonitorService.isMonitorFeed(feed)) return this.monitor.fetchFeed(feed, { force });
     if (PlatformService.isPlatformFeed(feed)) {
       if (feed.platform === 'mail') return this.mail.fetchFeed(feed, { force });
       return this.platforms.fetchFeed(feed, { force });
@@ -969,6 +1031,23 @@ class AppStore extends EventEmitter {
         }
       }
     });
+    // F18 网页追更：合成文章的 diff 高亮正文直写 article_caches——主消毒管线会剥
+    // <ins>/class（白名单外），缓存通路（articleContent 命中缓存原样返回）才能保留
+    // 「新增段高亮」标记；isSanitized=true 语义成立：内容是本服务组装的转义文本。
+    if (PageMonitorService.isMonitorFeed(feed) && parsedEntries.length) {
+      for (const parsed of parsedEntries) {
+        try {
+          this.cachesRepo.saveCache({
+            entryID: `local:${feed.id}:${stableDigest(parsed.id)}`,
+            text: String(parsed.summary || ''),
+            html: parsed.contentHTML || null,
+            imageURLs: [],
+            sourceURL: parsed.url || null,
+            isSanitized: true,
+          });
+        } catch (_) { /* 高亮缓存失败不影响入库主流程 */ }
+      }
+    }
     // 规则过滤引擎（F2）：灌文事务提交后、状态推送之前同步应用规则
     // （纯内存匹配 + 批量写单事务；零规则零成本，异常不外抛不影响入库主流程）
     if (newUnread.length) this.rules.applyToNewEntries(newUnread);

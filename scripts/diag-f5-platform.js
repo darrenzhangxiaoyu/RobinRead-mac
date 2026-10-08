@@ -294,7 +294,7 @@ app.whenReady().then(async () => {
   }
 });
 
-/** ── 9. UI 冒烟：showAddFeed 三 tab + 平台试抓预览 3 条 + 确认添加（真 IPC）── */
+/** ── 9. UI 冒烟：showAddFeed 四 tab（F18 增「网页追更」）+ 平台试抓预览 3 条 + 确认添加（真 IPC）── */
 async function addDialogUIProbe(store, localAccountID) {
   const { BrowserWindow } = require('electron');
   const { registerIPCHandlers } = require('../src/main/ipc');
@@ -355,8 +355,8 @@ async function addDialogUIProbe(store, localAccountID) {
   })()`);
   if (result.__err) { ok(false, '9 UI 探针异常 — ' + result.__err); }
   else {
-    ok(result.labels.length === 3 && result.labels.includes('B 站 UP 主') && result.labels.includes('微博用户'),
-      `9 添加对话框三 tab（${result.labels.join(' / ')}）`);
+    ok(result.labels.length === 4 && result.labels.includes('B 站 UP 主') && result.labels.includes('微博用户') && result.labels.includes('网页追更'),
+      `9 添加对话框四 tab（${result.labels.join(' / ')}）`);
     ok(result.rows >= 3 && !!result.firstTitle, `9 试抓预览 3 条（rows=${result.rows}，首行=${result.firstTitle}）`);
     ok(result.addDisabled === false, '9 预览成功后「添加」解禁');
     ok(result.done, '9 确认添加 → onDone 回调（feed 真建档）');

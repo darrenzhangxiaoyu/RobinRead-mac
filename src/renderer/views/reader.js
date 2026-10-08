@@ -613,7 +613,8 @@ export class ReaderView {
     article.appendChild(this.body);
     // 媒体中心（F3）：带 enclosure 的文章在标题下、正文前内嵌媒体卡片
     // （视频 → <video controls> 直接播画面；音频 → 播放卡片唤起迷你播放器）
-    if (this.mediaInfo) {
+    // F17：弹出阅读窗（mode:'popup'）不启用媒体播放——避免多窗多声源（构造选项开关）
+    if (this.mediaInfo && this.handlers.mode !== 'popup') {
       try { article.insertBefore(this._buildMediaCard(), this.body); }
       catch (_) { /* 媒体卡片失败不影响正文 */ }
     }
@@ -3881,6 +3882,8 @@ export class ReaderView {
 
   /** 头部「听」按钮：无语音引擎 / 已确认无语音 / 无正文时置灰并给出 title 说明。 */
   _ttsAppendHeaderButton(actions) {
+    // F17：弹出阅读窗禁用 TTS（多窗不混声源，构造选项 mode:'popup'）
+    if (this.handlers.mode === 'popup') return;
     const btn = document.createElement('button');
     btn.className = 'btn-text bordered nj-tts-header-btn';
     btn.dataset.role = 'tts';
@@ -3999,6 +4002,9 @@ export class ReaderView {
   }
 
   toggleTTS() {
+    // F17：弹出阅读窗禁用 TTS（构造选项 mode:'popup'；R 键/Esc 在 _onTTSKeyDown 里
+    // 因 ttsState 恒为 idle 自然短路，这里是最后闸门）
+    if (this.handlers.mode === 'popup') return;
     // 防重入：_ttsStart 含异步引擎分派，快速第二次 R 期间 state 仍为 idle，须同步挡住
     if (this.ttsState !== 'idle' || this._ttsStarting) {
       this._ttsStarting = false;

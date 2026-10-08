@@ -2125,8 +2125,9 @@ export class SettingsView {
 // MARK: - Sheet 对话框（AddFeed / AddFolder / RenameFolder / FreshRSS 账号）
 
 /**
- * 「添加订阅」三 tab：RSS / B 站 UP 主 / 微博用户（F5 中文平台适配器）。
+ * 「添加订阅」四 tab：RSS / B 站 UP 主 / 微博用户 / 网页追更（F5 + F18）。
  * 平台 tab：输入 UID 或主页链接 → 试抓预览前 3 条 → 确认添加（feed 落 platform/platform_ref）。
+ * 追更 tab：URL + 可选选择器 → 抓取预览（正文前 200 字）→ 确认（platform='monitor' 合成源）。
  */
 export function showAddFeed(folders, onDone) {
   const { overlay, modal } = smallModal(t('添加订阅'));
@@ -2140,6 +2141,7 @@ export function showAddFeed(folders, onDone) {
     ['rss', t('RSS')],
     ['bilibili', t('B 站 UP 主')],
     ['weibo', t('微博用户')],
+    ['monitor', t('网页追更')],
   ];
   const tabs = document.createElement('div');
   tabs.className = 'segmented';
@@ -2180,6 +2182,7 @@ export function showAddFeed(folders, onDone) {
     for (const b of tabs.children) b.classList.toggle('active', b.dataset.tab === active);
     content.innerHTML = '';
     if (active === 'rss') renderRSSBody();
+    else if (active === 'monitor') renderMonitorBody();
     else renderPlatformBody(active);
   }
 
@@ -2313,6 +2316,84 @@ export function showAddFeed(folders, onDone) {
       }
     });
     setTimeout(() => input.focus(), 50);
+  }
+
+  // ── 追更 tab（F18）：URL + 可选选择器 → 抓取预览（前 200 字）→ 确认添加 ──
+  function renderMonitorBody() {
+    const urlInput = field(content, t('网页地址'), 'globe', 'https://example.com/article');
+    const selectorInput = field(content, t('CSS 选择器（可选）'), 'monitorPage', t('如 #content、.article-body、article；留空自动取正文主体'));
+    const folderSelect = selectField(content, t('可选分类'), 'folder', folderOptions());
+    hint(content, t('保存后定时检查该网页（至少间隔 30 分钟），内容变化时生成一篇「更新」文章并高亮新增段落。'));
+
+    const previewBox = document.createElement('div');
+    content.appendChild(previewBox);
+
+    const previewButton = document.createElement('button');
+    previewButton.type = 'button';
+    previewButton.className = 'btn-text bordered';
+    previewButton.textContent = t('抓取预览');
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'btn-text primary';
+    addButton.textContent = t('开始追更');
+    setFooter([cancelButton(), previewButton, addButton]);
+
+    previewButton.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      const ticket = ++seq;
+      previewButton.disabled = true;
+      previewBox.innerHTML = '';
+      previewBox.appendChild(previewStatus(t('正在抓取…')));
+      try {
+        const result = await window.robin.monitorPreview({ url, selector: selectorInput.value.trim() });
+        if (ticket !== seq || !overlay.isConnected) return; // 已切 tab / 关闭：丢弃旧返回
+        if (!result.ok) throw new Error(String(result.error || t('预览失败')));
+        const data = result.data || {};
+        previewBox.innerHTML = '';
+        const head = previewHeader(t('网页追更'), data.title || '');
+        previewBox.appendChild(head);
+        const excerpt = document.createElement('div');
+        excerpt.className = 'platform-preview-row';
+        excerpt.style.cssText = 'font-size:12px;color:var(--text-secondary);padding:7px 10px;margin:4px 0;border:1px solid var(--separator);border-radius:8px;line-height:1.5;max-height:96px;overflow:hidden;';
+        excerpt.textContent = data.excerpt || t('没有抓到页面正文，请检查地址或改用其他选择器。');
+        previewBox.appendChild(excerpt);
+      } catch (err) {
+        if (ticket !== seq || !overlay.isConnected) return;
+        previewBox.innerHTML = '';
+        previewBox.appendChild(previewStatus(String(err?.message || err)));
+      } finally {
+        if (ticket === seq && overlay.isConnected) previewButton.disabled = false;
+      }
+    });
+
+    addButton.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      addButton.disabled = true;
+      try {
+        const result = await window.robin.monitorAdd({
+          url, selector: selectorInput.value.trim(), folder: folderSelect.value || null,
+        });
+        if (!result.ok) {
+          if (/会员/.test(String(result.error))) {
+            overlay.remove();
+            const { showUpgradeGate } = await import('./account.js');
+            showUpgradeGate({ message: String(result.error) });
+            return;
+          }
+          await alertBox(t('添加失败'), String(result.error));
+          addButton.disabled = false;
+          return;
+        }
+        onDone?.();
+        overlay.remove();
+      } catch (err) {
+        await alertBox(t('添加失败'), String(err?.message || err));
+        addButton.disabled = false;
+      }
+    });
+    setTimeout(() => urlInput.focus(), 50);
   }
 
   renderTab();
