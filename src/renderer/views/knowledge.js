@@ -24,6 +24,15 @@ const TABS = [
   { id: 'ask', label: '全库问答', icon: 'spark' },
   { id: 'research', label: 'AI 研究', icon: 'spark' },
   { id: 'threads', label: '线索', icon: 'search' },
+  { id: 'dash', label: '源体检', icon: 'flame' },
+];
+
+// F15 复核过滤 chips：标签云按来源过滤展示（只过滤，不改数据）
+const TAG_FILTERS = [
+  { id: 'all', label: '全部' },
+  { id: 'manual', label: '手动' },
+  { id: 'ai', label: 'AI' },
+  { id: 'inherit', label: '继承' },
 ];
 
 function timeAgo(seconds) {
@@ -99,11 +108,12 @@ export class KnowledgeCenter {
       search: async () => ({ query: '' }),
       heatmap: async () => window.robin.kbHeatmap(365),
       stats: async () => window.robin.kbStats(30),
-      tags: async () => window.robin.kbTags(),
+      tags: async () => ({ all: await window.robin.kbTags(), rows: await window.robin.kbTagsSource() }),
       graph: async () => window.robin.kbGraph(240),
       ask: async () => ({ sessions: (await window.robin.ragSessions()) || [] }),
       research: async () => window.robin.researchList(),
       threads: async () => window.robin.threadsList(), // F13：线索聚类（_renderThreads 自取详情）
+      dash: async () => window.robin.dashOverview(), // F16：源体检总览（60s 缓存）
     };
     const loader = loads[this.tab];
     if (!loader) return;

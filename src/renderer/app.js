@@ -1320,9 +1320,11 @@ function sameScope(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** 当前列表排序（主进程 listItems sort 参数）。 */
+/** 当前列表排序（主进程 listItems sort 参数）。
+ * 四态透传（批次 A 审查 B1）：既有实现坍缩为二态，shortFirst/smart 从渲染层永远不可达。 */
 function currentListSort() {
-  return window.__robinReaderLayout?.listSort === 'unreadFirst' ? 'unreadFirst' : 'time';
+  const s = window.__robinReaderLayout?.listSort;
+  return ['time', 'unreadFirst', 'shortFirst', 'smart'].includes(s) ? s : 'time';
 }
 
 /** 下一篇文章打开的翻页方向（'fwd' 正翻 / 'back' 回翻），由打开动作设置、handleEntrySelect 消费。 */

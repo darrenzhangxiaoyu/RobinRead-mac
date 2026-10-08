@@ -126,8 +126,9 @@ class SimilarService {
       const oldest = this._cache.keys().next().value;
       this._cache.delete(oldest); // FIFO 淘汰（读序近似访问序，够用且 O(1)）
     }
-    this._cache.set(id, { items, at: Date.now() });
-    return { items: items.slice(0, Math.max(1, Math.min(Number(limit) || SIMILAR_LIMIT_DEFAULT, 20))) };
+    const top = items.slice(0, 20); // 展示只用 ≤3，缓存截 top20 防 500 条/篇驻留
+    this._cache.set(id, { items: top, at: Date.now() });
+    return { items: top.slice(0, Math.max(1, Math.min(Number(limit) || SIMILAR_LIMIT_DEFAULT, 20))) };
   }
 
   /** 「继续读」卡准入：素材 >= MIN_CARD_ITEMS 才值得展示（渲染层据此优雅隐藏）。 */

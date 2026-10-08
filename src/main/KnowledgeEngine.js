@@ -154,6 +154,22 @@ class KnowledgeEngine {
   getTags(limit = 100) { return this.store.database.prepare('SELECT tag, COUNT(*) as count FROM article_tags GROUP BY tag ORDER BY count DESC LIMIT ?').all(limit); }
 
   /**
+   * 标签 × 来源计数（F15 复核过滤 chips 的数据面）：按 (tag, source) 聚合，
+   * 渲染层据此在「全部/手动/AI/继承」间切换——只过滤展示，不改任何数据。
+   * source 口径：manual=手动 / ai=AI（含既有规则词库自动打标）/ inherit=F15 继承 /
+   * auto=v9 时代默认值的历史行（归入「全部」展示，不单列）。
+   */
+  getTagsWithSource(limit = 500) {
+    return this.store.database.prepare(`
+      SELECT tag, source, COUNT(*) as count
+      FROM article_tags
+      GROUP BY tag, source
+      ORDER BY count DESC, tag ASC
+      LIMIT ?
+    `).all(Number(limit) || 500);
+  }
+
+  /**
    * 知识图谱数据（标签 ↔ 文章二部关系）：tags 节点 / articles 节点 / edges 边。
    * 供知识中心「图谱」canvas 力导向渲染；行数封顶防止超大库卡顿。
    */

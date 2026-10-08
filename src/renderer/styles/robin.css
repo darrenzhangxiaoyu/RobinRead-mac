@@ -5962,10 +5962,10 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 }
 
 /* ── F14 信息密度三档：body[data-list-density] 挂在 body，行高与内边距三档 ── */
-body[data-list-density="compact"] .entry-row { padding-top: 4px; padding-bottom: 4px; }
+body[data-list-density="compact"] .entry-row:not(.nj-mag-card) { padding-top: 4px; padding-bottom: 4px; }
 body[data-list-density="compact"] .entry-row .entry-title { line-height: 1.4; }
 body[data-list-density="compact"] .entry-row .entry-summary { display: none; }
-body[data-list-density="relaxed"] .entry-row { padding-top: 14px; padding-bottom: 14px; }
+body[data-list-density="relaxed"] .entry-row:not(.nj-mag-card) { padding-top: 14px; padding-bottom: 14px; }
 body[data-list-density="relaxed"] .entry-row .entry-title { line-height: 1.75; }
 
 /* ── F13 文末继续读 + 知识中心线索视图（全令牌） ── */

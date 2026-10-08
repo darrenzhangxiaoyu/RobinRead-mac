@@ -155,6 +155,15 @@ contextBridge.exposeInMainWorld('robin', {
   threadsList: () => data('threads:list'),
   threadsDetail: (keyword) => data('threads:detail', keyword),
 
+  // AI 自动标签（F15：开关读写（偏好持久化）/ 立即跑一批 / 诊断快照）
+  tagsAutoConfig: (patch) => data('tags:autoConfig', patch),
+  tagsAutoKick: () => invoke('tags:autoKick'),
+  tagsAutoSnapshot: () => data('tags:autoSnapshot'),
+
+  // 订阅源体检仪表盘（F16：总览（60s 缓存）/ 单源详情）
+  dashOverview: () => data('dash:overview'),
+  dashFeed: (feedID) => data('dash:feed', feedID),
+
   // AI 深度研究（F8：列表 / 详情 / 删除 / 流式生成 / 追问 / 取消；onResearchDelta 收流式分片）
   researchList: () => data('research:list'),
   researchGet: (id) => data('research:get', id),

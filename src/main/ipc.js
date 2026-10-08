@@ -761,6 +761,18 @@ function registerIPCHandlers(store, window) {
   handle('threads:list', () => SIM().threadsList());
   handle('threads:detail', (keyword) => SIM().threadsDetail(String(keyword || '')));
 
+  // MARK: AI 自动标签（F15：开关（偏好持久化）/ 立即跑一批 / 诊断快照）
+  handle('tags:autoConfig', (patch) => {
+    if (patch && typeof patch === 'object' && 'enabled' in patch) store.tagAuto.setEnabled(patch.enabled === true);
+    return store.tagAuto.snapshot();
+  });
+  handle('tags:autoKick', () => store.tagAuto.kick({ force: true }));
+  handle('tags:autoSnapshot', () => store.tagAuto.snapshot());
+
+  // MARK: 订阅源体检仪表盘（F16：总览（60s 缓存）/ 单源详情）
+  handle('dash:overview', () => store.dash.overview());
+  handle('dash:feed', (feedID) => store.dash.feedDetail(String(feedID || '')));
+
   // MARK: AI 深度研究（F8：素材聚合 / 流式生成 / 追问 / 历史 / 取消）
   // 流式分片与阶段经推送通道下行（research:delta / research:status），最终结果走信封返回。
   const RS = () => store.research;
@@ -961,6 +973,7 @@ function registerIPCHandlers(store, window) {
   handle('kb:addToReview', (payload) => K().addToReview(payload));
   handle('kb:removeFromReview', (id) => K().removeFromReview(id));
   handle('kb:tags', (itemID) => itemID ? K().getItemTags(itemID) : K().getTags());
+  handle('kb:tagsSource', () => K().getTagsWithSource()); // F15：标签×来源计数（复核过滤 chips）
   handle('kb:entriesForTag', (tag, limit) => K().entriesForTag(tag, limit));
   handle('kb:addTag', (itemID, tag) => K().addManualTag(itemID, tag));
   handle('kb:removeTag', (itemID, tag) => K().removeTag(itemID, tag));

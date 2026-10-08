@@ -254,6 +254,9 @@ if (!IS_PROBE) {
       store.sync?.dispose(); // F7：阅读位置/pending 批注冲刷落盘
     } catch (_) { /* 退出路径不抛错 */ }
     try {
+      store.tagAuto?.dispose(); // F15：AI 自动标签小时定时器清空，退出不再发起新批次
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
       store.preferences.flushSync();
       store.database.close();
     } catch (_) { /* 退出路径不抛错 */ }

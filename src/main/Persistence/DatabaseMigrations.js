@@ -760,6 +760,28 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v20-auto-tags',
+    up: (db) => {
+      // AI 自动标签（F15）：article_tags 的 source 列早在 v9 就已建（TEXT DEFAULT 'auto'，
+      // 手动='manual' / AI='ai'）——按铁律先 PRAGMA 检查，已有则零 DDL；只有极老的
+      // GRDB 血统库缺列时才幂等补列。索引为本功能的两条热路径服务：
+      // - 复核过滤 chips 按 source 聚合（kb:tagsSource）；
+      // - AI 批量打标取「最近入库且未打标」按 date_arrived 取窗（原表无该索引）。
+      const cols = db.prepare("PRAGMA table_info(article_tags)").all().map((c) => c.name);
+      if (!cols.includes('source')) {
+        try {
+          db.exec("ALTER TABLE article_tags ADD COLUMN source TEXT DEFAULT 'auto'");
+        } catch (_) { /* 列已存在：幂等重入 */ }
+      }
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_article_tags_source
+        ON article_tags(source, tag);
+        CREATE INDEX IF NOT EXISTS idx_article_states_arrived
+        ON article_states(date_arrived);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

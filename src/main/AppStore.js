@@ -42,6 +42,8 @@ const { SmartPicksService, scoreArticle, SORT_WEIGHTS } = require('./SmartPicksS
 const { ObsidianExportService } = require('./ObsidianExportService');
 const { BooksService } = require('./BooksService');
 const { SimilarService } = require('./SimilarService');
+const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
+const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -166,6 +168,9 @@ class AppStore extends EventEmitter {
     this.obsidian = new ObsidianExportService(this); // Obsidian 知识库导出（F11）：Markdown 库 + 增量游标（目录授权仅内存态）
     this.books = new BooksService(this, userDataPath); // 个人文集自动成书（F12）：文集 CRUD + EPUB 成书 + 自动节流
     this.similar = new SimilarService(this); // 相关文章 + 线索视图（F13）：文末继续读 + 知识中心线索 tab
+    this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
+    this.tagAuto.start();
+    this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -967,6 +972,11 @@ class AppStore extends EventEmitter {
     // 规则过滤引擎（F2）：灌文事务提交后、状态推送之前同步应用规则
     // （纯内存匹配 + 批量写单事务；零规则零成本，异常不外抛不影响入库主流程）
     if (newUnread.length) this.rules.applyToNewEntries(newUnread);
+    // AI 自动标签（F15）：规则继承打标——按同源既有标签 Top5 给新文章打 source='inherit'
+    // （零 AI 确定性，纯 SQL 单事务；异常静默不外抛，不影响入库主流程）
+    if (newUnread.length) {
+      try { this.tagAuto.inheritFor(feed.id, newUnread); } catch (_) { /* 打标失败不外抛 */ }
+    }
     if (newUnread.length > 200) newUnread = newUnread.slice(0, 200);
     if (newUnread.length) this._bumpListSet();
     // 全文抓取（F1）：灌文事务提交后只登记 ID，筛选与网络由 fulltext.kick() 异步接力。
@@ -2418,6 +2428,7 @@ class AppStore extends EventEmitter {
     // P2-4：整批单事务（upsertEntry 内层 SAVEPOINT 嵌套安全）——首启全量 200 条
     // 原先每条一事务，一次同步 200 次 WAL fsync。
     const newIDs = []; // 本轮新灌入的 itemID（F2 规则过滤引擎回传）
+    const newIDsByFeed = new Map(); // feedID -> itemID[]（F15 继承打标按源分组）
     this.database.transaction(() => {
       for (const item of items) {
         if (!item.id) continue;
@@ -2429,7 +2440,11 @@ class AppStore extends EventEmitter {
         const itemID = existingItemID ?? `gr:${accountID}:${stableDigest(item.id)}`;
         const feed = this._feedForReaderItem(accountID, item);
         if (!feed) continue;
-        if (!existingItemID) newIDs.push(itemID);
+        if (!existingItemID) {
+          newIDs.push(itemID);
+          if (!newIDsByFeed.has(feed.id)) newIDsByFeed.set(feed.id, []);
+          newIDsByFeed.get(feed.id).push(itemID);
+        }
 
         const publishedAt = item.published ?? item.updated ?? (item.timestampMS ?? item.crawlTimeMS) ?? nowSeconds();
         const contentHTML = item.contentHTML ?? item.summaryContent ?? null;
@@ -2449,6 +2464,10 @@ class AppStore extends EventEmitter {
         });
       }
     });
+    // AI 自动标签（F15）：同步灌入的新文章按源继承既有标签（零 AI，异常静默）
+    for (const [feedID, ids] of newIDsByFeed) {
+      try { this.tagAuto.inheritFor(feedID, ids); } catch (_) { /* 打标失败不外抛 */ }
+    }
     return newIDs;
   }
 
