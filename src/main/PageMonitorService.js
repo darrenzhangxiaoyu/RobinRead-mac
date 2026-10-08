@@ -357,11 +357,13 @@ class PageMonitorService {
       throw new Error(i18n.localized('追更源缺少有效网页地址，请删除后重新添加。'));
     }
     const nextURL = PageMonitorService.monitorFeedURL(pageURL, cleanSelector);
+    // 先抓新基线再提交选择器变更（验证轮 P2-1）：若先改选择器，窗口期内刷新会用
+    // 新选择器对旧基线 diff，落纯噪声合成文章；基线抓取失败则整体失败，旧状态原样保留。
+    const baseline = await this.captureBaseline(feedID, pageURL, cleanSelector);
     this.store.feedsRepo.updateFeed(feedID, (f) => ({
       ...f, platformRef: cleanSelector, platform: 'monitor',
     }));
     this.store.feedsRepo.updateFeedURL(feedID, nextURL); // feed_url 不在 updateFeed 更新列（保持既有调用零影响）
-    const baseline = await this.captureBaseline(feedID, pageURL, cleanSelector);
     this.store._invalidatePrepared();
     this.store._emitState();
     return { feed: this.store.feedsRepo.feed(feedID), ...baseline };

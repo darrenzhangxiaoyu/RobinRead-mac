@@ -1893,7 +1893,8 @@ async function onFeedContext(event, { feed, selectedFeedIDs }) {
     { label: t('全部已读'), icon: 'checkAll', onClick: () => window.robin.markAllRead({ kind: 'feed', feedID: feed.id }) },
     { label: t('复制订阅'), icon: 'copy', onClick: () => navigator.clipboard.writeText(feed.feedURL) },
     { label: t('此源排版偏好…'), icon: 'appearance', onClick: () => showFeedTypographyDialog(feed) },
-    ...(feed.platform === 'monitor' ? monitorFeedMenuItems(feed) : []),
+    // F18：追更与停止态都给管理入口（停止态唯一恢复路径就是「更改选择器」）
+    ...(['monitor', 'monitor-stopped'].includes(feed.platform) ? monitorFeedMenuItems(feed) : []),
     { label: t('全文抓取'), icon: 'docText', children: fulltextMenuItems(feed) },
     { label: t('AI 精读翻译'), icon: 'spark', children: [
       { label: t('跟随默认'), onClick: async () => { await window.robin.setTranslateFeedMode(feed.id, 'auto'); showToast(t('此源翻译已改为跟随默认')); } },

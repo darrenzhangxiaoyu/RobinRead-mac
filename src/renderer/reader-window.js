@@ -95,9 +95,11 @@ async function bootstrap() {
   setBtn('rw-font-minus', icon('textSmaller'), '缩小正文字号');
   setBtn('rw-font-plus', icon('textLarger'), '放大正文字号');
   setBtn('rw-close', icon('winClose'), '关闭窗口');
+  // F10 起字号为活状态（批次 C 审查 P1-1：闭包冻结快照会使第二次点击起失效）
+  let currentFontSize = Number(snapshot.preferences?.articleFontSize) || 17;
   const adjustFont = async (delta) => {
-    const current = Number(snapshot.preferences?.articleFontSize) || 17;
-    const size = Math.max(12, Math.min(28, current + delta));
+    const size = Math.max(12, Math.min(28, currentFontSize + delta));
+    currentFontSize = size;
     document.documentElement.style.setProperty('--article-font-size', `${size}px`);
     await window.robin.setFontSize(size); // 写回同一偏好：主窗/弹出窗共用
   };
