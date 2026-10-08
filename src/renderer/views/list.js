@@ -1252,8 +1252,14 @@ export class ListView {
     this._revealObserver = new IntersectionObserver((entries, observer) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
-          entry.target.classList.add('nj-revealed');
-          observer.unobserve(entry.target);
+          const el = entry.target;
+          el.classList.add('nj-revealed');
+          observer.unobserve(el);
+          // U1-U5 审查 P1-1：落定后摘除 reveal 类——否则 reveal 的 0.4s 过渡规则
+          // 永久接管行卡 transition，U4 悬停微抬升/阴影的 --dur-fast 永不生效
+          const settle = () => { el.classList.remove('nj-reveal-pending', 'nj-revealed'); };
+          el.addEventListener('transitionend', settle, { once: true });
+          setTimeout(settle, 600); // 兜底：transitionend 被 reduced-motion/离屏吞掉时也能落定
         }
       }
     }, { root: null, rootMargin: '0px 0px -6% 0px', threshold: 0.04 });

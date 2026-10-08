@@ -3085,12 +3085,12 @@ body.dark .nj-note-marker { color: #d3a952; }
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-/* 首段不缩进，后续段间距更透气 */
-.reader-article p { margin: 0 0 1.35em; letter-spacing: 0.01em; }
+/* 首段不缩进，后续段间距更透气；字距取「基线 0.01em 与用户偏好 --reader-letter-spacing」的大者（U1-U5 审查 P1-3：不得覆盖 wide/loose 档） */
+.reader-article p { margin: 0 0 1.35em; letter-spacing: max(0.01em, var(--reader-letter-spacing, 0.006em)); }
 /* 标题：更稳的字距与留白 */
 .reader-article h1, .reader-article h2, .reader-article h3,
 .reader-article h4, .reader-article h5, .reader-article h6 {
-  letter-spacing: 0.015em;
+  letter-spacing: max(0.015em, var(--reader-letter-spacing, 0.006em));
   margin: 1.9em 0 0.7em;
 }
 /* U5-②：h2/h3 主题色小节标记（accent 短横线；仅正文内层级，h1 刊头不受影响） */
@@ -4185,7 +4185,7 @@ body.dark .favicon-badge { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14)
   transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 /* U4-①：行卡 hover 微抬升（transform + shadow-1，GPU 合成友好；不触碰布局属性） */
-.entry-row:hover { background: var(--row-hover); transform: translateY(-1px); box-shadow: var(--shadow-1); }
+.entry-row:not(.nj-mag-card):hover { background: var(--row-hover); transform: translateY(-1px); box-shadow: var(--shadow-1); }
 .entry-row.selected { box-shadow: inset 3px 0 0 var(--accent); }
 .entry-row.unread .entry-title { font-weight: 700; }
 .entry-summary { color: var(--text-tertiary); }

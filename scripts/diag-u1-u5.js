@@ -208,7 +208,7 @@ app.whenReady().then(async () => {
           try {
             if (r.selectorText && r.style) {
               const s = r.selectorText;
-              if (s === '.entry-row:hover' && (r.style.transform || '').includes('translateY(-1px)')) found.rowHoverLift = r.cssText.slice(0, 160);
+              if (s.startsWith('.entry-row:not(.nj-mag-card):hover') && (r.style.transform || '').includes('translateY(-1px)')) found.rowHoverLift = r.cssText.slice(0, 160);
               if (s.includes('.sidebar-row[data-feed-id]:hover::after')) found.rowHoverBar = true;
               if (s === '.reader-article blockquote' && (r.style.borderLeft || '').includes('3px')) found.bqLeft = r.style.borderLeft;
               if (s === '.sidebar-folder.collapsed .sidebar-folder-children') found.folderRule = r.style.gridTemplateRows;
