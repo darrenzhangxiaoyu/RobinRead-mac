@@ -4232,6 +4232,148 @@ body[data-bilingual-style="card"] .reader-article .nj-t {
   .nj-tts-player.is-live .nj-tts-wave i { animation: none; height: 9px; }
 }
 
+/* ── F10 智能每日精选：画像摘要条 + 精选行 + 播报胶囊（全量消费既有令牌） ── */
+.nj-picks-profile {
+  margin: var(--space-3) var(--space-4) var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--page-background);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-1);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.nj-picks-head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.nj-picks-title {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--accent); font-weight: 600; font-size: 0.86em;
+  white-space: nowrap;
+}
+.nj-picks-sub {
+  color: var(--text-tertiary); font-size: 0.74em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nj-picks-spring { flex: 1; min-width: 0; }
+.nj-picks-limit {
+  appearance: none;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit; font-size: 0.74em;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.nj-picks-limit:hover { border-color: var(--accent); color: var(--accent); }
+.nj-picks-broadcast {
+  appearance: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit; font-size: 0.76em;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.nj-picks-broadcast:hover { border-color: var(--accent); color: var(--accent); }
+.nj-picks-broadcast.is-playing {
+  color: oklch(0.62 0.14 35);
+  border-color: oklch(0.62 0.14 35 / 0.55);
+}
+body.dark .nj-picks-broadcast.is-playing { color: oklch(0.78 0.13 55); border-color: oklch(0.78 0.13 55 / 0.5); }
+.nj-picks-words { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
+.nj-picks-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 1px 8px 1px 9px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  font-size: 0.74em;
+  color: var(--text-secondary);
+  max-width: 180px;
+}
+.nj-picks-chip-word { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nj-picks-chip-bar {
+  width: 34px; height: 4px; border-radius: var(--radius-full);
+  background: var(--separator);
+  overflow: hidden; flex: 0 0 auto;
+}
+.nj-picks-chip-bar i {
+  display: block; height: 100%;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+.nj-picks-hint {
+  color: var(--text-tertiary);
+  font-size: 0.76em;
+  line-height: 1.5;
+}
+/* 精选行：名次徽标 + 不感兴趣悬浮键（复用 row-quick 家族） */
+.entry-row.nj-picks-row .nj-picks-rank {
+  flex: 0 0 22px;
+  align-self: center;
+  text-align: center;
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.entry-row.nj-picks-row { column-gap: var(--space-2); }
+.entry-row.nj-picks-row:hover .nj-picks-rank { color: var(--accent); }
+.row-quick .q-dismiss:hover { color: var(--warm-accent); }
+
+/* 精选播报胶囊（复用 TTS 迷你播放器交互语言；视口级 fixed，媒体播放器之下） */
+.nj-picks-player {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 40;
+  display: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 5px 11px;
+  background: var(--note-background);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.nj-picks-player.visible { display: inline-flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+.nj-pp-label {
+  font-size: 0.72em;
+  color: var(--text-secondary);
+  margin-right: 2px;
+  white-space: nowrap;
+}
+.nj-pp-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  width: 22px; height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font: inherit; font-size: 10px;
+  flex: 0 0 auto;
+}
+.nj-pp-btn:hover { color: var(--accent); background: var(--row-hover); }
+.nj-pp-progress {
+  font-size: 0.7em;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: center;
+}
+.nj-picks-player.is-live .nj-pp-label { color: var(--accent); }
+
 /* ── R22 杂志纸张质感三选（借鉴上游 v1.4.5）+ 图片重试态 ── */
 .nj-edition-paper {
   appearance: none; border: 1px solid var(--separator); border-radius: var(--radius-full);

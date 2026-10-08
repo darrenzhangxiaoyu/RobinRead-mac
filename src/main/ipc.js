@@ -738,6 +738,14 @@ function registerIPCHandlers(store, window) {
   handle('rag:sources', (messageID) => RG().sources(messageID));
   handle('rag:snapshot', () => RG().snapshot());
 
+  // MARK: 智能每日精选（F10：画像摘要 / Top N 精选 / 不感兴趣 / 播报文稿 / 数量档位）
+  const SP = () => store.smartPicks;
+  handle('picks:profile', () => SP().profileSummary());
+  handle('picks:get', (opts) => SP().pickTop(opts || {}));
+  handle('picks:exclude', (entryID) => SP().exclude(entryID));
+  handle('picks:broadcast', (opts) => SP().broadcastScript(opts || {}));
+  handle('picks:setLimit', (n) => SP().setLimit(n));
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => {
     store.preferences.set('RobinRead.list.titleZh', on === true);

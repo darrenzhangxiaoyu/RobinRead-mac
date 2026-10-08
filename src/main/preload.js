@@ -156,6 +156,13 @@ contextBridge.exposeInMainWorld('robin', {
   onRagDelta: (listener) => subscribe('rag:delta', listener),
   onRagStatus: (listener) => subscribe('rag:status', listener),
 
+  // 智能每日精选（F10：画像摘要 / Top N / 不感兴趣 / 播报文稿 / 数量档位）
+  picksProfile: () => data('picks:profile'),
+  picksGet: (opts) => data('picks:get', opts),
+  picksExclude: (entryID) => data('picks:exclude', entryID),
+  picksBroadcast: (opts) => data('picks:broadcast', opts),
+  picksSetLimit: (n) => data('picks:setLimit', n),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

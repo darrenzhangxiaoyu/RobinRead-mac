@@ -34,6 +34,9 @@ export class ListView {
     this.items = [];
     this.scope = null;
     this.selectedID = null;
+    // F10 智能精选：视图载荷与播报态（app 层经 setPicks / setPicksBroadcastState 驱动）
+    this.picksData = null;
+    this.picksBroadcastState = 'idle';
     // R23 批量多选：选中集合 + 区间锚点（视图层状态，随重渲染清空）
     this.picked = new Set();
     this.pickAnchor = -1;
@@ -120,9 +123,12 @@ export class ListView {
         <button class="digest-btn" id="view-mode-btn" title="${escapeHTML(t('切换列表 / 杂志视图'))}"><span></span></button>
         <button class="digest-btn" id="list-sort-btn" title="${escapeHTML(t('切换排序方式'))}"><span></span></button>
         <button class="digest-btn" id="digest-btn" title="${escapeHTML(t('AI 汇总今日全部文章'))}">${icon('spark')}<span></span></button>
+        <button class="digest-btn" id="picks-btn" title="${escapeHTML(t('按你的阅读兴趣重排的今日精选（本地画像，零 AI）'))}">${icon('wand')}<span></span></button>
         <button class="digest-btn" id="later-clean-btn" title="${escapeHTML(t('把入队超过 14 天的稍后读标记已读并移出队列'))}" style="display:none"></button>
       </div>`;
     this.topInset.querySelector('#digest-btn span').textContent = t('今日简报');
+    this.topInset.querySelector('#picks-btn span').textContent = t('精选');
+    this.topInset.querySelector('#picks-btn').addEventListener('click', () => this.handlers.onTogglePicks?.());
     const cleanBtn = this.topInset.querySelector('#later-clean-btn');
     cleanBtn.addEventListener('click', () => this.handlers.onCleanupLater?.(this._overdueIDs || []));
     this.sortBtn = this.topInset.querySelector('#list-sort-btn');
@@ -199,6 +205,15 @@ export class ListView {
   }
 
   render(items, scope, selectedID, hasUnread) {
+    // F10 精选模式：精选载荷在场且视野适用时，列表整体让位给精选视图
+    // （today/unread 之外的视野自动回落普通列表，由 app 层在切视野时收起精选）。
+    if (this.picksData && ListView.picksEligible(scope)) {
+      this.items = items;
+      this.scope = scope;
+      this.selectedID = selectedID;
+      this._renderPicks(selectedID);
+      return;
+    }
     // R33 渲染签名去重：app:state 推送频繁，列表无实质变化时跳过整段重建（保滚动/选中/批量态）
     const sig = this._renderSig(items, scope, selectedID, hasUnread);
     if (sig === this._lastSig && !this._sigBust) {
@@ -1047,6 +1062,183 @@ export class ListView {
   setDigestVisible(visible) {
     const btn = this.topInset?.querySelector('#digest-btn');
     if (btn) btn.style.display = visible ? '' : 'none';
+  }
+
+  // MARK: - 智能每日精选（F10）
+
+  /** 「精选」工具栏入口显隐（与「今日简报」同视野：today / unread）。 */
+  setPicksVisible(visible) {
+    const btn = this.topInset?.querySelector('#picks-btn');
+    if (btn) {
+      btn.style.display = visible ? '' : 'none';
+      btn.classList.toggle('active', Boolean(this.picksData));
+    }
+  }
+
+  /** 精选是否适用于该视野（today / unread 之外的视野回到普通列表）。 */
+  static picksEligible(scope) {
+    return scope?.kind === 'today' || scope?.kind === 'unread';
+  }
+
+  /** 写入精选载荷并渲染精选视图；payload=null 清除并回到普通列表。 */
+  setPicks(payload) {
+    this.picksData = payload || null;
+    if (this.picksData) {
+      this._lastSig = null; // 退出精选时必须真重绘普通列表
+      this._renderPicks(this.selectedID);
+    }
+  }
+
+  clearPicks() {
+    if (!this.picksData) return;
+    this.picksData = null;
+    this._lastSig = null;
+  }
+
+  /** 播报精选按钮态（idle / playing / paused），由 PicksTTSPlayer 状态回调驱动。 */
+  setPicksBroadcastState(state) {
+    this.picksBroadcastState = state || 'idle';
+    const btn = this.rowsHost?.querySelector('.nj-picks-broadcast');
+    if (!btn) return;
+    const label = btn.querySelector('span');
+    if (label) {
+      label.textContent = this.picksBroadcastState === 'playing' ? t('停止播报')
+        : this.picksBroadcastState === 'paused' ? t('继续播报') : t('播报精选');
+    }
+    btn.classList.toggle('is-playing', this.picksBroadcastState !== 'idle');
+  }
+
+  /**
+   * 精选视图：画像摘要条（Top 8 兴趣词 chips + 权重条微型可视化）+「播报精选」+
+   * Top N 行（复用现有列表行渲染，附名次徽标与「不感兴趣」）。
+   * 空画像降级：提示「阅读越多推荐越准」。
+   */
+  _renderPicks(selectedID) {
+    const data = this.picksData;
+    if (!data) return;
+    this._clearPick();
+    this.rowsHost.innerHTML = '';
+    this.topInset.querySelector('.list-top-title').textContent = t('智能精选');
+
+    const bar = document.createElement('div');
+    bar.className = 'nj-picks-profile';
+    bar.innerHTML = `
+      <div class="nj-picks-head">
+        <span class="nj-picks-title">${icon('wand')}<span></span></span>
+        <span class="nj-picks-sub"></span>
+        <span class="nj-picks-spring"></span>
+        <select class="nj-picks-limit" title="${attr(t('精选数量'))}">
+          <option value="10">10</option>
+          <option value="15">15</option>
+          <option value="20">20</option>
+          <option value="30">30</option>
+        </select>
+        <button type="button" class="nj-picks-broadcast" title="${attr(t('把精选拼成简报文稿，用神经语音播报'))}">${icon('radioDot')}<span>${escapeHTML(t('播报精选'))}</span></button>
+      </div>
+      <div class="nj-picks-words"></div>
+      <div class="nj-picks-hint" hidden></div>`;
+    bar.querySelector('.nj-picks-title span').textContent = t('为什么是这些');
+    const sub = bar.querySelector('.nj-picks-sub');
+    if (sub) {
+      sub.textContent = data.degraded
+        ? t('画像积累中 · 按新鲜度排序')
+        : tf('画像 Top %lld · 候选 %lld 篇', (data.profileTop || []).length, data.candidateCount ?? 0);
+    }
+    const limitSel = bar.querySelector('.nj-picks-limit');
+    if (limitSel) {
+      limitSel.value = String(data.limit || 15);
+      limitSel.addEventListener('change', () => this.handlers.onPicksLimit?.(Number(limitSel.value)));
+    }
+    bar.querySelector('.nj-picks-broadcast').addEventListener('click', () => this.handlers.onBroadcastPicks?.());
+    this.setPicksBroadcastState(this.picksBroadcastState); // 重绘后同步播放中态
+
+    const wordsHost = bar.querySelector('.nj-picks-words');
+    const words = data.profileTop || [];
+    const maxWeight = words.length ? words[0].weight : 0;
+    for (const w of words) {
+      const chip = document.createElement('span');
+      chip.className = 'nj-picks-chip';
+      const pct = maxWeight > 0 ? Math.max(10, Math.round((w.weight / maxWeight) * 100)) : 0;
+      chip.innerHTML = `<span class="nj-picks-chip-word"></span><span class="nj-picks-chip-bar"><i style="width:${pct}%"></i></span>`;
+      chip.querySelector('.nj-picks-chip-word').textContent = w.word;
+      chip.title = t('阅读画像词');
+      wordsHost.appendChild(chip);
+    }
+    const hint = bar.querySelector('.nj-picks-hint');
+    if (hint && data.degraded) {
+      hint.hidden = false;
+      hint.textContent = t('你的阅读画像还在积累，当前按新鲜度排序；读得越多推荐越准。');
+    }
+    this.rowsHost.appendChild(bar);
+
+    if (!data.picks || data.picks.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'list-empty';
+      empty.innerHTML = `<div class="glyph">${icon('wand')}</div><h3></h3><p></p>`;
+      empty.querySelector('h3').textContent = t('暂无可精选的文章');
+      empty.querySelector('p').textContent = t('近 3 天没有未读文章，或都已被你排除；刷新订阅后再来看看。');
+      this.rowsHost.appendChild(empty);
+      this._knownIds = new Set();
+      this._markNew = false;
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    data.picks.forEach((item, index) => {
+      const row = this.rowFor(this._picksView(item));
+      row.classList.add('nj-picks-row');
+      row.dataset.picksRank = String(index + 1);
+      const rank = document.createElement('span');
+      rank.className = 'nj-picks-rank';
+      rank.title = t('综合兴趣匹配、订阅源偏好与新鲜度');
+      rank.textContent = String(index + 1);
+      row.insertBefore(rank, row.firstChild);
+      const quick = row.querySelector('.row-quick');
+      if (quick) quick.appendChild(this._picksDismissBtn(item));
+      fragment.appendChild(row);
+    });
+    this.rowsHost.appendChild(fragment);
+    this.markSelected(selectedID);
+    this._observeReveal();
+    this._knownIds = new Set(data.picks.map((it) => it.id));
+    this._markNew = false;
+  }
+
+  /** 精选载荷 → 列表行视图形状（复用 rowFor 渲染，缺省字段补齐）。 */
+  _picksView(item) {
+    const feed = (window.__robinSidebar || [])
+      .flatMap((account) => account.allFeeds || [])
+      .find((f) => f.id === item.feedID);
+    return {
+      id: item.id,
+      feedID: item.feedID,
+      title: item.title,
+      summaryPreview: item.summary || '',
+      sourceTitle: item.sourceTitle || '',
+      url: item.url || null,
+      publishedAt: item.publishedAt,
+      isRead: false,
+      isStarred: item.isStarred === true,
+      isLater: false,
+      hasMedia: item.hasMedia === true,
+      hasBodyCache: undefined,
+      readMinutes: 0,
+      feedIconURL: feed ? feedIconURL(feed) : '',
+    };
+  }
+
+  /** 「不感兴趣」行内按钮：排除该文并即时重排（24h 记忆）。 */
+  _picksDismissBtn(item) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'row-quick-btn q-dismiss nj-picks-dismiss';
+    btn.title = t('把这篇移出精选（24 小时内不再出现）');
+    btn.innerHTML = icon('close');
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.handlers.onPicksDismiss?.(item.id);
+    });
+    return btn;
   }
 
   /** 智能稍后读（方向 23）：稍后读视野且存在超龄项时显示「清理超龄」。 */

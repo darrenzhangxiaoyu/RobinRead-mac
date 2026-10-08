@@ -33,6 +33,7 @@ import { EvolutionView } from './views/evolution-view.js';
 import { AihotView } from './views/aihot-view.js';
 import { MediaView } from './views/media-view.js';
 import { MediaMiniPlayer } from './views/media-player.js';
+import { PicksTTSPlayer } from './views/picks-tts.js';
 import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 import { syncPaletteCommand } from './views/sync-command.js';
@@ -60,6 +61,8 @@ const state = {
 const views = {};
 let navConfirmation = null;     // { key, entryID, expiresAt, timer }
 let toastTimer = null;
+// F10 智能精选：开启态 + 请求序号（快速切换时过期返回丢弃）
+const picksState = { on: false, seq: 0 };
 // P1-8：列表请求序号——reloadList 与 onStateChanged 全量重拉并发竞争时，
 // 只有最新请求的返回才允许落地（视野切换乱序的根源修复）
 let listReqSeq = 0;
@@ -123,19 +126,39 @@ async function bootstrap() {
   });
   views.account.init();
   // 媒体中心（F3）：全局单实例迷你播放器（与 TTS 互斥在此裁决，双方经 deps 互通）
+  // F10 起「全局 TTS 态」= 阅读器朗读 + 精选播报（PicksTTSPlayer）两者取非空闲者
   views.mediaPlayer = new MediaMiniPlayer({
     tts: {
-      state: () => views.reader?.ttsState || 'idle',
-      stop: () => views.reader?.stopTTS?.(),
+      state: () => {
+        const readerState = views.reader?.ttsState || 'idle';
+        if (readerState !== 'idle') return readerState;
+        return views.picksTTS?.state || 'idle';
+      },
+      stop: () => {
+        views.reader?.stopTTS?.();
+        views.picksTTS?.stop?.();
+      },
     },
     toast: showToast,
   });
+  // F10 智能精选播报：NeuralTTS 既有通路的独立胶囊播放器（不入 media_items）
+  views.picksTTS = new PicksTTSPlayer({
+    toast: showToast,
+    onState: (s) => views.list?.setPicksBroadcastState?.(s),
+  });
+  window.__robinPicksTTS = views.picksTTS; // E2E 测试句柄（与 __robinReader 同惯例）
   views.list = new ListView(document.getElementById('list-scroll'), {
     onSelect: handleEntrySelect,
     onContext: showListRowContext,
     onLoadMore: loadMoreEntries,
     onSearch: runSearch,
     onDigest: showTodayDigest,
+    onTogglePicks: () => toggleSmartPicks(),
+    onBroadcastPicks: () => broadcastSmartPicks(),
+    onPicksDismiss: (entryID) => dismissSmartPick(entryID),
+    onPicksLimit: (n) => {
+      window.robin.picksSetLimit(n).then(() => refreshSmartPicks()).catch(() => {});
+    },
     onClusterBrief: showClusterBrief,
     onExportEdition: showEditionExport,
     onCleanupLater: (ids) => cleanupOverdueLater(ids),
@@ -187,6 +210,7 @@ async function bootstrap() {
     },
   );
   window.__robinReader = views.reader; // E2E 测试句柄
+  window.__robinList = views.list; // E2E 测试句柄（F10 探针观测精选视图态）
 
   buildToolbar();
   bindToolbar();
@@ -637,6 +661,7 @@ function buildPaletteCommands() {
     { label: t('切换聚焦模式'), keywords: 'focus 聚焦 渐暗', icon: 'eye', hint: 'F', action: toggleFocusMode },
     { label: t('切换禅模式'), keywords: 'zen 禅 全屏', icon: 'expand', action: toggleZenMode },
     { label: t('今日简报'), keywords: 'digest 简报 日报 ai open', icon: 'spark', action: () => showTodayDigest() },
+    { label: t('智能精选'), keywords: 'smart picks 精选 推荐 画像 兴趣 interest', icon: 'wand', action: () => toggleSmartPicks() },
     { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
@@ -757,8 +782,18 @@ async function reloadList({ resetScroll = false } = {}) {
   if (!result.ok) return;
   if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次结果过期
   state.listItems = result.data;
-  views.list.render(state.listItems, state.scope, state.selectedEntryID, currentHasUnread());
+  // F10 智能精选：开启态只适用于 today/unread 视野——切到其他视野自动收起
+  if (picksState.on && !ListView.picksEligible(state.scope)) {
+    picksState.on = false;
+    views.list.clearPicks();
+  }
+  if (picksState.on) {
+    await refreshSmartPicks({ resetScroll });
+  } else {
+    views.list.render(state.listItems, state.scope, state.selectedEntryID, currentHasUnread());
+  }
   views.list.setDigestVisible(state.scope?.kind === 'today' || state.scope?.kind === 'unread');
+  views.list.setPicksVisible(ListView.picksEligible(state.scope));
   // 智能稍后读（方向 23）：稍后读视野下出现「清理超龄」入口（入队超 14 天）
   const overdue = state.scope?.kind === 'later' ? laterOverdueIDs() : [];
   views.list.setLaterCleanup(overdue);
@@ -766,6 +801,59 @@ async function reloadList({ resetScroll = false } = {}) {
   views.list.setResume(state.scope?.kind === 'today' ? views.reader?.resumeCandidate?.() || null : null);
   updateToolbarState();
   if (resetScroll) views.list.scrollTop();
+}
+
+// MARK: - 智能每日精选（F10：工具栏「精选」切换 / 播报 / 不感兴趣）
+
+/** 「精选」切换：开 = 拉取画像 Top N 并让列表让位；关 = 回普通列表。 */
+async function toggleSmartPicks() {
+  picksState.on = !picksState.on;
+  if (!picksState.on) {
+    views.picksTTS?.stop();
+    views.list.clearPicks();
+    await reloadList();
+    return;
+  }
+  await refreshSmartPicks({ resetScroll: true });
+}
+
+/** 拉取精选载荷（主进程即时重算画像 + 排序），驱动精选视图渲染。 */
+async function refreshSmartPicks({ resetScroll = false } = {}) {
+  if (!picksState.on || !ListView.picksEligible(state.scope)) return;
+  const seq = ++picksState.seq;
+  const payload = await window.robin.picksGet();
+  if (seq !== picksState.seq) return; // 快速切换/重排竞态：过期载荷丢弃
+  if (!payload || !Array.isArray(payload.picks)) {
+    showToast(t('精选暂时不可用，请稍后再试。'));
+    return;
+  }
+  views.list.setPicks(payload);
+  views.list.setPicksVisible(true);
+  if (resetScroll) views.list.scrollTop();
+}
+
+/** 「播报精选」：拼简报文稿 → PicksTTSPlayer 流式合成播放；播放中再点 = 停止。 */
+async function broadcastSmartPicks() {
+  if (!views.picksTTS) return;
+  if (views.picksTTS.state !== 'idle') {
+    views.picksTTS.stop();
+    return;
+  }
+  const result = await window.robin.picksBroadcast();
+  if (!result?.script) {
+    showToast(t('还没有可播报的精选。'));
+    return;
+  }
+  await views.picksTTS.play(result.script);
+}
+
+/** 「不感兴趣」：主进程记入 24h 排除名单，前端即时重排。 */
+async function dismissSmartPick(entryID) {
+  try {
+    await window.robin.picksExclude(entryID);
+  } catch (_) { /* 排除失败不阻塞前端重排 */ }
+  showToast(t('已移出精选，24 小时内不再推荐。'));
+  await refreshSmartPicks();
 }
 
 async function runSearch(query) {
@@ -781,6 +869,7 @@ async function runSearch(query) {
   state.searchMode = true; // P1-5：从搜索结果进入文章 → reader.searchAfterOpen 自动高亮首个命中
   views.list.setSearchMode(true);
   views.list.setDigestVisible(false);
+  views.list.setPicksVisible(false); // F10：搜索态收起精选入口（清空搜索后经 reloadList 恢复）
   // 优先全文搜索（含正文），空结果回退到标题/摘要搜索
   let items = await window.robin.fullTextSearch(query);
   if (!items || !items.length) {
@@ -1899,6 +1988,7 @@ async function runSmartFolderSearch(name, query) {
   state.searchMode = true; // P1-5：智能文件夹=保存的搜索，进文同样自动高亮关键词
   views.list.setSearchMode(true);
   views.list.setDigestVisible(false);
+  views.list.setPicksVisible(false); // F10：智能文件夹视图不提供精选入口
   views.list.render(items, { kind: 'smart', name }, state.selectedEntryID, false);
   updateToolbarState();
 }
@@ -2145,7 +2235,12 @@ function bindEvents() {
       } else {
         // 行集变化（过滤规则/新增文章/删除）：全量重建，保持选择与滚动位置
         const scrollTop = document.getElementById('list-scroll')?.scrollTop || 0;
-        views.list.render(result.data, state.scope, state.selectedEntryID, currentHasUnread());
+        // F10：精选开启时行集变化走精选重取（普通 render 会让位于精选视图，载荷需新）
+        if (picksState.on && ListView.picksEligible(state.scope)) {
+          await refreshSmartPicks();
+        } else {
+          views.list.render(result.data, state.scope, state.selectedEntryID, currentHasUnread());
+        }
         views.list.setDigestVisible(state.scope?.kind === 'today' || state.scope?.kind === 'unread');
         const scroller = document.getElementById('list-scroll');
         if (scroller) scroller.scrollTop = scrollTop;
