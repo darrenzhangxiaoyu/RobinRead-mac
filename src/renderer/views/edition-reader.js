@@ -1301,8 +1301,9 @@ export class EditionReader {
     let toc = this.overlay.querySelector('.er-toc');
     if (toc) {
       // R48：关闭走滑出动画（与开启对称），动画完再移除
+      // U2：滑出时长归簇 var(--dur-mid)=0.25s，移除定时器同步放宽（300ms > 0.25s，避免截断动画）
       toc.classList.add('closing');
-      setTimeout(() => toc.remove(), 240);
+      setTimeout(() => toc.remove(), 300);
       return;
     }
     toc = document.createElement('div');

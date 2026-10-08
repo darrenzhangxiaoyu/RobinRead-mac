@@ -131,8 +131,8 @@ app.whenReady().then(async () => {
       assert.ok(kbSrc.includes(token), `knowledge.js 应含 ${token}`);
     }
     const cssSrc = fs.readFileSync(path.join(ROOT, 'src', 'renderer', 'styles', 'robin.css'), 'utf8');
-    // R1 设计令牌体系：token 层存在且被消费
-    assert.ok(cssSrc.includes('--radius-md') && cssSrc.includes('--dur-base') && cssSrc.includes('--ease-out') && cssSrc.includes('--shadow-3'), 'css 应含设计令牌层');
+    // R1 设计令牌体系：token 层存在且被消费（U2 后 --dur-base 并入四档标尺，改断 --dur-instant）
+    assert.ok(cssSrc.includes('--radius-md') && cssSrc.includes('--dur-instant') && cssSrc.includes('--ease-out') && cssSrc.includes('--shadow-3'), 'css 应含设计令牌层');
     // R9 可访问性：对比度达标 token + focus-visible 铺开 + reduced-motion 收敛
     assert.ok(cssSrc.includes('rgba(41, 38, 32, 0.66)'), 'LIGHT secondary 应为 0.66 alpha（4.74:1 AA）');
     assert.ok(cssSrc.includes('rgba(41, 38, 32, 0.54)'), 'LIGHT tertiary 应为 0.54 alpha（3.34:1）');

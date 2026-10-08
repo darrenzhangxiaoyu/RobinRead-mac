@@ -229,12 +229,16 @@ export class SidebarView {
     });
     wrapper.appendChild(row);
 
+    // U3-①：折叠动画走 CSS grid-template-rows 0fr⇄1fr（.sidebar-folder-inner 为高度约束层），
+    // 显隐完全由 .collapsed 类驱动——不再写 inline display，保证过渡可播。
     const children = document.createElement('div');
     children.className = 'sidebar-folder-children';
-    if (collapsed) children.style.display = 'none';
+    const inner = document.createElement('div');
+    inner.className = 'sidebar-folder-inner';
     for (const feed of folder.feeds || []) {
-      children.appendChild(this.feedRow(feed, account, counts, scope, { inFolder: true }));
+      inner.appendChild(this.feedRow(feed, account, counts, scope, { inFolder: true }));
     }
+    children.appendChild(inner);
     wrapper.appendChild(children);
     return wrapper;
   }
@@ -242,9 +246,8 @@ export class SidebarView {
   toggleFolder(key, wrapper) {
     const collapsed = !this.collapsedFolders.has(key);
     this._toggleSet(this.collapsedFolders, key, 'robinread.collapsedFolders', collapsed);
+    // 显隐交给 CSS（.sidebar-folder.collapsed .sidebar-folder-children）；此处只翻类，动画自然播放
     wrapper.classList.toggle('collapsed', collapsed);
-    const children = wrapper.querySelector('.sidebar-folder-children');
-    if (children) children.style.display = collapsed ? 'none' : '';
   }
 
   _removeFromCollapsed(key) {

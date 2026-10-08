@@ -53,7 +53,7 @@
 .fs-rail::-webkit-scrollbar { width: 4px; }
 .fs-rail::-webkit-scrollbar-thumb {
   background: transparent; border-radius: 999px;
-  transition: background 0.2s ease;
+  transition: background var(--dur-fast) ease;
 }
 .fs-rail:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 .fs-rail::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--accent) 38%, transparent); }
@@ -64,7 +64,7 @@
   border-radius: 8px; padding: 6px 10px;
   font-size: 12.5px; color: var(--text-secondary);
   cursor: pointer; font-family: inherit; text-align: left;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-instant) ease, color var(--dur-instant) ease;
 }
 .fs-rail-item:hover { background: var(--row-hover); color: var(--text-primary); }
 .fs-rail-item.active { background: var(--row-selected); color: var(--text-primary); font-weight: 700; }
@@ -104,7 +104,7 @@
   border: 1px solid var(--separator); border-radius: 12px;
   background: var(--page-background);
   padding: 13px 13px 11px 15px;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  transition: transform var(--dur-instant) ease, box-shadow var(--dur-instant) ease, border-color var(--dur-instant) ease;
 }
 .fs-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.4); border-color: var(--note-border); }
 .fs-card.top { border-color: var(--note-border); background: linear-gradient(135deg, rgba(97, 115, 87, 0.05), transparent 55%), var(--page-background); }
@@ -198,7 +198,7 @@
   border-radius: 8px; padding: 8px 0;
   color: var(--text-secondary); font-family: inherit;
   cursor: default;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--dur-instant) ease, color var(--dur-instant) ease;
 }
 .footer-nav-btn svg { width: 16px; height: 16px; }
 .footer-nav-btn:hover { background: var(--row-selected); color: var(--text-primary); }
@@ -332,7 +332,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
   display: flex; align-items: center; gap: 10px;
   padding: 7px 10px; border-radius: 8px;
   background: var(--page-background); border: 1px solid var(--separator);
-  animation: materialize 0.14s ease;
+  animation: materialize var(--dur-instant) ease;
 }
 .wc-search-name { flex: 1; font-size: 12.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wc-search-item .btn-text { flex: 0 0 auto; font-size: 11px; padding: 4px 12px; }
@@ -361,7 +361,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
 .dg-topic {
   padding: 14px 16px 12px; border-radius: 12px;
   background: var(--page-background); border: 1px solid var(--separator);
-  animation: materialize 0.16s ease;
+  animation: materialize var(--dur-fast) ease;
 }
 .dg-topic-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .dg-topic-no { font-family: var(--font-serif); font-size: 17px; font-weight: 700; color: var(--accent); opacity: 0.85; }
@@ -378,7 +378,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
   background: var(--note-background); color: var(--accent);
   font-size: 10px; font-weight: 700; line-height: 1;
   display: inline-flex; align-items: center; justify-content: center;
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.12s ease;
+  transition: background var(--dur-instant) ease, border-color var(--dur-instant) ease, transform var(--dur-instant) ease;
 }
 .dg-ref:hover { border-color: var(--accent); transform: translateY(-1px); background: var(--row-hover); }
 .dg-ref.missing { opacity: 0.4; cursor: default; }
