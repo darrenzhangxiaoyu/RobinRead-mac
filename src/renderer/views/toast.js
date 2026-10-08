@@ -23,7 +23,7 @@ const TONE_ICON = {
   progress: '<svg class="toast-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="8" cy="8" r="6.25" opacity="0.25"/><path d="M8 1.75a6.25 6.25 0 0 1 6.25 6.25"/></svg>',
 };
 
-const live = new Set(); // 在场 toast 记录（用于栈容量与 dismissTop）
+const live = new Set(); // 在场 toast 记录（用于栈容量与 dismiss）
 
 function ensureStack() {
   let stack = document.getElementById(STACK_ID);
@@ -35,6 +35,20 @@ function ensureStack() {
     document.body.appendChild(stack);
   }
   return stack;
+}
+
+/** 容量护栏：超限先请最旧的普通条走（无动画直落，避免栈爆）；进度条豁免淘汰（审查 P3：
+ *  长任务进行中连打普通 toast 不得挤掉进度条——挤掉后 done/fail 将静默失效）。 */
+function evictOldestNormal() {
+  for (const e of live) {
+    if (!e.progress) {
+      live.delete(e);
+      e.el.remove();
+      return;
+    }
+  }
+  const oldest = live.values().next().value; // 全是进度条时退回最旧（不致栈爆）
+  if (oldest) { live.delete(oldest); oldest.el.remove(); }
 }
 
 /** 离场：挂 .leaving（CSS 过渡 --dur-mid）后移除；进度条已停表。 */
@@ -75,13 +89,10 @@ export function showToast(message, opts = {}) {
     tone = 'success',
     action = null,
   } = opts;
+  // 带动作的提示保底 ≥4.2s（审查 P1：动作按钮需要阅读+点击时间，默认 1.8s 基本点不到）
+  const effDuration = action?.label ? Math.max(duration, 4200) : duration;
   const stack = ensureStack();
-  // 容量护栏：超限先请最旧的走（无动画直落，避免栈爆）
-  while (live.size >= CAP) {
-    const oldest = live.values().next().value;
-    live.delete(oldest);
-    oldest.el.remove();
-  }
+  while (live.size >= CAP) evictOldestNormal();
 
   const el = document.createElement('div');
   el.className = `toast-capsule ${tone}`;
@@ -89,7 +100,7 @@ export function showToast(message, opts = {}) {
   el.innerHTML = `<span class="toast-ic">${TONE_ICON[tone] || TONE_ICON.success}</span><span class="toast-msg"></span>`;
   el.querySelector('.toast-msg').textContent = message;
 
-  const entry = { el, duration, timer: 0, startedAt: Date.now(), remaining: duration };
+  const entry = { el, duration: effDuration, timer: 0, startedAt: Date.now(), remaining: effDuration };
   if (action?.label) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -104,18 +115,18 @@ export function showToast(message, opts = {}) {
   }
   stack.appendChild(el);
   live.add(entry);
-  if (duration > 0) {
-    entry.timer = setTimeout(() => leave(entry), duration);
+  if (effDuration > 0) {
+    entry.timer = setTimeout(() => leave(entry), effDuration);
     wireHoverPause(entry);
   }
   return el;
 }
 
-/** 旧 dismissToast 语义：请走最顶端（最新）一条。 */
+/** 旧 dismissToast 语义：请走最早一条（审查 P3：导航确认等清理场景针对的是先前的旧提示，
+ *  删「最新」会在多 toast 并存时误杀无关新提示而留旧的）。 */
 export function dismissTop() {
-  if (!live.size) return;
-  const last = [...live].pop();
-  leave(last);
+  const oldest = live.values().next().value;
+  if (oldest) leave(oldest);
 }
 
 /**
@@ -125,11 +136,7 @@ export function dismissTop() {
  */
 export function showProgress(title, { note = '', total = 100 } = {}) {
   const stack = ensureStack();
-  while (live.size >= CAP) {
-    const oldest = live.values().next().value;
-    live.delete(oldest);
-    oldest.el.remove();
-  }
+  while (live.size >= CAP) evictOldestNormal();
   const el = document.createElement('div');
   el.className = 'toast-capsule progress';
   el.setAttribute('role', 'status');
@@ -145,12 +152,30 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
   noteEl.textContent = note;
   el.querySelector('.toast-body').appendChild(noteEl);
 
-  const entry = { el, duration: 0, timer: 0, startedAt: 0, remaining: 0 };
+  const entry = { el, duration: 0, timer: 0, startedAt: 0, remaining: 0, progress: true };
   stack.appendChild(el);
   live.add(entry);
+  wireHoverPause(entry); // 创建即挂监听（duration=0 时处理器空转）；done/fail 换态后直接生效
 
   const barFill = el.querySelector('.toast-bar > i');
   let lastPct = 0;
+  /** 收口后若指针已悬停在条上（无新 mouseenter 事件），就地进入暂停态（审查 P3）。 */
+  const settleTone = (toneClass, toneIcon, ms, message) => {
+    el.classList.remove('progress');
+    el.classList.add(toneClass);
+    el.querySelector('.toast-ic').innerHTML = toneIcon;
+    if (message) el.querySelector('.toast-title').textContent = message;
+    noteEl.remove();
+    el.querySelector('.toast-bar').remove();
+    entry.duration = ms;
+    entry.remaining = ms;
+    entry.startedAt = Date.now();
+    entry.timer = setTimeout(() => leave(entry), ms);
+    if (el.matches(':hover')) {
+      clearTimeout(entry.timer);
+      el.classList.add('hold');
+    }
+  };
   const handle = {
     /** 推进进度：pct ∈ [0,100]（或按 total 归一），note 更新右侧小字。 */
     set(pct, noteText) {
@@ -162,33 +187,13 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
     /** 完成：换成功态 + 收口提示，短暂停留后自动离场。 */
     done(message) {
       if (!live.has(entry)) return handle;
-      el.classList.remove('progress');
-      el.classList.add('success');
-      el.querySelector('.toast-ic').innerHTML = TONE_ICON.success;
-      if (message) el.querySelector('.toast-title').textContent = message;
-      noteEl.remove();
-      el.querySelector('.toast-bar').remove();
-      entry.duration = 1600;
-      entry.remaining = 1600;
-      entry.startedAt = Date.now();
-      entry.timer = setTimeout(() => leave(entry), 1600);
-      wireHoverPause(entry);
+      settleTone('success', TONE_ICON.success, 1600, message);
       return handle;
     },
     /** 失败：换错误态，停留更久供阅读。 */
     fail(message) {
       if (!live.has(entry)) return handle;
-      el.classList.remove('progress');
-      el.classList.add('error');
-      el.querySelector('.toast-ic').innerHTML = TONE_ICON.error;
-      if (message) el.querySelector('.toast-title').textContent = message;
-      noteEl.remove();
-      el.querySelector('.toast-bar').remove();
-      entry.duration = 3200;
-      entry.remaining = 3200;
-      entry.startedAt = Date.now();
-      entry.timer = setTimeout(() => leave(entry), 3200);
-      wireHoverPause(entry);
+      settleTone('error', TONE_ICON.error, 3200, message);
       return handle;
     },
     close() { leave(entry); return handle; },

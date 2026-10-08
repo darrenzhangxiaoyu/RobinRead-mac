@@ -69,7 +69,7 @@ export function editionCoverArt({ year, month, day, accent, paper, ink, issueTex
 
   const parts = [];
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-hidden="true" data-edition-art="${year}-${month}-${day}">`);
-  parts.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${paper}"/>`);
+  // 不再铺不透明纸底（审查 P3：会盖住书封纸张的 grain 渐变呈平块）；艺术层透明叠加，纸色由封面容器承载
 
   // ① 远星点阵（上半幅细点网格 + 少量星点，密度由种子决定）
   const cols = 9; const rows = 7;
@@ -137,7 +137,11 @@ export function editionCoverArt({ year, month, day, accent, paper, ink, issueTex
   if (issueText) {
     const label = String(issueText).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     parts.push(`<text x="${W - 26}" y="${H - 30}" text-anchor="end" font-family="Georgia, 'Times New Roman', serif" font-size="13" letter-spacing="2" fill="${mix(ink, paper, 0.25)}">${label}</text>`);
-    parts.push(`<line x1="${W - 26 - label.length * 8.5}" y1="${H - 24}" x2="${W - 26}" y2="${H - 24}" stroke="${mix(ink, paper, 0.45)}" stroke-width="1"/>`);
+    // 压线宽按字形估算（审查 P3：CJK 全宽 ≈15px，拉丁 ≈7px；length*8.5 对「总第 N 期」明显偏短）。
+    // 注意用转义前原文计宽——HTML 实体（&amp; 等）非可见字形。
+    const raw = String(issueText);
+    const textWidth = [...raw].reduce((w, ch) => w + (ch.charCodeAt(0) > 0x2e7f ? 15 : 7), 0);
+    parts.push(`<line x1="${W - 26 - textWidth}" y1="${H - 24}" x2="${W - 26}" y2="${H - 24}" stroke="${mix(ink, paper, 0.45)}" stroke-width="1"/>`);
   }
 
   parts.push('</svg>');

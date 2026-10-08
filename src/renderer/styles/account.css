@@ -69,8 +69,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.acct-identity-status { font-size: 11.5px; color: var(--text-secondary); }
-.acct-grace { font-size: 10.5px; color: var(--text-secondary); opacity: 0.85; }
+.acct-identity-status { font-size: var(--fs-lg); color: var(--text-secondary); }
+.acct-grace { font-size: var(--fs-sm); color: var(--text-secondary); opacity: 0.85; }
 
 /* ---- 账号密码登录/注册表单（会员中心未登录态 + 设置→账号 共用）---- */
 .acct-auth {
@@ -100,7 +100,7 @@
 }
 .acct-auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .acct-auth-fields { display: flex; flex-direction: column; gap: 8px; }
-.acct-auth-error { font-size: 11.5px; color: #c93b3b; }
+.acct-auth-error { font-size: var(--fs-lg); color: #c93b3b; }
 
 
 .acct-usage {
@@ -144,8 +144,8 @@
 .acct-plan-price { display: flex; align-items: baseline; gap: 1px; }
 .acct-plan-price .yen { font-size: 13px; font-weight: 700; }
 .acct-plan-price .num { font-size: 26px; font-weight: 800; font-family: var(--font-serif, inherit); letter-spacing: -0.02em; }
-.acct-plan-price .per { font-size: 11px; color: var(--text-secondary); margin-left: 3px; }
-.acct-plan-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+.acct-plan-price .per { font-size: var(--fs-md); color: var(--text-secondary); margin-left: 3px; }
+.acct-plan-desc { font-size: var(--fs-md); color: var(--text-secondary); line-height: 1.5; }
 .acct-plan button { margin-top: 4px; width: 100%; }
 
 .acct-rights-list {
@@ -201,12 +201,12 @@
   pointer-events: none;
 }
 .acct-pay-status { font-size: 13px; font-weight: 600; }
-.acct-pay-countdown { font-size: 11.5px; color: var(--text-secondary); }
+.acct-pay-countdown { font-size: var(--fs-lg); color: var(--text-secondary); }
 
 /* ---- 升级引导 ---- */
 .acct-gate { max-width: 380px; }
 .acct-gate-msg { font-size: 13.5px; line-height: 1.65; }
-.acct-gate-quota { margin-top: 4px; font-size: 11.5px; color: var(--text-secondary); }
+.acct-gate-quota { margin-top: 4px; font-size: var(--fs-lg); color: var(--text-secondary); }
 .acct-gate-price {
   font-size: 19px;
   font-weight: 800;

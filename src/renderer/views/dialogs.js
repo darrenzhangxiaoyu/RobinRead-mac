@@ -12,6 +12,7 @@ import { TYPOGRAPHY_PRESETS } from '../data/typography-presets.js';
 import { syncResultText } from './sync-command.js';
 import { bookMetaLine, showCreateBookDialog } from './bookshelf.js';
 import { Toast } from './toast.js';
+import { focusArrowSiblings } from './kbd-nav.js'; /* U18：设置分区导航 ↑↓ */
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -64,7 +65,7 @@ const SECTION_SEARCH_INDEX = {
   refresh: ['刷新频率', '打开应用时刷新', '手动刷新'],
   rules: ['过滤规则'],
   language: ['界面语言', '语言选择'],
-  sync: ['服务器地址', '用户名', '密码', '测试连接', '自动同步', '立即同步'],
+  sync: ['服务器地址', '用户名', '密码 / 授权码', '测试连接', '自动同步', '立即同步'], /* 用既有 i18n 键（审查 P3：'密码' 是无键裸中文，英文 UI 命中 chip 会回显中文） */
   obsidian: ['导出目录', '导出文章', '导出高亮与批注', '立即导出', '全量重导'],
   bookshelf: ['新建文集'],
   feedback: ['前往官网'],
@@ -171,6 +172,16 @@ export class SettingsView {
     const nav = document.createElement('nav');
     nav.className = 'settings-nav-list';
     this.navItems = new Map();
+    // 分区跳转（审查 P3：render 重建模态会静默清掉搜索词——搜索态跳转保留搜索上下文并重放过滤）
+    const gotoSection = (id) => {
+      const q = searchInput.value;
+      this.section = id;
+      this.render();
+      if (q) {
+        const inp = this.modal?.querySelector('.settings-search input');
+        if (inp) { inp.value = q; this._applySearch(q); }
+      }
+    };
     for (const section of SECTIONS) {
       const item = document.createElement('div');
       item.className = `modal-nav-item ${section.id === this.section ? 'active' : ''}`;
@@ -179,12 +190,10 @@ export class SettingsView {
       item.setAttribute('tabindex', '0'); // R52：设置导航纳入 Tab 序（此前 div 不可达，键盘用户跳不进设置分区）
       item.innerHTML = `<span class="nav-icon">${icon(section.icon)}</span><span class="nav-title"></span><div class="nav-hits" hidden></div>`;
       item.querySelector('.nav-title').textContent = t(section.title);
-      item.addEventListener('click', () => {
-        this.section = section.id;
-        this.render();
-      });
-      item.addEventListener('keydown', (e) => { // Enter/空格即选中（role=button 语义）
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.section = section.id; this.render(); }
+      item.addEventListener('click', () => gotoSection(section.id));
+      item.addEventListener('keydown', (e) => { // Enter/空格即选中（role=button 语义）；↑↓ 在分区间移动焦点（U18 审计补缺）
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); gotoSection(section.id); return; }
+        focusArrowSiblings(nav, e, '.modal-nav-item');
       });
       nav.appendChild(item);
       this.navItems.set(section.id, { item, hitsEl: item.querySelector('.nav-hits') });

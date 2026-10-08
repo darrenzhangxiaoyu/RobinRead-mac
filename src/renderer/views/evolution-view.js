@@ -5,6 +5,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { focusArrowSiblings } from './kbd-nav.js'; /* U18：模态侧栏导航 ↑↓ 补齐 */
 
 function timeAgo(seconds) {
   if (!seconds) return '—';
@@ -76,9 +77,16 @@ export class EvolutionView {
     for (const s of sections) {
       const item = document.createElement('div');
       item.className = `modal-nav-item ${s.id === this.section ? 'active' : ''}`;
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0'); // U18：模态导航纳入 Tab 序
       item.innerHTML = `<span class="nav-icon">${icon(s.icon)}</span><span></span>`;
       item.querySelector('span:last-child').textContent = t(s.label);
-      item.addEventListener('click', () => { this.section = s.id; this._render(); this._load(); });
+      const selectSection = () => { this.section = s.id; this._render(); this._load(); };
+      item.addEventListener('click', selectSection);
+      item.addEventListener('keydown', (e) => { // Enter/空格即选中（role=button 语义）；↑↓ 在分区间移动焦点
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSection(); return; }
+        focusArrowSiblings(sidebar, e, '.modal-nav-item');
+      });
       sidebar.appendChild(item);
     }
     this.modal.appendChild(sidebar);
@@ -263,15 +271,16 @@ export class EvolutionView {
       lbl.textContent = t('近 14 天信息流');
       el.appendChild(lbl);
       const chart = document.createElement('div');
-      chart.className = 'kb-chart';
+      chart.className = 'kb-chart nj-bars'; /* U16：柱条统一升起入场（CSS 交错） */
       const max = Math.max(1, ...byDay.map((x) => x.count));
-      for (const day of byDay) {
+      byDay.forEach((day, i) => {
         const bar = document.createElement('div');
         bar.className = 'kb-chart-bar';
         bar.title = `${day.day} · ${day.count} 篇`;
         bar.style.height = `${Math.max(4, (day.count / max) * 72)}px`;
+        bar.style.setProperty('--nj-bar-i', String(i)); /* U16：交错次序 */
         chart.appendChild(bar);
-      }
+      });
       el.appendChild(chart);
     }
     const byFeed = d.byFeed || [];

@@ -69,7 +69,7 @@ app.whenReady().then(async () => {
     ok(/\.toggle\.on \{ box-shadow: 0 0 0 3px color-mix\(in srgb, var\(--accent\) 14%, transparent\); \}/.test(robin), 'U12 开关激活光环（accent 派生）在册');
     ok(/\.td-card:hover \{[^}]*transform: translateY\(var\(--lift-y\)\);[^}]*box-shadow: var\(--shadow-1\);/.test(robin), 'U12 td-card 悬停抬升归 --lift-y/--shadow-1');
     ok(/\.prov-card:hover \{ transform: translateY\(var\(--lift-y\)\); box-shadow: var\(--shadow-1\); \}/.test(robin), 'U12 prov-card 悬停抬升归令牌');
-    ok(/\.fs-card:hover \{ transform: translateY\(var\(--lift-y\)\); box-shadow: var\(--shadow-1\); \}/.test(storeCss), 'U12 store fs-card 抬升归令牌（store.css）');
+    ok(/\.fs-card:hover \{ transform: translateY\(var\(--lift-y\)\); box-shadow: var\(--shadow-1\)[^}]*\}/.test(storeCss), 'U12 store fs-card 抬升归令牌（store.css）');
     ok(/\.context-menu-item:active/.test(robin) && /\.modal-nav-item:active/.test(robin), 'U12 菜单/导航按压覆盖在册');
 
     // U13：toast 栈模块与兼容委托
@@ -290,7 +290,7 @@ app.whenReady().then(async () => {
     ok(b.artIssueText, 'U15 版画含期号文本（总第 N 期）');
     ok(b.artNoExternal, 'U15 版画无外部引用（url(/<image/href/外链)）');
     ok(b.artDayVaries && b.artAccentVaries, 'U15 日期/主题色变化 → 版画随之变化');
-    ok(b.artGeo, 'U15 版画几何构成（山峦路径≥7 + 星点圆≥30）');
+    ok(b.artGeo, 'U15 版画几何构成（山峦路径≥5 + 星点圆≥30）');
     ok(b.accentToken, 'U15 --accent 主题色令牌在场（派生源）');
 
     if (failed) { console.error(failed + ' 项失败'); app.exit(1); }

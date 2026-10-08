@@ -11,6 +11,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { emptyArtSVG } from './empty-art.js';
 import { formatFullDate } from './list.js';
 import { renderMarkdown } from '../markdown.js';
 import { ContextMenu } from './context-menu.js';
@@ -473,9 +474,11 @@ export class ReaderView {
     this._dismissPopover();
     this._dismissHighlightMenu();
     document.getElementById('nj-annot-panel')?.remove();
+    // U11 插画空态（审查 P3 补接）：命中线稿库走 .empty-art（CSS 动画挂该类），未命中回退 .glyph
+    const readerArt = emptyArtSVG('newspaper');
     this.scrollEl.innerHTML = `
       <div class="reader-empty">
-        <div class="glyph">${icon('newspaper')}</div>
+        ${readerArt ? `<div class="empty-art">${readerArt}</div>` : `<div class="glyph">${icon('newspaper')}</div>`}
         <h3>${escapeHTML(t('选择一篇文章'))}</h3>
         <p>${escapeHTML(t('从列表中打开文章开始阅读。'))}</p>
       </div>`;
@@ -2265,7 +2268,7 @@ export class ReaderView {
         <button class="close-btn">${icon('close')}</button>
       </div>
       ${kind === 'ask' ? `<div class="nj-question-row">
-        <input class="nj-question-input" placeholder="${attr(t('针对划选文字提问...'))}"/>
+        <input class="nj-question-input" placeholder="${attr(t('针对划选文字提问…'))}"/>
         <button class="btn-text primary ask-send">${escapeHTML(t('发送提问'))}</button>
       </div>` : ''}
       <div class="nj-explanation-body loading"></div>

@@ -421,6 +421,22 @@ function bindWindowControls() {
   });
 }
 
+/** U19：拖拽态视觉层——按住标题栏空白拖动时挂 body.nj-win-drag（标题栏提亮 + snap 提示层显现）。
+ *  纯 CSS 类切换，不触碰窗口管理逻辑；交互元素区不感知。
+ *  独立注册（不依赖 bootstrap 成功）：标题栏是静态 DOM，IPC 不可用时拖拽视感依旧成立。 */
+function bindWindowDragHint() {
+  const toolbarEl = document.getElementById('main-toolbar');
+  if (!toolbarEl) return;
+  const isInteractive = (target) => !!(target && target.closest && target.closest('.btn, .reader-capsule, .window-controls, .tb-title, input, select, button'));
+  toolbarEl.addEventListener('pointerdown', (event) => {
+    if (isInteractive(event.target)) return;
+    document.body.classList.add('nj-win-drag');
+  });
+  window.addEventListener('pointerup', () => document.body.classList.remove('nj-win-drag'));
+  window.addEventListener('blur', () => document.body.classList.remove('nj-win-drag'));
+}
+bindWindowDragHint(); // U19：模块加载即挂（script type=module 晚于静态 DOM 解析）
+
 function bindToolbar() {
   document.getElementById('btn-toggle-sidebar').addEventListener('click', toggleSidebarCollapsed);
   document.getElementById('btn-refresh').addEventListener('click', () => {
@@ -673,7 +689,7 @@ function buildPaletteCommands() {
     { label: t('收藏'), keywords: 'starred 收藏 star open', icon: 'star', action: () => handleScopeSelect({ kind: 'starred' }) },
     { label: t('稍后读'), keywords: 'later 稍后读 read later open', icon: 'clock', action: () => handleScopeSelect({ kind: 'later' }) },
     { label: t('切换杂志 / 列表视图'), keywords: 'magazine list view 杂志 列表 视图', icon: 'newspaper', action: () => window.robin.setReaderLayout({ listViewMode: window.__robinReaderLayout?.listViewMode === 'magazine' ? 'list' : 'magazine' }) },
-    { label: t('切换浅色 / 深色主题'), keywords: 'theme dark light 主题 深色 浅色', icon: 'appearance', action: () => window.robin.setTheme(document.body.classList.contains('dark') ? 'light' : 'dark') },
+    { label: t('切换浅色 / 深色主题'), keywords: 'theme dark light 主题 深色 浅色', icon: 'appearance', desc: t('切换整窗纸面配色，夜间读长文更省眼。'), action: () => window.robin.setTheme(document.body.classList.contains('dark') ? 'light' : 'dark') },
     { label: t('知更纸刊（默认）'), keywords: 'preset 版式 预设 纸刊 默认', icon: 'bookOpen', action: () => applyPreset('default') },
     { label: t('新闻晚报'), keywords: 'preset 版式 报纸 晚报 紧凑', icon: 'newspaper', action: () => applyPreset('evening') },
     { label: t('极简留白'), keywords: 'preset 版式 极简 留白', icon: 'circle', action: () => applyPreset('minimal') },
@@ -689,11 +705,11 @@ function buildPaletteCommands() {
     { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
-    { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', action: openKnowledgeCenter },
+    { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', desc: t('高亮、笔记、复习与知识图谱的中心。'), action: openKnowledgeCenter },
     { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
     { label: t('从链接精读…'), keywords: 'url link 链接 精读 extract openUrl', icon: 'globe', action: () => readFromUrlPrompt() },
-    { label: t('设置'), keywords: 'settings 设置 preference open', icon: 'gear', action: () => showSettings('appearance') },
+    { label: t('设置'), keywords: 'settings 设置 preference open', icon: 'gear', desc: t('外观、账户、同步与 AI 配置都在这里。'), action: () => showSettings('appearance') },
     { label: t('刷新全部订阅'), keywords: 'refresh 刷新 订阅', icon: 'refresh', action: () => window.robin.refresh() },
     syncPaletteCommand({ notify: (message) => showToast(message), silentError: false }),
     { label: t('增大字号'), keywords: 'font size larger 字号 增大', icon: 'textLarger', action: () => adjustFontSize(1) },
@@ -809,7 +825,11 @@ async function reloadList({ resetScroll = false } = {}) {
     views.list.showSkeleton(); // 数据落地后由 render() 整体覆盖
   }
   const result = await window.robin.getList(state.scope, { limit: 100, retainingIDs: [...state.retainedIDs], sort: currentListSort() });
-  if (!result.ok) return;
+  if (!result.ok) {
+    // U11 骨架屏失败出路（审查 P2）：骨架已清空 rowsHost，失败时用上一份列表回渲，不让骨架卡死
+    views.list.render(state.listItems, state.scope, state.selectedEntryID, currentHasUnread());
+    return;
+  }
   if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次结果过期
   state.listItems = result.data;
   // F10 智能精选：开启态只适用于 today/unread 视野——切到其他视野自动收起
@@ -1942,7 +1962,7 @@ function folderMenuItems(feedIDs, currentFolder) {
   }
   items.push({ type: 'separator' });
   items.push({
-    label: t('新建文件夹...'),
+    label: t('新建文件夹…'),
     icon: 'folderPlus',
     onClick: () => showAddFolder(reloadAll),
   });

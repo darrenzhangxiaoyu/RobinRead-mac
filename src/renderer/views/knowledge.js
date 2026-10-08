@@ -8,6 +8,7 @@ import { icon } from '../icons.js';
 import { promptBox, confirmBox } from '../ui-prompt.js';
 import { emptyArtSVG } from './empty-art.js';
 import { renderMarkdown } from '../markdown.js';
+import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline } from './chart-kit.js'; /* U16 */
 
 const TABS = [
   { id: 'dashboard', label: '看板', icon: 'general' },
@@ -292,19 +293,15 @@ export class KnowledgeCenter {
       el.appendChild(sparkWrap);
 
       requestAnimationFrame(() => {
-        // 令牌从 body 读取：body.dark 覆盖的暗态令牌（--note-background 等）才能解析到暗值
-        const css = getComputedStyle(document.body);
-        const token = (name, fb) => (css.getPropertyValue(name) || '').trim() || fb;
-        const readColor = token('--accent', '#617357');
-        const knowColor = token('--warm-accent', '#a3573d');
-        const gridColor = token('--note-border', '#d8d5c6');
-        const dpr = window.devicePixelRatio || 1;
+        // U16：色彩走令牌（body 解析，暗态令牌自动跟随）；画布走 chart-kit dpr 清晰化；
+        // 入场动画 = 折线自左向右生长（rAF 单驱动，reduced-motion 直达终态）
+        const readColor = chartToken(document.body, '--accent', '#617357');
+        const knowColor = chartToken(document.body, '--warm-accent', '#a3573d');
+        const gridColor = chartToken(document.body, '--note-border', '#d8d5c6');
         // 画布宽度取自身 content-box（CSS width:100% 已扣除卡片 padding）；取 parent clientWidth 会连 padding 一起量，右缘溢出卡片
         const H = 120;
         const W = Math.max(320, canvas.clientWidth || canvas.parentElement.clientWidth || 700);
-        canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-        const ctx = canvas.getContext('2d');
-        ctx.scale(dpr, dpr);
+        const ctx = setupCanvas(canvas, W, H);
         // 补全日期序列（缺日补 0）
         const seq = [];
         const base = new Date(); base.setDate(base.getDate() - 29);
@@ -317,24 +314,22 @@ export class KnowledgeCenter {
         const maxV = Math.max(1, ...seq.map((x) => Math.max(x.read, x.know)));
         const px = (i) => 8 + (i / 29) * (W - 16);
         const py = (v) => H - 14 - (v / maxV) * (H - 30);
-        // 网格基线
-        ctx.strokeStyle = gridColor; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(8, H - 14); ctx.lineTo(W - 8, H - 14); ctx.stroke();
-        // 双序列面积+折线
         const series = [
           { key: 'read', color: readColor },
           { key: 'know', color: knowColor },
         ];
-        for (const ser of series) {
-          ctx.beginPath();
-          seq.forEach((x, i) => {
-            const X = px(i), Y = py(ser.key === 'read' ? x.read : x.know);
-            if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+        const full = series.map((ser) => seq.map((x, i) => ({ x: px(i), y: py(ser.key === 'read' ? x.read : x.know) })));
+        const render = (progress) => {
+          ctx.clearRect(0, 0, W, H);
+          // 网格基线（U16 统一发丝线）
+          drawBaseline(ctx, 8, W - 8, H - 14, gridColor);
+          series.forEach((ser, si) => {
+            const pts = clipSeriesByProgress(full[si], progress);
+            if (pts.length >= 2) strokeSeries(ctx, pts, { color: ser.color, width: 1.8, baselineY: H - 14 });
           });
-          ctx.strokeStyle = ser.color; ctx.lineWidth = 1.8; ctx.stroke();
-          ctx.lineTo(px(29), H - 14); ctx.lineTo(px(0), H - 14); ctx.closePath();
-          ctx.globalAlpha = 0.10; ctx.fillStyle = ser.color; ctx.fill(); ctx.globalAlpha = 1;
-        }
+        };
+        this._sparkIntro?.cancel?.();
+        this._sparkIntro = runChartIntro({ onFrame: render });
       });
     }
 
@@ -387,7 +382,7 @@ export class KnowledgeCenter {
         hourWrap.className = 'kb-spark-wrap';
         hourWrap.innerHTML = `<div class="kb-graph-head"><span class="kb-daily-title">${escapeHTML(t('时段分布 · 近 30 天'))}</span></div>`;
         const barRow = document.createElement('div');
-        barRow.className = 'kb-hour-bars';
+        barRow.className = 'kb-hour-bars nj-bars'; /* U16：柱条统一升起入场（CSS 交错） */
         const maxH = Math.max(...hours, 1);
         for (let h = 0; h < 24; h++) {
           const col = document.createElement('div');
@@ -395,6 +390,7 @@ export class KnowledgeCenter {
           col.title = `${String(h).padStart(2, '0')}:00 · ${hours[h]}`;
           const bar = document.createElement('i');
           bar.style.height = Math.max(4, Math.round((hours[h] / maxH) * 64)) + 'px';
+          bar.style.setProperty('--nj-bar-i', String(h)); /* U16：交错次序 */
           col.appendChild(bar);
           const lab = document.createElement('span');
           lab.textContent = h % 6 === 0 ? String(h) : '';
@@ -1109,14 +1105,8 @@ export class KnowledgeCenter {
       }
     }
 
-    // 绘制
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width = `${W}px`;
-    canvas.style.height = `${H}px`;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
+    // 绘制（U16：dpr 清晰化统一走 chart-kit；入场 = 节点浮现 + 边淡入，rAF 单驱动）
+    const ctx = setupCanvas(canvas, W, H);
     const radiusOf = (node) => (node.kind === 'tag' ? Math.min(20, 6 + Math.sqrt(node.weight) * 3.2) : 5);
     let hover = null;
     let pinnedTag = null; // 点击标签节点：钉住并在面板中列出关联文章
@@ -1170,6 +1160,48 @@ export class KnowledgeCenter {
       }
     };
     draw();
+    // U16 入场：progress 0→1 期间按节点序渐进浮现（半径/透明度插值），完成后交还交互 draw()
+    {
+      let shown = 0;
+      this._graphIntro?.cancel?.();
+      this._graphIntro = runChartIntro({
+        onFrame: (progress) => {
+          shown = Math.max(1, Math.round(nodes.length * progress));
+          ctx.clearRect(0, 0, W, H);
+          const subset = new Set(nodes.slice(0, shown));
+          for (const edge of edges) {
+            if (!subset.has(edge.a) || !subset.has(edge.b)) continue;
+            ctx.strokeStyle = palette.line;
+            ctx.globalAlpha = 0.55 * progress;
+            ctx.beginPath();
+            ctx.moveTo(edge.a.x, edge.a.y);
+            ctx.lineTo(edge.b.x, edge.b.y);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          for (const node of nodes.slice(0, shown)) {
+            const r = radiusOf(node) * (0.5 + 0.5 * progress);
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+            if (node.kind === 'tag') { ctx.fillStyle = palette.accent; ctx.fill(); }
+            else {
+              ctx.fillStyle = palette.paper; ctx.fill();
+              ctx.strokeStyle = palette.muted; ctx.lineWidth = 1.4; ctx.stroke();
+            }
+            if (node.kind === 'tag' && node.weight >= 3) {
+              ctx.globalAlpha = 0.92 * progress;
+              ctx.fillStyle = palette.ink;
+              ctx.font = `600 11px system-ui, sans-serif`;
+              ctx.textAlign = 'center';
+              const label = node.label.length > 18 ? `${node.label.slice(0, 17)}…` : node.label;
+              ctx.fillText(label, node.x, node.y - r - 5);
+              ctx.globalAlpha = 1;
+            }
+          }
+        },
+        onDone: () => { shown = nodes.length; draw(); },
+      });
+    }
 
     // 交互：悬停高亮关联子图 + 点击文章节点直达
     const nodeAt = (evt) => {
