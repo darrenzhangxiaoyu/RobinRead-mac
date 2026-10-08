@@ -218,7 +218,10 @@ class BooksService {
           html = ArticleExtractor.sanitizedHTML(ArticleExtractor.normalizeFeedMarkup(String(row.content_html)), row.url);
         } catch (_) { html = ''; }
       }
-      if (!html.trim() && row.summary && String(row.summary).trim()) html = `<p>${String(row.summary)}</p>`;
+      if (!html.trim() && row.summary && String(row.summary).trim()) {
+        // 摘要回退同样过消毒管线（验证轮 P2：裸摘要可携带脚本标签进入章节 XHTML）
+        try { html = ArticleExtractor.sanitizedHTML(`<p>${String(row.summary)}</p>`, row.url); } catch (_) { html = ''; }
+      }
       if (!html.trim()) continue;
       out.push({
         id: row.id,

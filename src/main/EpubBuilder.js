@@ -329,7 +329,7 @@ function buildBookEpub(payload) {
 <head><meta charset="utf-8"/><title>${escapeXML(bookTitle)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
 <body>
 <div class="cover-page" epub:type="cover">
-${cover ? `<img src="../${coverHref}" alt="cover"/>` : `<img src="cover.svg" alt="cover"/>`}
+${cover ? `<img src="${coverHref}" alt="cover"/>` : `<img src="cover.svg" alt="cover"/>`}
 <h1 class="cover-title">${escapeXML(bookTitle)}</h1>
 <p class="cover-author">${escapeXML(author)}</p>
 </div>
