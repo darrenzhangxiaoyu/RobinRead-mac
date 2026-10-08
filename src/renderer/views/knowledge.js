@@ -8,7 +8,7 @@ import { icon } from '../icons.js';
 import { promptBox, confirmBox } from '../ui-prompt.js';
 import { emptyArtSVG } from './empty-art.js';
 import { renderMarkdown } from '../markdown.js';
-import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline } from './chart-kit.js'; /* U16 */
+import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline, onResolutionChange } from './chart-kit.js'; /* U16 */
 
 const TABS = [
   { id: 'dashboard', label: '看板', icon: 'general' },
@@ -69,6 +69,11 @@ export class KnowledgeCenter {
     this.tagFilter = 'all';
     // F16 源体检：总览卡点击过滤（null=不过滤）+ 当前展开的源详情
     this.dashFilter = null;
+    // U16 审查 P2：跨屏拖动 dpr 变化后已绘 canvas 物理口径过期（发糊）——视图在场时重进当前 tab 重绘。
+    // 单例观察；视图已关闭时 isConnected=false 自然 no-op。
+    onResolutionChange(() => {
+      if (this.overlay?.isConnected) { this._render(); this._load(); }
+    });
   }
 
   present(initialTab = null) {

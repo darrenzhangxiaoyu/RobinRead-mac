@@ -43,6 +43,7 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
+  --radius-2xs: 2px; /* 微元素（命中高亮 mark 等），审查收口补档 */
   --radius-xs: 4px;
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -6745,15 +6746,16 @@ input[type="checkbox"]:active { transform: scale(0.9); }
 }
 
 /* ── U17 命令面板 2.0：命中高亮 / 预览窗格 ── */
-/* 命中字符标记（<mark>）：accent 14% 底 + 同色文字，禁浏览器默认黄底 */
+/* 命中字符标记（<mark>）：accent 16% 底 + 同色文字，禁浏览器默认黄底 */
 .cmd-item .cmd-label mark {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   padding: 0 0.5px;
   font-weight: 700;
 }
-/* 预览窗格双列布局：面板加宽，右栏固定 216px；窄窗回退单列（面板 ≤560px 时预览隐藏） */
+/* 预览窗格双列布局：面板加宽，右栏固定 216px。
+   窄窗回退：主窗 minWidth=980 保证双列始终成立（审查 P3：原注释宣称的 ≤560px 单列回退并无对应 CSS，已改口径）。 */
 .cmd-palette.has-preview { width: min(780px, 94vw); }
 .cmd-palette.has-preview { flex-direction: row; }
 .cmd-palette-main {

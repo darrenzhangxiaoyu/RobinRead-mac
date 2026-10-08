@@ -87,10 +87,10 @@ app.whenReady().then(async () => {
 
     // U19：窗口级体验
     ok(/classList\.add\('nj-win-drag'\)/.test(appSrc) && /classList\.remove\('nj-win-drag'\)/.test(appSrc), 'U19 拖拽态 body.nj-win-drag 挂/摘接线在册');
-    ok(htmlSrc.includes('nj-snap-hint') && (htmlSrc.match(/nj-snap-edge nj-snap-/g) || []).length === 4, 'U19 snap 提示层四缘元素在册');
+    ok(htmlSrc.includes('nj-snap-hint') && (htmlSrc.match(/\bnj-snap-(?:top|bottom|left|right)\b/g) || []).length === 4, 'U19 snap 提示层四缘元素在册（与 class/属性顺序无关）');
     ok(/body\.nj-win-drag \.nj-snap-hint \{ opacity: 1; \}/.test(robin) && /\.nj-snap-top \{/.test(robin) && /\.nj-snap-bottom \{/.test(robin) && /\.nj-snap-left \{/.test(robin) && /\.nj-snap-right \{/.test(robin), 'U19 snap 显现规则 + 四缘样式在册');
     ok(/body\.nj-win-drag #main-toolbar \{/.test(robin), 'U19 拖拽态标题栏提亮规则在册');
-    ok(/id="main-toolbar"[^>]*role="banner"/.test(htmlSrc), 'U19 标题栏 role=banner 语义在册');
+    ok(/id="main-toolbar"/.test(htmlSrc) && /\brole="banner"/.test((htmlSrc.match(/<[^>]*id="main-toolbar"[^>]*>/) || [''])[0]), 'U19 标题栏 role=banner 语义在册（与属性顺序无关）');
     ok(ipcSrc.includes("ipcMain.on('window:maximize'") && ipcSrc.includes('window.unmaximize()'), 'U19 窗口管理逻辑零触碰（window:maximize 原样回归锚）');
 
     // U20：一致性审计修

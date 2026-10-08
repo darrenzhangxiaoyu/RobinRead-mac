@@ -19,7 +19,13 @@ export function focusArrowSiblings(container, event, selector) {
   const key = event?.key;
   if (key !== 'ArrowDown' && key !== 'ArrowUp') return false;
   const items = Array.from(container.querySelectorAll(selector))
-    .filter((el) => !el.classList.contains('hidden') && !el.hasAttribute('disabled') && (el.getClientRects().length > 0));
+    // 可达过滤（审查 P3 补口径）：.hidden 类 / disabled 属性 / 无布局盒（display:none）/
+    // visibility:hidden（仍有布局盒，需显式排除）；aria-disabled 语义等同 disabled
+    .filter((el) => !el.classList.contains('hidden')
+      && !el.hasAttribute('disabled')
+      && el.getAttribute('aria-disabled') !== 'true'
+      && el.getClientRects().length > 0
+      && getComputedStyle(el).visibility !== 'hidden');
   if (!items.length) return false;
   const current = items.indexOf(document.activeElement);
   const delta = key === 'ArrowDown' ? 1 : -1;

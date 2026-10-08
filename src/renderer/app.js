@@ -433,6 +433,7 @@ function bindWindowDragHint() {
     document.body.classList.add('nj-win-drag');
   });
   window.addEventListener('pointerup', () => document.body.classList.remove('nj-win-drag'));
+  window.addEventListener('pointercancel', () => document.body.classList.remove('nj-win-drag')); // 触控/笔被系统中断（审查 P3）
   window.addEventListener('blur', () => document.body.classList.remove('nj-win-drag'));
 }
 bindWindowDragHint(); // U19：模块加载即挂（script type=module 晚于静态 DOM 解析）

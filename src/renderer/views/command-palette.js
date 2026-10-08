@@ -197,9 +197,10 @@ export class CommandPalette {
     try { cmd.action?.(); } catch (_) { /* 单条命令失败不破坏面板生命周期 */ }
   }
 
-  /** U17：命中字符高亮——label 按模糊命中下标切片，命中段包 <mark>（HTML 转义安全）。 */
+  /** U17：命中字符高亮——label 按模糊命中下标切片，命中段包 <mark>（HTML 转义安全）。
+   *  口径与 _filter 对齐：统一 trim（审查 P3：否则带首尾空格的查询命令可命中但高亮消失）。 */
   _labelHTML(cmd) {
-    const positions = fuzzyMark(this.query || '', cmd.label);
+    const positions = fuzzyMark(String(this.query || '').trim(), cmd.label);
     if (!positions || !positions.length) return this._escapeHTML(cmd.label);
     const hit = new Set(positions);
     let html = '';

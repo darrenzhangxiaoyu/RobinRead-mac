@@ -28,6 +28,22 @@ export function prefersReducedMotion() {
 }
 
 /**
+ * devicePixelRatio 变化（跨屏拖动）订阅（U16 审查 P2）：
+ * 已绘 canvas 的物理像素口径在 dpr 变化后过期（整体发糊），调用方在回调里重绘在场的图表。
+ * 一次性媒体查询 + 自动按新 dpr 重武装；应用生命周期单例观察（不提供退订——回调自判视图在场与否）。
+ */
+export function onResolutionChange(cb) {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+  const arm = () => {
+    let mq;
+    try { mq = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`); }
+    catch (_) { return; }
+    mq.addEventListener('change', () => { try { cb(); } catch (_) {} arm(); }, { once: true });
+  };
+  arm();
+}
+
+/**
  * 从宿主元素解析 CSS 令牌颜色（canvas 取不到 CSS 变量，统一在此换算）。
  * @param {Element} host 参照元素（继承 body.dark / 纸感四态类）
  * @param {string} name  令牌名（如 '--accent'）

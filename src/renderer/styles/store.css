@@ -249,7 +249,7 @@
 .digest-modal #digest-regen {
   appearance: none; border: 1px solid var(--separator); background: var(--row-hover);
   color: var(--text-secondary); border-radius: 7px; padding: 4px 12px;
-  font-size: var(--fs-lg); cursor: pointer; transition: background .12s ease, color .12s ease;
+  font-size: var(--fs-lg); cursor: pointer; transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out); /* U20 审查 P3：时长/缓动字面量归档 */
 }
 .digest-modal #digest-regen:hover { background: var(--row-selected); color: var(--text-primary); }
 .digest-meta {
