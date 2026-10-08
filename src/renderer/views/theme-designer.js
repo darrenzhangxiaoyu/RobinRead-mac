@@ -18,6 +18,7 @@ import {
   fullPalette, applyPalette, clearPalette, defaultTokens, switchModeTokens,
   normalizeTokens, applyVariant, persistTokens, clearTokens, hueName,
   hexToOklch, oklchToHex, auditPalette, TRADITIONAL_COLORS, TRADITIONAL_THEMES,
+  SEASON_PACKS,
   tokensFromTraditionalColor, pushRecent, recentThemes,
 } from './theme-engine.js';
 
@@ -264,12 +265,12 @@ function proposalCard(proposal, mode, active, onApply) {
   card.appendChild(miniPreview(palette, { compact: true }));
   const name = document.createElement('div');
   name.className = 'td-card-name';
-  name.textContent = proposal.name;
+  name.textContent = t(proposal.name);
   card.appendChild(name);
   const meta = document.createElement('div');
   meta.className = 'td-card-meta';
   meta.textContent = proposal.note
-    ? proposal.note
+    ? t(proposal.note)
     : `${Math.round(proposal.th)}° · ${harmonyLabel(proposal.harmony)}${active ? ` · ${t('已应用')}` : ''}`;
   card.appendChild(meta);
   card.addEventListener('click', () => onApply(proposal));
@@ -338,6 +339,34 @@ export class ThemeProposer {
     actions.append(modeBtn, moreBtn, resetBtn);
     head.appendChild(actions);
     body.appendChild(head);
+
+    // 季节套包（U7）：春夏秋冬四组成套色板，季节分区头 + 一键应用（走既有 onApply → applyPalette 通路）
+    const seasonHead = document.createElement('div');
+    seasonHead.className = 'td-season-head';
+    const seasonTitle = document.createElement('span');
+    seasonTitle.className = 'td-season-title';
+    seasonTitle.textContent = t('季节套包 · 一键成套');
+    seasonHead.appendChild(seasonTitle);
+    for (const pack of SEASON_PACKS) {
+      const tag = document.createElement('span');
+      tag.className = 'td-season-tag';
+      tag.dataset.season = pack.season;
+      tag.style.background = pack.colorHex;
+      tag.textContent = pack.label;
+      tag.title = `${t(pack.name)} · ${t(pack.note)}`;
+      seasonHead.appendChild(tag);
+    }
+    body.appendChild(seasonHead);
+    const seasonGrid = document.createElement('div');
+    seasonGrid.className = 'td-grid td-season-grid';
+    for (const pack of SEASON_PACKS) {
+      seasonGrid.appendChild(proposalCard(pack, this.mode, this.appliedKey === pack.key, (p) => {
+        this.appliedKey = p.key;
+        this.handlers.onApply({ ...p.tokens, mode: this.mode }, p.name);
+        this.render(container);
+      }));
+    }
+    body.appendChild(seasonGrid);
 
     // 传统色精选
     body.appendChild(sectionLabel(t('中国传统色 · 精选')));

@@ -10,6 +10,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { emptyArtSVG } from './empty-art.js';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -127,7 +128,8 @@ export class TopicView {
 
     if (!topics.length) {
       const empty = el('div', 'nj-topic-empty');
-      empty.innerHTML = `<div class="glyph">${icon('search')}</div><h3></h3><p></p>`;
+      const topicArt = emptyArtSVG('search'); // U11 插画空态
+      empty.innerHTML = `${topicArt ? `<div class="empty-art">${topicArt}</div>` : `<div class="glyph">${icon('search')}</div>`}<h3></h3><p></p>`;
       empty.querySelector('h3').textContent = t('还没有盯梢的话题');
       empty.querySelector('p').textContent = t('从文章右键「盯梢这类内容」，或点右上角新建。');
       this.bodyEl.appendChild(empty);
@@ -373,7 +375,8 @@ export class TopicView {
 
     if (!hits.length) {
       const empty = el('div', 'nj-topic-empty');
-      empty.innerHTML = `<div class="glyph">${icon('search')}</div><h3></h3><p></p>`;
+      const hitArt = emptyArtSVG('search'); // U11 插画空态
+      empty.innerHTML = `${hitArt ? `<div class="empty-art">${hitArt}</div>` : `<div class="glyph">${icon('search')}</div>`}<h3></h3><p></p>`;
       empty.querySelector('h3').textContent = t('还没有命中');
       empty.querySelector('p').textContent = t('点「立即聚合」马上收集一次，之后会随刷新自动更新。');
       this.streamEl.appendChild(empty);

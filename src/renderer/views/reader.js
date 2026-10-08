@@ -35,7 +35,7 @@ const TTS_RATE_KEY = 'robinread.tts.rate';
 const TTS_VOICE_KEY = 'robinread.tts.voice';
 
 /** 内联 SVG（不依赖 icons.js，喇叭/播放/暂停/停止）。 */
-const TTS_SPEAKER_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 6.1v3.8h2.5L8.2 13V3L4.7 6.1H2.2z"/><path d="M10.6 5.4a3.7 3.7 0 0 1 0 5.2M12.6 3.6a6.3 6.3 0 0 1 0 8.8"/></svg>';
+const TTS_SPEAKER_SVG = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 6.1v3.8h2.5L8.2 13V3L4.7 6.1H2.2z"/><path d="M10.6 5.4a3.7 3.7 0 0 1 0 5.2M12.6 3.6a6.3 6.3 0 0 1 0 8.8"/></svg>';
 const TTS_PLAY_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M5 3.2v9.6l7.6-4.8z"/></svg>';
 const TTS_PAUSE_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M4.6 3h2.3v10H4.6zM9.1 3h2.3v10H9.1z"/></svg>';
 const TTS_STOP_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="3.8" y="3.8" width="8.4" height="8.4" rx="1.2"/></svg>';

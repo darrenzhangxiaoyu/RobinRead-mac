@@ -39,6 +39,7 @@ import { FocusSessionPanel } from './views/focus-session.js';
 import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 import { syncPaletteCommand } from './views/sync-command.js';
+import { Toast } from './views/toast.js';
 
 let customThemeTokens = null; // null = 使用内置纸感默认
 const state = {
@@ -62,7 +63,6 @@ const state = {
 
 const views = {};
 let navConfirmation = null;     // { key, entryID, expiresAt, timer }
-let toastTimer = null;
 // F10 智能精选：开启态 + 请求序号（快速切换时过期返回丢弃）
 const picksState = { on: false, seq: 0 };
 // P1-8：列表请求序号——reloadList 与 onStateChanged 全量重拉并发竞争时，
@@ -800,8 +800,14 @@ async function reloadSidebar() {
   views.sidebar.render(state.sidebar, state.snapshot?.sidebarCounts, state.scope);
 }
 
+let lastListScopeKey = ''; // U11 骨架屏：视野切换在途时给列表占位（同视野静默刷新不打扰）
 async function reloadList({ resetScroll = false } = {}) {
   const seq = ++listReqSeq; // P1-8：登记本次请求序号，过期返回直接丢弃
+  const scopeKey = JSON.stringify(state.scope || {});
+  if (scopeKey !== lastListScopeKey) {
+    lastListScopeKey = scopeKey;
+    views.list.showSkeleton(); // 数据落地后由 render() 整体覆盖
+  }
   const result = await window.robin.getList(state.scope, { limit: 100, retainingIDs: [...state.retainedIDs], sort: currentListSort() });
   if (!result.ok) return;
   if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次结果过期
@@ -918,6 +924,7 @@ async function runSearch(query) {
   views.list.setSearchMode(true);
   views.list.setDigestVisible(false);
   views.list.setPicksVisible(false); // F10：搜索态收起精选入口（清空搜索后经 reloadList 恢复）
+  views.list.showSkeleton(); // U11：全文检索在途占位
   // 优先全文搜索（含正文），空结果回退到标题/摘要搜索
   let items = await window.robin.fullTextSearch(query);
   if (!items || !items.length) {
@@ -1543,39 +1550,15 @@ function cancelNavConfirmation(dismissToastAlso) {
   if (dismissToastAlso) dismissToast();
 }
 
-// MARK: - Toast（底部胶囊）
+// MARK: - Toast（U13 自绘栈；旧 showToast 签名委托 toast.js，全部既有调用点零改动）
 
 /** showToast(message, duration?, action?) — action: { label, onClick }（收藏后「查看收藏」直达）。 */
 function showToast(message, duration = 1800, action = null) {
-  dismissToast();
-  const toast = document.createElement('div');
-  toast.className = 'toast-capsule';
-  toast.id = 'toast-capsule';
-  toast.innerHTML = `<span class="check">${icon('checkCircle')}</span><span class="toast-msg"></span>`;
-  toast.querySelector('.toast-msg').textContent = message;
-  if (action?.label) {
-    const btn = document.createElement('button');
-    btn.className = 'toast-action';
-    btn.textContent = action.label;
-    btn.addEventListener('click', () => {
-      dismissToast();
-      action.onClick?.();
-    });
-    toast.appendChild(btn);
-    duration = Math.max(duration, 4200); // 带动作的提示留足点击时间
-  }
-  document.body.appendChild(toast);
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => dismissToast(), duration);
+  return Toast.show(message, { duration, action }); // 带动作的提示在 toast.js 内保底 ≥4.2s
 }
 
 function dismissToast() {
-  const toast = document.getElementById('toast-capsule');
-  if (toast) {
-    toast.classList.add('leaving');
-    setTimeout(() => toast.remove(), 260);
-  }
-  clearTimeout(toastTimer);
+  Toast.dismissTop();
 }
 
 // MARK: - 栏焦点
@@ -2521,6 +2504,19 @@ function bindEvents() {
   }, true);
 
   window.addEventListener('resize', debounce(syncToolbarZones, 200));
+
+  // U10-②：resize 期间给 body 挂 .nj-resizing（CSS 侧 transition:none !important），
+  // 消除拖拽缩放时列表/阅读器过渡抖动；复用既有 debounce 通道，停止缩放 200ms 后摘除。
+  let resizeSettleTimer = null;
+  window.addEventListener('resize', () => {
+    document.body.classList.add('nj-resizing');
+    clearTimeout(resizeSettleTimer);
+    resizeSettleTimer = setTimeout(() => document.body.classList.remove('nj-resizing'), 200);
+  });
+
+  // U10-①：标题栏双击最大化提示（拖拽区悬停态在 CSS：#main-toolbar:hover::after 发丝线）
+  const mainToolbar = document.getElementById('main-toolbar');
+  if (mainToolbar) mainToolbar.title = t('双击标题栏空白处可最大化或还原窗口');
 
   // 主题事件（设置页提案 / 设计器）
   window.addEventListener('robinread:theme-applied', (event) => {

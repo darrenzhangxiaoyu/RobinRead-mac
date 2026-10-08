@@ -10,6 +10,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { emptyArtSVG } from './empty-art.js';
 
 export class SidebarView {
   constructor(scrollEl, footerEl, handlers) {
@@ -372,7 +373,11 @@ export class SidebarView {
   emptyState(title, message, glyph, actionLabel, onAction) {
     const el = document.createElement('div');
     el.className = 'list-empty';
-    el.innerHTML = `<div class="glyph">${icon(glyph)}</div><h3></h3><p></p>`;
+    // U11 插画空态：命中线稿库时以插画替代单图标，未命中回退既有 .glyph 图标
+    const art = emptyArtSVG(glyph);
+    el.innerHTML = art
+      ? `<div class="empty-art">${art}</div><h3></h3><p></p>`
+      : `<div class="glyph">${icon(glyph)}</div><h3></h3><p></p>`;
     el.querySelector('h3').textContent = title;
     el.querySelector('p').textContent = message;
     if (actionLabel) {

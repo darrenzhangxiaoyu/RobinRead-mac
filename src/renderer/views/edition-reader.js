@@ -24,6 +24,7 @@ import { t } from '../i18n.js';
 import { icon } from '../icons.js';
 import { PAGE_TURN_SOUND_SRC } from '../data/page-turn-sound.js';
 import { PAPERS, paperPref, setPaperPref, paperLabel } from './paper-pref.js';
+import { editionCoverArt } from './edition-cover-art.js';
 
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -1692,10 +1693,29 @@ export class EditionReader {
     const lead = leadEntry ? leadEntry.image : '';
     const volMatch = /(\d+)/.exec(this._coverVol() || '');
     const volNum = volMatch ? volMatch[1] : '';
+    // U15 每日版画：日期（本期最新文章日）+ 当前主题色令牌 → 确定性 SVG 纹样；
+    // 色板取封面纸系令牌（--erp-paper/--erp-ink），accent 取全局主题（自定义主题/季节包自动跟随）。
+    let artAccent = '';
+    let artPaper = '';
+    let artInk = '';
+    try {
+      const csCover = getComputedStyle(this.overlay);
+      artAccent = (csCover.getPropertyValue('--accent') || '').trim();
+      artPaper = (csCover.getPropertyValue('--erp-paper') || '').trim();
+      artInk = (csCover.getPropertyValue('--erp-ink') || '').trim();
+    } catch (_) { /* 非渲染环境（探针源码层）：留空走生成器内回退色 */ }
+    const newestTs = this.items.reduce((acc, it) => ((it.date || 0) > (acc || 0) ? it.date : acc), 0);
+    const newestDate = newestTs ? new Date(newestTs * 1000) : new Date();
+    const artSVG = editionCoverArt({
+      year: newestDate.getFullYear(), month: newestDate.getMonth() + 1, day: newestDate.getDate(),
+      accent: artAccent || '#617357', paper: artPaper || '#f6f2e7', ink: artInk || '#2b2721',
+      issueText: this._coverVol() || '',
+    });
     cover.querySelector('.er-cover-front').innerHTML = `
       <div class="er-face-shade"></div>
       <div class="er-cover-face">
         <div class="er-stack s3"></div><div class="er-stack s2"></div><div class="er-stack s1"></div>
+        <div class="er-cover-art" aria-hidden="true">${artSVG}</div>
         <div class="er-brand">知更</div>
         <div class="er-cover-title">${escapeHTML(this.title)}</div>
         <div class="er-rule"></div>

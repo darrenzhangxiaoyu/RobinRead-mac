@@ -70,6 +70,19 @@
   --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.15);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  /* ── U6 表面三档（卡片/弹层/模态）──
+     浅色=现状等值别名（--surface-1 即摘要卡原公式、2=chrome、3=page，零回归）；
+     暗色=由既有纸面令牌 color-mix 派生的三档浮起（见 body.dark），层与层可辨。 */
+  --surface-1: color-mix(in srgb, var(--page-background) 97%, #fffaf0); /* 卡片（摘要卡等浮起卡面） */
+  --surface-2: var(--chrome-background);                                /* 弹层（右键菜单/toast） */
+  --surface-3: var(--page-background);                                  /* 模态（modal/命令面板） */
+  /* ── U8 图标尺寸阶梯（14 紧凑按钮 / 16 导航·命令行 / 18 菜单强调）── */
+  --icon-sm: 14px;
+  --icon-md: 16px;
+  --icon-lg: 18px;
+  /* ── U12 微交互体感标尺（按压/抬升统一量纲；新时长沿用 U2 四档）── */
+  --press-scale: 0.96;  /* 按压反馈缩放（active 下沉） */
+  --lift-y: -2px;       /* 卡片悬停抬升位移 */
 }
 
 body.dark {
@@ -83,12 +96,25 @@ body.dark {
   --note-border: rgba(122, 138, 107, 0.42);
   --text-primary: rgba(238, 234, 224, 0.92);
   --text-secondary: rgba(238, 234, 224, 0.56);
-  --text-tertiary: rgba(238, 234, 224, 0.42); /* R9: 3.58:1, decorative only */
+  --text-tertiary: rgba(238, 234, 224, 0.42); /* R9: 3.58:1, decorative only；U6 走查：在最亮 surface-3 上 3.4:1，装饰档维持 */
   --separator: rgba(238, 234, 224, 0.10);
   --row-hover: rgba(238, 234, 224, 0.05);
   --row-selected: rgba(151, 178, 134, 0.14);
   --kb-hl-yellow: #c9a23d;      /* 暗态提亮一档，保持与暗纸面的可辨度 */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.25);
+  /* ── U6-①：暗色表面三档分层（elevation）──
+     自既有纸面令牌 color-mix 派生（note-background 为最亮暗纸面）：page(0%) → 卡片 45% → 弹层 65% → 模态 85%。
+     全部不透明（弹层/模态叠在暗背景上不透底）；卡片档 45% 为审查 P3 收口——30% 时与 page 仅差约 4 个
+     RGB 阶，浮起感不可辨（历史硬编码卡面高出约 20 阶），45% 恢复可辨层次。 */
+  --surface-1: color-mix(in srgb, var(--note-background) 45%, var(--page-background));
+  --surface-2: color-mix(in srgb, var(--note-background) 65%, var(--page-background));
+  --surface-3: color-mix(in srgb, var(--note-background) 85%, var(--page-background));
+  /* ── U6-②：暗色阴影加深档 ──
+     墨色从暖褐（rgba(41,38,32) 系）换为纯黑（更重黑），不透明度较亮色档收敛——
+     暗面上阴影靠「更深」而非「更浓」成型，避免脏灰晕。 */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.30);
+  --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.52);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -151,6 +177,9 @@ body.dark .robin-surface::before {
   position: absolute; left: 0; right: 0; bottom: 0;
   height: 1px; background: transparent; pointer-events: none;
 }
+/* U10-①：标题栏拖拽区悬停态——底部发丝线微显，暗示「这是可拖拽的标题栏」；
+   交互元素区（按钮/胶囊/窗口控制）不感知（::after 为纯装饰，pointer-events: none）。 */
+#main-toolbar:hover::after { background: var(--separator); opacity: 0.55; }
 
 .tb-zone { display: flex; align-items: center; gap: 6px; height: 100%; position: relative; flex: 0 0 auto; }
 .tb-zone-sidebar {
@@ -249,6 +278,25 @@ body.sidebar-collapsed .tb-zone-list { width: var(--list-width, 340px); }
 }
 .btn { position: relative; }
 @keyframes rotate { to { transform: rotate(360deg); } }
+
+/* ── U8 图标系统微调 ─────────────────────────────────────────────
+   ① stroke-width 统一 1.75 在 icons.js 源头完成（窗口控制 10×10 字形按 1.75×10/16≈1.1 等比）。
+   ② 基线对齐：图标不参与压缩、外边距归零；行内语境以 vertical-align 下沉 0.14em（≈光学居中于 x-height）。
+   ③ 尺寸阶梯归簇：14（紧凑按钮/胶囊）· 16（导航/命令行）· 18（菜单强调），由 --icon-sm/md/lg 承载。 */
+.btn > svg, .cap-btn > svg, .btn-text.icon-label > svg {
+  flex: none; margin: 0;
+  width: var(--icon-sm); height: var(--icon-sm);
+  vertical-align: -0.14em;
+}
+.context-menu-item > svg {
+  flex: none; margin: 0;
+  width: var(--icon-lg); height: var(--icon-lg);
+  vertical-align: -0.14em;
+}
+.nav-icon svg, .cmd-item .cmd-icon svg {
+  width: var(--icon-md); height: var(--icon-md);
+  vertical-align: -0.14em;
+}
 
 /* 阅读工具胶囊（ReaderCapsuleToolbar 1:1） */
 .reader-capsule {
@@ -907,7 +955,7 @@ body.rp-focus .reader-article .robin-summary-card { opacity: 0.55; transition: o
   width: min(560px, 90vw);
   max-height: 62vh;
   display: flex; flex-direction: column;
-  background: var(--page-background);
+  background: var(--surface-3); /* U6：命令面板为全屏级弹层，取表面第三档 */
   border: 1px solid var(--note-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
@@ -930,8 +978,8 @@ body.rp-focus .reader-article .robin-summary-card { opacity: 0.55; transition: o
 }
 .cmd-item.active { background: var(--row-selected); }
 .cmd-item .cmd-icon { color: var(--text-secondary); display: inline-flex; flex-shrink: 0; }
-/* 图标网格统一（R24 验收）：newspaper 等大尺寸图标（封面回退用 34px）钳到命令行 15px 线框 */
-.cmd-item .cmd-icon svg { width: 15px; height: 15px; }
+/* 图标尺寸由 U8 阶梯归簇管辖（--icon-md 16px）；原 R24 15px 钳制声明已并入阶梯
+   （审查 P2 收口：同优先级后置 15px 曾压制阶梯，newspaper 类大图标仍被钳住）。 */
 .cmd-item .cmd-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95em; }
 .cmd-item .cmd-hint { font-size: 0.75em; color: var(--text-secondary); flex-shrink: 0; }
 .cmd-empty { padding: 22px; text-align: center; color: var(--text-secondary); font-size: 0.9em; }
@@ -1003,7 +1051,7 @@ body.rp-focus .reader-article .robin-summary-card { opacity: 0.55; transition: o
   transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
   user-select: none;
 }
-body.dark .robin-summary-card { background: color-mix(in srgb, #302d28 97%, transparent); }
+body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色卡片面归入表面第一档（替换历史硬编码暗色卡面字面量） */
 .robin-summary-card:hover { border-color: var(--accent); }
 .robin-summary-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .robin-summary-header-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
@@ -1647,27 +1695,54 @@ body.dark .robin-summary-card { background: color-mix(in srgb, #302d28 97%, tran
 .floating-scrollbar .thumb.dragging { opacity: 0.36; }
 
 /* ==========================================================================
-   Toast（底部胶囊提示，对应 toastOverlay）
+   Toast（U13 自绘通知栈，对应 toast.js）
+   底部居中堆叠（上限 4，新条目最靠近底缘）；成功/警告/错误三态；
+   hover 暂停自动消退（toast.js 计时），进度通知为长任务常驻条目。
    ========================================================================== */
 
-.toast-capsule {
+#nj-toast-stack {
   position: fixed;
   left: 50%; bottom: 28px;
   transform: translateX(-50%);
   z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.toast-capsule {
+  position: relative;
+  pointer-events: auto;
   display: flex; align-items: center; gap: 8px;
+  max-width: min(520px, calc(100vw - 64px));
   padding: 10px 16px;
   border-radius: var(--radius-full);
-  background: var(--page-background);
-  border: 1px solid rgba(97, 115, 87, 0.3);
+  background: var(--surface-2); /* U6：toast 属弹层，取表面第二档 */
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   box-shadow: var(--shadow-2);
   font-size: 13px; font-weight: 500;
   animation: toast-in var(--dur-slow) var(--ease-out);
 }
-@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
-/* U2：离场须在 app.js dismissToast 的 260ms 移除预算内完成 → 归 --dur-mid(0.25s)，不随 --dur-slow(0.4s) 放宽 */
-.toast-capsule.leaving { transition: opacity var(--dur-mid) var(--ease-out), transform var(--dur-mid) var(--ease-out); opacity: 0; transform: translate(-50%, 8px); }
-.toast-capsule .check { color: var(--accent); display: inline-flex; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+/* U2：离场须在 toast.js LEAVE_MS(250ms) 移除预算内完成 → 归 --dur-mid(0.25s) */
+.toast-capsule.leaving { transition: opacity var(--dur-mid) var(--ease-out), transform var(--dur-mid) var(--ease-out); opacity: 0; transform: translateY(8px) scale(0.97); }
+.toast-capsule .toast-ic { display: inline-flex; flex: 0 0 auto; }
+.toast-capsule .toast-ic svg { width: 15px; height: 15px; }
+.toast-capsule .toast-msg { overflow: hidden; text-overflow: ellipsis; }
+/* 三态语义色：图标染色 + 警/错左缘色条（全部由主题令牌 color-mix 派生） */
+.toast-capsule.success .toast-ic { color: var(--accent); }
+.toast-capsule.warn { border-left: 3px solid color-mix(in srgb, var(--warm-accent) 82%, var(--text-primary)); }
+.toast-capsule.warn .toast-ic { color: color-mix(in srgb, var(--warm-accent) 82%, var(--text-primary)); }
+.toast-capsule.error { border-left: 3px solid color-mix(in srgb, var(--warm-accent) 62%, var(--text-primary)); }
+.toast-capsule.error .toast-ic { color: color-mix(in srgb, var(--warm-accent) 62%, var(--text-primary)); }
+/* 进度通知：常驻不自动消退；标题 + 右侧小注 + 细进度条 */
+.toast-capsule.progress { border-radius: var(--radius-lg); padding: 10px 14px; min-width: 260px; }
+.toast-capsule .toast-body { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.toast-capsule .toast-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast-capsule .toast-note { font-size: 11px; font-weight: 400; color: var(--text-tertiary); white-space: nowrap; }
+.toast-capsule .toast-bar { height: 3px; border-radius: var(--radius-full); background: var(--row-hover); overflow: hidden; }
+.toast-capsule .toast-bar > i { display: block; height: 100%; width: 0%; border-radius: inherit; background: var(--accent); transition: width var(--dur-mid) var(--ease-out); }
+/* 进度转圈：transform 旋转（合成层动画，reduced-motion 由全局收敛块关闭） */
+.toast-capsule .toast-spin { animation: toast-spin 0.9s linear infinite; transform-origin: 50% 50%; }
+@keyframes toast-spin { to { transform: rotate(360deg); } }
 
 /* ==========================================================================
    模态框（设置 / Sheet）
@@ -1684,7 +1759,7 @@ body.dark .robin-summary-card { background: color-mix(in srgb, #302d28 97%, tran
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 .modal {
-  background: var(--page-background);
+  background: var(--surface-3); /* U6：模态取表面第三档（浅色=page 等值；暗色=最亮浮起面） */
   border: 1px solid var(--note-border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-3);
@@ -1776,7 +1851,7 @@ body.dark .robin-summary-card { background: color-mix(in srgb, #302d28 97%, tran
 
 select.control, input.control {
   border: 1px solid var(--note-border);
-  background: var(--page-background);
+  background: var(--surface-1); /* U6：输入框取表面第一档（浅色≈原公式；暗色=可辨的沉入式井面） */
   color: var(--text-primary);
   border-radius: var(--radius-sm);
   font-family: inherit; font-size: 12.5px;
@@ -1799,7 +1874,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 .btn-text:disabled { opacity: 0.45; pointer-events: none; }
 .btn-text.bordered { background: transparent; }
 .btn-text.icon-label { display: inline-flex; align-items: center; gap: 6px; }
-.btn-text.icon-label svg { width: 13px; height: 13px; }
+/* 图标尺寸归 U8 阶梯（--icon-sm；审查 P2 收口：此处原 13px 后置声明曾同优先级压制阶梯）。 */
 
 /* AI 连接测试状态 */
 .ai-test-wrap { display: flex; align-items: center; gap: 10px; max-width: 320px; }
@@ -1924,7 +1999,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 .context-menu {
   position: fixed; z-index: 1200;
   min-width: 210px;
-  background: var(--chrome-background);
+  background: var(--surface-2); /* U6：弹层取表面第二档（浅色=chrome 等值；暗色=中档浮起面） */
   border: 1px solid var(--note-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
@@ -2132,6 +2207,22 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 .td-chip-accent { border-style: dashed; }
 
 .td-section-label { font-size: 11.5px; font-weight: 700; color: var(--text-tertiary); margin-bottom: 8px; }
+
+/* 季节套包分区头（U7）：标题 + 春夏秋冬四枚季节签，签色取各套包 accent */
+.td-season-head {
+  display: flex; align-items: center; gap: 7px;
+  margin: 2px 0 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--separator);
+}
+.td-season-title { font-size: 11.5px; font-weight: 700; color: var(--text-tertiary); margin-right: 2px; }
+.td-season-tag {
+  width: 20px; height: 20px; border-radius: var(--radius-full);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
 
 /* 提案卡片 */
 .td-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
@@ -4146,6 +4237,22 @@ textarea:focus-visible,
 .reader-scroll::-webkit-scrollbar-thumb, .list-scroll::-webkit-scrollbar-thumb {
   border-radius: 999px; background: var(--note-border); }
 .reader-scroll::-webkit-scrollbar-thumb:hover, .list-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+/* U9-①/②：主题色拇指（审查 P2 收口：撤销 hover 加宽 6→10px——webkit 滚动条占布局空间，
+   进出 hover 区会引发正文重排抖动；改为轨道恒 6px，仅拇指变色分层。 */
+.reader-scroll:hover::-webkit-scrollbar-thumb, .list-scroll:hover::-webkit-scrollbar-thumb {
+  border-radius: 999px; background: color-mix(in srgb, var(--accent) 60%, transparent); }
+.reader-scroll:hover::-webkit-scrollbar-thumb:hover, .list-scroll:hover::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* U9-③：正文 scroll-behavior 恒 auto（滚轮/惯性即时，smooth 全局化会劣化跟手性）。
+   TOC/目录跳转的平滑滚动由 reader.js scrollIntoView({behavior:'smooth'}) 承担（审查 P1 收口：
+   原 CSS 类挂载方案全库无 JS 挂载点属死规则，已删）；reduced-motion 由全局收敛块兜底。 */
+.reader-scroll { scroll-behavior: auto; }
+
+/* U10-②：窗口 resize 期间抑制全部过渡（列宽/阅读器过渡动画在拖拽缩放时表现为抖动）。
+   body.nj-resizing 由 app.js 的 resize 监听挂载，防抖 200ms 后摘除。 */
+body.nj-resizing *, body.nj-resizing *::before, body.nj-resizing *::after {
+  transition: none !important;
+}
 
 /* 全局选区：纸感绿（阅读区原有规则保持兼容） */
 ::selection { background: rgba(116, 137, 100, 0.26); }
@@ -6413,5 +6520,198 @@ body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24
   border-left: 2px solid var(--separator);
   padding-left: var(--space-2);
   margin: var(--space-2) 0;
+}
+
+/* ==========================================================================
+   U11–U15 视觉轮（2026-10 马拉松）
+   动效一律 transform/opacity 合成层属性；prefers-reduced-motion 由上方全局收敛块统一关闭。
+   ========================================================================== */
+
+/* ── U11 ① 插画空态（empty-art.js 内联线稿，与 icons.js 同描边语言）── */
+.empty-art {
+  width: 150px; max-width: 62%;
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+.empty-art .ea-scene { width: 100%; height: auto; display: block; }
+.empty-art .ea-accent { color: var(--accent); }          /* 每幅一枚主题色高亮 */
+.empty-art .ea-eye { fill: currentColor; stroke: none; }
+.list-empty .empty-art, .reader-empty .empty-art, .nj-topic-empty .empty-art {
+  animation: ea-in var(--dur-slow) var(--ease-out) both;
+}
+@keyframes ea-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ── U11 ② 统一骨架屏：列表行占位（阅读器 .nj-sk / AIHOT 骨架同 shimmer 语言）── */
+.nj-skeleton-list { display: flex; flex-direction: column; }
+.nj-sk-row { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; }
+.nj-sk-row + .nj-sk-row { border-top: 1px solid var(--separator); }
+.nj-sk-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: var(--radius-full); margin-top: 6px; background: var(--row-selected); animation: kb-shimmer 1.4s linear infinite; }
+.nj-sk-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 7px; }
+.nj-sk-lines .nj-sk-line { height: 11px; margin-bottom: 0; }
+.w45 { width: 45%; }
+/* AIHOT 骨架并入统一 shimmer 语言（透明度脉冲 → 渐变位移，与阅读器/列表同语言） */
+.aihot-skeleton-rank, .aihot-skeleton-line {
+  background: linear-gradient(100deg, var(--row-selected) 35%, var(--row-hover) 50%, var(--row-selected) 65%);
+  background-size: 220% 100%;
+  animation: kb-shimmer 1.4s linear infinite;
+}
+
+/* ── U11 ③ 进度语言：呼吸点 / 不确定进度条（transform+opacity 合成层动画）── */
+.nj-breath {
+  display: inline-block; width: 6px; height: 6px; border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: nj-breathe 1.2s var(--ease-in-out) infinite;
+}
+@keyframes nj-breathe { 0%, 100% { opacity: 0.25; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1); } }
+.nj-indet {
+  position: relative; height: 3px; border-radius: var(--radius-full);
+  background: var(--row-hover); overflow: hidden;
+}
+.nj-indet > i {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 36%;
+  border-radius: inherit; background: var(--accent);
+  animation: nj-indet-slide 1.3s var(--ease-in-out) infinite;
+}
+@keyframes nj-indet-slide { from { transform: translateX(-110%); } to { transform: translateX(380%); } }
+/* 「加载更多」行：前置呼吸点（纯 CSS ::before，零 JS 定时器） */
+.list-loading-more {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.list-loading-more::before {
+  content: ''; width: 6px; height: 6px; border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: nj-breathe 1.2s var(--ease-in-out) infinite;
+}
+
+/* ── U12 ① 按压反馈：常规按钮/菜单/导航条目统一下沉（--press-scale 量纲）──
+   窗口控制（.wc-btn）不参与：caption 按钮按压已有配色语义，缩放会破坏窗口惯例。
+   filter 在列（.btn-text:hover 的 brightness 过渡由此承接，避免被本规则覆盖回瞬时）。 */
+.btn, .btn-text, .cap-btn, .segmented button, .context-menu-item,
+.modal-nav-item, .footer-nav-btn, .list-empty-refresh {
+  transition-property: background, color, border-color, transform, box-shadow, filter;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+.btn:active:not(:disabled), .btn-text:active:not(:disabled), .cap-btn:active,
+.segmented button:active, .context-menu-item:active, .modal-nav-item:active,
+.list-empty-refresh:active {
+  transform: scale(var(--press-scale));
+}
+/* ② 勾选/开关编舞：旋钮弹簧位移（--ease-spring）+ 激活光环 + 按压捏合 */
+.toggle::after {
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+.toggle:active::after { transform: scale(0.86); }
+.toggle.on:active::after { transform: translateX(16px) scale(0.86); }
+.toggle.on { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent); }
+input[type="checkbox"] {
+  accent-color: var(--accent);
+  transition: transform var(--dur-instant) var(--ease-out);
+}
+input[type="checkbox"]:active { transform: scale(0.9); }
+/* ③ 悬停抬升体系：卡片静置 --shadow-card → hover 抬升 --lift-y + --shadow-1
+   （弹层/模态不参与；滚动区内的设置组只提亮边框不位移，避免滚动抖动） */
+.prov-card, .td-card {
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.prov-card:hover { transform: translateY(var(--lift-y)); box-shadow: var(--shadow-1); }
+.td-card:hover {
+  transform: translateY(var(--lift-y));
+  box-shadow: var(--shadow-1);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--separator));
+}
+.settings-group:hover { border-color: color-mix(in srgb, var(--accent) 26%, var(--separator)); }
+
+/* ── U14 设置中心：全屏化 + 顶部搜索 + 锚点导航 + 分区卡片 ── */
+.modal.settings-modal {
+  width: 100vw; height: 100vh;
+  max-width: none; border: none; border-radius: 0;
+}
+.settings-nav { width: 250px; }
+.settings-search {
+  position: relative;
+  display: flex; align-items: center;
+  margin: 0 4px 12px;
+}
+.settings-search-icon {
+  position: absolute; left: 9px;
+  width: var(--icon-sm); height: var(--icon-sm);
+  color: var(--text-tertiary);
+  display: inline-flex; pointer-events: none;
+}
+.settings-search-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
+.settings-search input {
+  width: 100%; height: 30px;
+  padding: 0 30px;
+  border-radius: var(--radius-md);
+}
+.settings-search-clear {
+  position: absolute; right: 5px;
+  width: 20px; height: 20px;
+  appearance: none; border: none; background: transparent;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-full);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.settings-search-clear svg { width: 10px; height: 10px; }
+.settings-search-clear:hover { color: var(--text-primary); background: var(--row-hover); }
+.settings-nav-list { flex: 1 1 auto; min-height: 0; }
+.modal-nav-item.hidden { display: none; }
+.modal-nav-item .nav-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-hits { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 0 2px 24px; }
+.nav-hit {
+  font-size: 10.5px; line-height: 1.6;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--row-selected);
+  color: var(--text-secondary);
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.settings-nav-empty { padding: 18px 12px; font-size: 12px; color: var(--text-tertiary); text-align: center; }
+/* 分区锚点名片（分区卡片化的头卡） */
+.settings-section-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px; margin-bottom: 18px;
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+.settings-section-ic {
+  width: 34px; height: 34px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.settings-section-ic svg { width: 17px; height: 17px; }
+.settings-section-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.settings-section-copy b { font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
+.settings-section-copy i { font-style: normal; font-size: 11.5px; line-height: 1.5; color: var(--text-tertiary); }
+/* 设置组卡片化：surface-1 卡面；搜索过滤时整组/整行就地隐藏 */
+.settings-group { background: var(--surface-1); }
+.settings-group.sr-hidden, .setting-row.sr-hidden { display: none; }
+
+/* ── U15 期刊封面：每日版画层 + 期号艺术字 ── */
+/* 版画铺在封面纸面上、文字之下（:not(.er-stack) 同特异度规则之后声明，后者胜出） */
+.er-cover-face > .er-cover-art {
+  position: absolute; inset: 4% 7% 4% 9%;
+  z-index: 0; pointer-events: none;
+}
+.er-cover-face > .er-cover-art svg { width: 100%; height: 100%; display: block; opacity: 0.92; }
+/* 期号艺术字：特大衬线数字 + 底部版画压线 + 纸面浮雕（暗色/纸感四态经 --erp-* 令牌自动跟随） */
+.er-cover-volbig { position: relative; padding-bottom: 7px; }
+.er-cover-volbig::after {
+  content: ''; position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  width: 56px; height: 2px;
+  background: color-mix(in srgb, var(--erp-ink) 52%, transparent);
+}
+.er-cover-face .er-cover-volbig .er-vol-num {
+  font-size: clamp(58px, 11vh, 92px);
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--erp-paper) 65%, transparent),
+    0 -1px 0 color-mix(in srgb, var(--erp-ink) 16%, transparent);
 }
 

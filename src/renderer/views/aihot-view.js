@@ -17,6 +17,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { renderMarkdown } from '../markdown.js';
+import { emptyArtSVG } from './empty-art.js';
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -968,6 +969,7 @@ export class AihotView {
   }
 
   _empty(title, desc) {
-    this.contentHost.innerHTML = `<div class="list-empty"><div class="glyph">${icon('spark')}</div><h3>${esc(t(title))}</h3><p>${esc(t(desc))}</p></div>`;
+    const art = emptyArtSVG('spark'); // U11 插画空态
+    this.contentHost.innerHTML = `<div class="list-empty">${art ? `<div class="empty-art">${art}</div>` : `<div class="glyph">${icon('spark')}</div>`}<h3>${esc(t(title))}</h3><p>${esc(t(desc))}</p></div>`;
   }
 }

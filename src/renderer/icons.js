@@ -2,9 +2,12 @@
 /**
  * RobinRead（知更）— SVG 图标集
  * 轻量线条图标集。
+ * U8：全库描边统一——线框图标 stroke-width 一律 1.75（16 单位 viewBox 口径）；
+ * 窗口控制 10×10 像素级字形按同一光学权重等比缩放：1.75 × 10/16 ≈ 1.1。
  */
+const ICON_STROKE = 1.75;
 const i = (body, vb = '0 0 16 16', w = 15, h = 15) =>
-  `<svg viewBox="${vb}" width="${w}" height="${h}" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+  `<svg viewBox="${vb}" width="${w}" height="${h}" fill="none" stroke="currentColor" stroke-width="${ICON_STROKE}" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
 
 export const icons = {
   refresh: i('<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"/><path d="M13.7 1.8v2.7h-2.7"/>'),
@@ -30,13 +33,13 @@ export const icons = {
   pencil: i('<path d="M11.3 2.3l2.4 2.4-8.3 8.3-3.1.7.7-3.1 8.3-8.3z"/>'),
   newspaper: i('<rect x="1.8" y="3" width="9.4" height="10.4" rx="1"/><path d="M11.2 5.6h2.4c.4 0 .6.3.6.6v6.4c0 .6-.5 1-1 1h-2V5.6z"/><path d="M3.8 5.6h4.6M3.8 8h4.6M3.8 10.4h4.6"/>', '0 0 16 16', 34, 34),
   radioDot: i('<path d="M4.2 6.2a4.9 4.9 0 0 1 7.6 0M2.2 3.9a7.7 7.7 0 0 1 11.6 0"/><circle cx="8" cy="11" r="1.4" fill="currentColor" stroke="none"/>', '0 0 16 16', 34, 34),
-  flame: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+  flame: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
   person: i('<circle cx="8" cy="5.4" r="2.6"/><path d="M2.8 13.6c.7-2.5 2.8-3.8 5.2-3.8s4.5 1.3 5.2 3.8"/>'),
   personX: i('<circle cx="7" cy="5.4" r="2.6"/><path d="M1.8 13.6c.7-2.5 2.8-3.8 5.2-3.8"/><path d="M11 9.8l3.6 3.6M14.6 9.8L11 13.4"/>'),
   ai: i('<path d="M8 1.4l1.5 3.1 3.4.5-2.5 2.4.6 3.4L8 9.2l-3 1.6.6-3.4L3.1 5l3.4-.5L8 1.4z"/><path d="M5.6 13.6h4.8"/>'),
-  chevronRight: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
-  chevronLeft: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>`,
-  chevronDown: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
+  chevronRight: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
+  chevronLeft: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>`,
+  chevronDown: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`,
   translate: i('<path d="M2 3.4h6M4.8 2v1.4c0 2.8-1.2 5.3-3 6.9"/><path d="M3 6.6c1.3 2.1 3.2 3.4 5.4 3.9"/><path d="M9 14l2.9-7.6L14.8 14M10 11.4h3.9"/>', '0 0 16 16', 14, 14),
   spark: i('<path d="M8 1.8l1.4 3 3 1.4-3 1.4L8 10.6 6.6 7.6l-3-1.4 3-1.4L8 1.8z"/><path d="M12.2 10.2l.7 1.4 1.4.7-1.4.7-.7 1.4-.7-1.4-1.4-.7 1.4-.7.7-1.4z"/>', '0 0 16 16', 14, 14),
   question: i('<circle cx="8" cy="8" r="6.3"/><path d="M6.2 6.2c.2-.9 1-1.5 1.8-1.5 1 0 1.8.8 1.8 1.8 0 1.2-1.8 1.5-1.8 2.7"/><circle cx="8" cy="11" r="0.7" fill="currentColor" stroke="none"/>'),
@@ -45,7 +48,7 @@ export const icons = {
   checkCircle: i('<circle cx="8" cy="8" r="6.4"/><path d="M5.2 8.2l1.9 1.9 3.7-4"/>'),
   expand: i('<path d="M9.4 2.2h4.4v4.4M6.6 13.8H2.2V9.4M13.8 2.2L9 7M2.2 13.8L7 9"/>', '0 0 16 16', 13, 13),
   collapse: i('<path d="M13.8 6.6H9.4V2.2M2.2 9.4h4.4v4.4M9.4 6.6l4.4-4.4M6.6 9.4l-4.4 4.4"/>', '0 0 16 16', 13, 13),
-  keyboard: i('<rect x="1.4" y="4" width="13.2" height="8.4" rx="1.4"/><path d="M4 6.6h.01M6.4 6.6h.01M8.8 6.6h.01M11.2 6.6h.01M4 9.4h.01M6.4 9.4h.01M8.8 9.4h.01M11.2 9.4h.01M5 11h6" stroke-width="1.4"/>'),
+  keyboard: i('<rect x="1.4" y="4" width="13.2" height="8.4" rx="1.4"/><path d="M4 6.6h.01M6.4 6.6h.01M8.8 6.6h.01M11.2 6.6h.01M4 9.4h.01M6.4 9.4h.01M8.8 9.4h.01M11.2 9.4h.01M5 11h6" stroke-width="1.75"/>'),
   cloud: i('<path d="M4.6 12.6h7a2.8 2.8 0 0 0 .5-5.6 4.2 4.2 0 0 0-8.1-.9 2.9 2.9 0 0 0 .6 6.5z"/>'),
   globe: i('<circle cx="8" cy="8" r="6.3"/><path d="M1.7 8h12.6M8 1.7c-2.2 2.2-3.2 4-3.2 6.3s1 4.1 3.2 6.3c2.2-2.2 3.2-4 3.2-6.3S10.2 3.9 8 1.7z"/>'),
   appearance: i('<path d="M8 1.8a6.2 6.2 0 1 0 0 12.4V1.8z" fill="currentColor" stroke="none" opacity="0.85"/><path d="M8 1.8a6.2 6.2 0 1 0 0 12.4V1.8z"/><circle cx="8" cy="8" r="6.2"/>'),
@@ -53,7 +56,7 @@ export const icons = {
   heart: i('<path d="M8 13.4C4.6 11 2 8.8 2 6.1 2 4.4 3.3 3 5 3c1.2 0 2.3.7 3 1.7C8.7 3.7 9.8 3 11 3c1.7 0 3 1.4 3 3.1 0 2.7-2.6 4.9-6 7.3z"/>'),
   bubble: i('<path d="M2.4 4c0-.9.7-1.6 1.6-1.6h8c.9 0 1.6.7 1.6 1.6v5.4c0 .9-.7 1.6-1.6 1.6H5.6L3 13.6V4z"/><path d="M5 6.4h6M5 8.6h4"/>'),
   eye: i('<path d="M1.6 8s2.2-4 6.4-4 6.4 4 6.4 4-2.2 4-6.4 4S1.6 8 1.6 8z"/><circle cx="8" cy="8" r="1.9"/>'),
-  server: i('<rect x="1.8" y="2.4" width="12.4" height="4.6" rx="1.2"/><rect x="1.8" y="9" width="12.4" height="4.6" rx="1.2"/><path d="M4.2 4.7h.01M4.2 11.3h.01" stroke-width="2"/>'),
+  server: i('<rect x="1.8" y="2.4" width="12.4" height="4.6" rx="1.2"/><rect x="1.8" y="9" width="12.4" height="4.6" rx="1.2"/><path d="M4.2 4.7h.01M4.2 11.3h.01" stroke-width="1.75"/>'),
   macDevices: i('<rect x="1.4" y="2.6" width="9" height="6.4" rx="1.2"/><path d="M3.6 10.6h4.6"/><rect x="10" y="5" width="4.6" height="8.4" rx="1.2"/>'),
   info: i('<circle cx="8" cy="8" r="6.3"/><path d="M8 7.2v4"/><circle cx="8" cy="5" r="0.65" fill="currentColor" stroke="none"/>'),
   wand: i('<path d="M10.6 2l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8L8 4.6l1.8-.8L10.6 2z"/><path d="M2 14l7.4-7.4"/><path d="M13 9.6l.5 1.1 1.1.5-1.1.5-.5 1.1-.5-1.1-1.1-.5 1.1-.5.5-1.1z"/>'),
@@ -62,16 +65,16 @@ export const icons = {
   docText: i('<path d="M3.4 1.9h5.9l3.1 3.1v9.1c0 .6-.4 1-1 1H3.4c-.6 0-1-.4-1-1V2.9c0-.6.4-1 1-1z"/><path d="M9.2 1.9v3.1h3.1"/><path d="M4.7 7.5h6M4.7 9.7h6M4.7 11.9h4"/>'),
   textSmaller: i('<path d="M2.4 5.5h5M4.4 3v5" /><path d="M9 11h4.6"/>'),
   textLarger: i('<path d="M2.4 5.5h5M4.9 3v5"/><path d="M8.6 11h5M11.1 8.5v5"/>'),
-  chevronMenuRight: `<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.8L7.2 6 3 10.2"/></svg>`,
-  winMinimize: `<svg viewBox="0 0 10 10" width="10" height="10" stroke="currentColor" stroke-width="1"><line x1="0.5" y1="5" x2="9.5" y2="5"/></svg>`,
-  winMaximize: `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg>`,
-  winRestore: `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="2.5" width="7" height="7"/><polyline points="2.5,2.5 2.5,0.5 9.5,0.5 9.5,7.5 7.5,7.5"/></svg>`,
+  chevronMenuRight: `<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.8L7.2 6 3 10.2"/></svg>`,
+  winMinimize: `<svg viewBox="0 0 10 10" width="10" height="10" stroke="currentColor" stroke-width="1.1"><line x1="0.5" y1="5" x2="9.5" y2="5"/></svg>`,
+  winMaximize: `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="0.5" y="0.5" width="9" height="9"/></svg>`,
+  winRestore: `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.1"><rect x="0.5" y="2.5" width="7" height="7"/><polyline points="2.5,2.5 2.5,0.5 9.5,0.5 9.5,7.5 7.5,7.5"/></svg>`,
   lock: i('<rect x="3" y="6.6" width="10" height="7.4" rx="1.4"/><path d="M5.2 6.6V4.8a2.8 2.8 0 0 1 5.6 0v1.8"/>'),
   store: i('<path d="M2.2 6.2h11.6v8c0 .5-.4.9-.9.9H3.1c-.5 0-.9-.4-.9-.9v-8z"/><path d="M2.4 6.2L3.6 2.9h8.8l1.2 3.3"/><path d="M6 9.4h4"/><path d="M5.8 6.2V4.6a2.2 2.2 0 0 1 4.4 0v1.6"/>'),
   search: i('<circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4L14 14"/>'),
   winClose: `<svg viewBox="0 0 10 10" width="10" height="10" stroke="currentColor" stroke-width="1.1"><line x1="0.8" y1="0.8" x2="9.2" y2="9.2"/><line x1="9.2" y1="0.8" x2="0.8" y2="9.2"/></svg>`,
   funnel: i('<path d="M1.8 2.6h12.4L9.6 8v4.4c0 .4-.4.7-.8.5l-2.4-1.2c-.3-.1-.4-.4-.4-.6V8L1.8 2.6z"/>'),
-  chevronUp: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
+  chevronUp: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
   playCircle: i('<circle cx="8" cy="8" r="6.4"/><path d="M6.6 5.6l4 2.4-4 2.4v-4.8z"/>'),
   books: i('<rect x="2" y="2.6" width="3.6" height="10.8" rx="0.8"/><rect x="7" y="2.6" width="3.6" height="10.8" rx="0.8"/><path d="M11.6 3.7l3.2-.9 2 10.5-3.2.9z"/>'),
   // F17 多窗并读：文章弹出到独立窗口

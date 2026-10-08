@@ -38,9 +38,16 @@ app.whenReady().then(async () => {
     });
 
     // 候选 20 篇未读：10 篇命中画像词 + 10 篇噪声
+    // 时间基准取「今日 00:00 起」的绝对锚点，而非相对 now 的小时偏移——
+    // 修正：在 00:00–03:00 本地时段运行时，1–12h 相对钟会把种子推到昨日，today 域变空产生假阴性。
+    const startOfDayTs = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()).getTime() / 1000);
     const candidates = [];
-    for (let i = 1; i <= 10; i++) candidates.push(mk(`量子计算新进展${i}`, 2 + i));
-    for (let i = 1; i <= 10; i++) candidates.push(mk(`美食探店${i}`, 1 + i));
+    for (let i = 1; i <= 10; i++) {
+      candidates.push({ id: `f14-hit-${i}`, title: `量子计算新进展${i}`, url: `https://f14.test/hit/${i}`, publishedAt: startOfDayTs + i * 60, summary: '', contentHTML: null });
+    }
+    for (let i = 1; i <= 10; i++) {
+      candidates.push({ id: `f14-noise-${i}`, title: `美食探店${i}`, url: `https://f14.test/noise/${i}`, publishedAt: startOfDayTs + (10 + i) * 60, summary: '', contentHTML: null });
+    }
 
     // 画像行为：对 10 篇「历史已读」量子计算文章记已读（真实 entryID，FK 才能满足）
     const history = [];

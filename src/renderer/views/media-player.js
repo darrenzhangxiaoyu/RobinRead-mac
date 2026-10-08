@@ -18,12 +18,12 @@ const SAVE_INTERVAL_MS = 5000; // 进度节流（渲染层）
 const SVG = {
   play: '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M5 3.2v9.6l7.6-4.8z"/></svg>',
   pause: '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M4.6 3h2.3v10H4.6zM9.1 3h2.3v10H9.1z"/></svg>',
-  back15: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M3.2 6.4A5.4 5.4 0 1 1 2.6 9.6"/><path d="M2.4 3.4v3h3"/><text x="8" y="11" font-size="6" fill="currentColor" stroke="none" text-anchor="middle" font-family="sans-serif">15</text></svg>',
-  fwd15: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M12.8 6.4a5.4 5.4 0 1 0 .6 3.2"/><path d="M13.6 3.4v3h-3"/><text x="8" y="11" font-size="6" fill="currentColor" stroke="none" text-anchor="middle" font-family="sans-serif">15</text></svg>',
+  back15: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3.2 6.4A5.4 5.4 0 1 1 2.6 9.6"/><path d="M2.4 3.4v3h3"/><text x="8" y="11" font-size="6" fill="currentColor" stroke="none" text-anchor="middle" font-family="sans-serif">15</text></svg>',
+  fwd15: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12.8 6.4a5.4 5.4 0 1 0 .6 3.2"/><path d="M13.6 3.4v3h-3"/><text x="8" y="11" font-size="6" fill="currentColor" stroke="none" text-anchor="middle" font-family="sans-serif">15</text></svg>',
   next: '<svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor"><path d="M3 3.4v9.2l6-4.6z"/><rect x="10.6" y="3.4" width="1.8" height="9.2" rx="0.6"/></svg>',
-  close: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.6 3.6l8.8 8.8M12.4 3.6l-8.8 8.8"/></svg>',
-  queue: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.4 4.4h11.2M2.4 8h11.2M2.4 11.6h6.4"/></svg>',
-  trash: '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.6 4.2h10.8M6.4 4.2V3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v1.2M4 4.2l.5 8.4c0 .7.6 1.3 1.3 1.3h4.4c.7 0 1.3-.6 1.3-1.3l.5-8.4"/></svg>',
+  close: '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M3.6 3.6l8.8 8.8M12.4 3.6l-8.8 8.8"/></svg>',
+  queue: '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M2.4 4.4h11.2M2.4 8h11.2M2.4 11.6h6.4"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M2.6 4.2h10.8M6.4 4.2V3c0-.5.4-.9.9-.9h1.4c.5 0 .9.4.9.9v1.2M4 4.2l.5 8.4c0 .7.6 1.3 1.3 1.3h4.4c.7 0 1.3-.6 1.3-1.3l.5-8.4"/></svg>',
 };
 
 function fmtTime(seconds) {

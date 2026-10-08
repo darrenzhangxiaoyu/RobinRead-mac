@@ -13,8 +13,24 @@ import { icon } from '../icons.js';
 import { EditionReader } from './edition-reader.js';
 import { paperPref, setPaperPref } from './paper-pref.js';
 import { feedIconURL } from './sidebar.js';
+import { emptyArtSVG } from './empty-art.js';
 
 const PAGE_SIZE = 100;
+
+/** U11 骨架屏行：列表数据在途时的统一占位（纯 CSS shimmer，无 JS 定时器）。 */
+function skeletonRow() {
+  const row = document.createElement('div');
+  row.className = 'nj-sk-row';
+  row.setAttribute('aria-hidden', 'true');
+  row.innerHTML = `
+    <span class="nj-sk nj-sk-dot"></span>
+    <span class="nj-sk-lines">
+      <i class="nj-sk nj-sk-line w70"></i>
+      <i class="nj-sk nj-sk-line w100"></i>
+      <i class="nj-sk nj-sk-line w45"></i>
+    </span>`;
+  return row;
+}
 
 /**
  * 全文抓取徽标（F1）：该源启用了全文抓取（开/仅新文章）且此篇尚无正文缓存 →
@@ -205,6 +221,19 @@ export class ListView {
     this.viewBtn.classList.toggle('active', this.viewMode === 'magazine');
   }
 
+  /**
+   * U11 列表骨架屏：视野切换/搜索等数据在途时立即给出占位语言（8 行统一 shimmer），
+   * 随后任何一次 render() 都会整体覆盖（rowsHost.innerHTML=''），无需手动摘除。
+   */
+  showSkeleton() {
+    this.rowsHost.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'nj-skeleton-list';
+    wrap.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < 8; i += 1) wrap.appendChild(skeletonRow());
+    this.rowsHost.appendChild(wrap);
+  }
+
   render(items, scope, selectedID, hasUnread) {
     // F10 精选模式：精选载荷在场且视野适用时，列表整体让位给精选视图
     // （today/unread 之外的视野自动回落普通列表，由 app 层在切视野时收起精选）。
@@ -237,18 +266,23 @@ export class ListView {
       const empty = document.createElement('div');
       empty.className = 'list-empty';
       const hasFeeds = (window.__robinSidebar || []).some((a) => (a.allFeeds?.length || 0) > 0);
+      // U11 插画空态：命中线稿库时以插画替代单图标，未命中回退既有 .glyph 图标
+      const artFor = (glyph) => {
+        const art = emptyArtSVG(glyph);
+        return art ? `<div class="empty-art">${art}</div>` : `<div class="glyph">${icon(glyph)}</div>`;
+      };
       if (scope?.kind === 'starred') {
         // 收藏视图空态：告诉用户「怎么收藏、收藏去哪了」
-        empty.innerHTML = `<div class="glyph">${icon('star')}</div><h3></h3><p></p>`;
+        empty.innerHTML = `${artFor('star')}<h3></h3><p></p>`;
         empty.querySelector('h3').textContent = t('还没有收藏');
         empty.querySelector('p').textContent = t('阅读时按 M 或点工具栏 ☆ 收藏文章，收藏的文章都会保存在这里。');
       } else if (scope?.kind === 'later') {
         // 稍后读视图空态：短期待办队列已清空
-        empty.innerHTML = `<div class="glyph">${icon('clock')}</div><h3></h3><p></p>`;
+        empty.innerHTML = `${artFor('clock')}<h3></h3><p></p>`;
         empty.querySelector('h3').textContent = t('稍后读队列为空');
         empty.querySelector('p').textContent = t('读着累先存起来：右键文章或点阅读器「稍后读」，处理完移出即可。');
       } else {
-        empty.innerHTML = `<div class="glyph">${icon('newspaper')}</div><h3></h3><p></p>`;
+        empty.innerHTML = `${artFor('newspaper')}<h3></h3><p></p>`;
         empty.querySelector('h3').textContent = t('没有文章');
         empty.querySelector('p').textContent = t(hasFeeds ? '切换到其他分类，或等待下一次订阅更新。' : '添加订阅后，这里会显示文章。');
         // R41：有订阅源的空态提供「立即刷新」一键动作，免去去侧栏找刷新
@@ -1175,7 +1209,8 @@ export class ListView {
     if (!data.picks || data.picks.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'list-empty';
-      empty.innerHTML = `<div class="glyph">${icon('wand')}</div><h3></h3><p></p>`;
+      const picksArt = emptyArtSVG('wand');
+      empty.innerHTML = `${picksArt ? `<div class="empty-art">${picksArt}</div>` : `<div class="glyph">${icon('wand')}</div>`}<h3></h3><p></p>`;
       empty.querySelector('h3').textContent = t('暂无可精选的文章');
       empty.querySelector('p').textContent = t('近 3 天没有未读文章，或都已被你排除；刷新订阅后再来看看。');
       this.rowsHost.appendChild(empty);

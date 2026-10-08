@@ -12,6 +12,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { emptyArtSVG } from './empty-art.js';
 
 const PAGE_SIZE = 100;
 
@@ -97,7 +98,8 @@ export class MediaView {
     modal.appendChild(this.moreBtn);
 
     this.emptyEl = el('div', 'list-empty nj-media-empty');
-    this.emptyEl.innerHTML = `<div class="glyph">${icon('playCircle')}</div><h3></h3><p></p>`;
+    const mediaArt = emptyArtSVG('playCircle'); // U11 插画空态
+    this.emptyEl.innerHTML = `${mediaArt ? `<div class="empty-art">${mediaArt}</div>` : `<div class="glyph">${icon('playCircle')}</div>`}<h3></h3><p></p>`;
     this.emptyEl.querySelector('h3').textContent = t('还没有可播放的媒体');
     this.emptyEl.querySelector('p').textContent = t('带音频/视频附件的文章（播客等）会自动出现在这里。');
     this.emptyEl.hidden = true;

@@ -11,6 +11,7 @@ import { promptBox, confirmBox, alertBox } from '../ui-prompt.js';
 import { TYPOGRAPHY_PRESETS } from '../data/typography-presets.js';
 import { syncResultText } from './sync-command.js';
 import { bookMetaLine, showCreateBookDialog } from './bookshelf.js';
+import { Toast } from './toast.js';
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -29,6 +30,63 @@ const SECTIONS = [
   { id: 'feedback', title: '反馈', icon: 'heart' },
   { id: 'about', title: '关于', icon: 'info' },
 ];
+
+// ── U14 设置中心：分区锚点简介 + 搜索索引 ──────────────────────────────
+// 简介一句（新 i18n 键）；搜索索引只收录既有设置项标题键（命中即跳转所在分区，
+// 不改任何设置行为）。索引允许随时扩充，t() 未命中的键原样回显不致错。
+const SECTION_INTRO = {
+  appearance: '主题、字号与阅读排版，纸感由你定义。',
+  general: '备份、托盘与系统行为的总开关。',
+  accounts: '本地账号、会员与 FreshRSS 接入。',
+  mail: '把 newsletter 邮件收进你的订阅流。',
+  ai: '精读、翻译与朗读的模型配置。',
+  knowledge: '高亮、标签与知识库增强。',
+  goals: '每日/每周阅读目标与专注会话。',
+  refresh: '自动刷新节奏与全文抓取。',
+  rules: '按条件自动处理新文章的规则。',
+  language: '界面语言与区域偏好。',
+  sync: 'WebDAV 多设备同步与冲突策略。',
+  obsidian: '把文章与高亮导出成 Obsidian 知识库。',
+  bookshelf: '把文集成书（EPUB）并管理书目。',
+  feedback: '喜欢知更的话，这里可以帮到我们。',
+  about: '版本、更新与开源致谢。',
+};
+
+// 搜索索引：分区 → 代表性设置项标题（全部为既有 i18n 键，只读检索用途）
+const SECTION_SEARCH_INDEX = {
+  appearance: ['外观模式', '主题设计器', '预设字号', '正文字体', '页面宽度', '行距', '段落风格', '文字对齐', '列表密度', '首字下沉', '中文微排版', '自定义样式', '最低信噪分', '标题自动译中文', '版式预设'],
+  general: ['自动备份', '导出备份', '导入备份', '关闭窗口时最小化到托盘', '刷新发现新文章时系统通知', '开机自启'],
+  accounts: ['昵称', 'UID', '会员'],
+  mail: ['邮箱接入'],
+  ai: ['精读人格', '朗读引擎', '神经音色', 'API Key', '翻译目标语言'],
+  knowledge: ['AI 自动标签', '运行状态'],
+  goals: ['每日篇数', '每周篇数'],
+  refresh: ['刷新频率', '打开应用时刷新', '手动刷新'],
+  rules: ['过滤规则'],
+  language: ['界面语言', '语言选择'],
+  sync: ['服务器地址', '用户名', '密码', '测试连接', '自动同步', '立即同步'],
+  obsidian: ['导出目录', '导出文章', '导出高亮与批注', '立即导出', '全量重导'],
+  bookshelf: ['新建文集'],
+  feedback: ['前往官网'],
+  about: ['检查更新'],
+};
+
+/**
+ * U14 设置搜索（纯函数，探针可单测）：返回 [{ id, title, hits: [设置项标题] }]。
+ * 分区标题或任一设置项标题命中即收录；query 为空返回 []（即不过滤）。
+ */
+export function settingsSearch(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+  const out = [];
+  for (const section of SECTIONS) {
+    const title = t(section.title);
+    const items = (SECTION_SEARCH_INDEX[section.id] || []).map((k) => t(k));
+    const hits = items.filter((label) => label.toLowerCase().includes(q));
+    if (title.toLowerCase().includes(q) || hits.length) out.push({ id: section.id, title, hits });
+  }
+  return out;
+}
 
 // 产品官网（关于 / 反馈页入口，主进程更新检查源同源）
 const WEBSITE_URL = 'https://ronbinread-d9gmsqi2vc0a18f04-1401273698.tcloudbaseapp.com/';
@@ -80,18 +138,47 @@ export class SettingsView {
 
   render() {
     if (!this.modal) return;
+    this.modal.classList.add('settings-modal'); // U14：设置全屏化
     this.modal.innerHTML = '';
 
+    // ── 左侧：标题 + 顶部搜索（过滤分区/设置项标题）+ 锚点分区导航 ──
     const sidebar = document.createElement('div');
-    sidebar.className = 'modal-sidebar';
+    sidebar.className = 'modal-sidebar settings-nav';
     sidebar.innerHTML = `<h2>${escapeHTML(t('设置'))}</h2>`;
+
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'settings-search';
+    searchWrap.innerHTML = `<span class="settings-search-icon">${icon('search')}</span><input type="text" spellcheck="false"/><button type="button" class="settings-search-clear" hidden>${icon('close')}</button>`;
+    const searchInput = searchWrap.querySelector('input');
+    const searchClear = searchWrap.querySelector('.settings-search-clear');
+    searchInput.placeholder = t('搜索设置…');
+    searchInput.setAttribute('aria-label', t('搜索设置…'));
+    searchInput.addEventListener('input', () => this._applySearch(searchInput.value));
+    searchClear.addEventListener('click', () => {
+      searchInput.value = '';
+      this._applySearch('');
+      searchInput.focus();
+    });
+    searchInput.addEventListener('keydown', (e) => { // Esc 先清搜索，再按才关设置（覆盖全局 Esc 关窗）
+      if (e.key === 'Escape' && searchInput.value) {
+        e.stopPropagation();
+        searchInput.value = '';
+        this._applySearch('');
+      }
+    });
+    sidebar.appendChild(searchWrap);
+
+    const nav = document.createElement('nav');
+    nav.className = 'settings-nav-list';
+    this.navItems = new Map();
     for (const section of SECTIONS) {
       const item = document.createElement('div');
       item.className = `modal-nav-item ${section.id === this.section ? 'active' : ''}`;
+      item.dataset.section = section.id;
       item.setAttribute('role', 'button');
       item.setAttribute('tabindex', '0'); // R52：设置导航纳入 Tab 序（此前 div 不可达，键盘用户跳不进设置分区）
-      item.innerHTML = `<span class="nav-icon">${icon(section.icon)}</span><span></span>`;
-      item.querySelector('span:last-child').textContent = t(section.title);
+      item.innerHTML = `<span class="nav-icon">${icon(section.icon)}</span><span class="nav-title"></span><div class="nav-hits" hidden></div>`;
+      item.querySelector('.nav-title').textContent = t(section.title);
       item.addEventListener('click', () => {
         this.section = section.id;
         this.render();
@@ -99,10 +186,19 @@ export class SettingsView {
       item.addEventListener('keydown', (e) => { // Enter/空格即选中（role=button 语义）
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.section = section.id; this.render(); }
       });
-      sidebar.appendChild(item);
+      nav.appendChild(item);
+      this.navItems.set(section.id, { item, hitsEl: item.querySelector('.nav-hits') });
     }
+    sidebar.appendChild(nav);
+
+    const navEmpty = document.createElement('div');
+    navEmpty.className = 'settings-nav-empty';
+    navEmpty.hidden = true;
+    sidebar.appendChild(navEmpty);
+    this.navEmpty = navEmpty;
     this.modal.appendChild(sidebar);
 
+    // ── 右侧：分区头 + 内容（既有设置项功能与 IPC 一条不动）──
     const main = document.createElement('div');
     main.className = 'modal-main';
     const header = document.createElement('div');
@@ -120,6 +216,15 @@ export class SettingsView {
     scroll.className = 'modal-scroll';
     main.appendChild(scroll);
     this.modal.appendChild(main);
+
+    // U14 分区卡片化：每分区顶部一块「锚点名片」（图标 + 标题 + 一句简介）
+    const meta = SECTIONS.find((s) => s.id === this.section);
+    const introCard = document.createElement('div');
+    introCard.className = 'settings-section-card';
+    introCard.innerHTML = `<span class="settings-section-ic">${icon(meta.icon)}</span><span class="settings-section-copy"><b></b><i></i></span>`;
+    introCard.querySelector('b').textContent = t(meta.title);
+    introCard.querySelector('i').textContent = t(SECTION_INTRO[this.section] || '');
+    scroll.appendChild(introCard);
 
     const prefs = this.state.snapshot?.preferences || {};
     const llm = this.state.snapshot?.llm || {};
@@ -141,6 +246,66 @@ export class SettingsView {
       case 'about': this._about(scroll); break;
       default: break;
     }
+  }
+
+  /**
+   * U14 搜索应用：导航只留命中分区（含设置项命中子行）；同时把当前分区里
+   * 未命中的设置行就地隐藏（.sr-hidden），清空搜索即全部恢复。
+   */
+  _applySearch(raw) {
+    if (!this.modal) return;
+    const q = String(raw || '').trim().toLowerCase();
+    this.modal.querySelector('.settings-search-clear')?.classList.toggle('on', !!q);
+    const clearBtn = this.modal.querySelector('.settings-search-clear');
+    if (clearBtn) clearBtn.hidden = !q;
+    const hits = settingsSearch(q);
+    const byId = new Map(hits.map((h) => [h.id, h]));
+    for (const [id, nav] of (this.navItems || new Map())) {
+      const { item, hitsEl } = nav;
+      if (!q) {
+        item.classList.remove('hidden');
+        hitsEl.hidden = true;
+        hitsEl.innerHTML = '';
+        continue;
+      }
+      const h = byId.get(id);
+      item.classList.toggle('hidden', !h);
+      hitsEl.hidden = !h || !h.hits.length;
+      hitsEl.innerHTML = '';
+      for (const label of (h?.hits || []).slice(0, 3)) {
+        const chip = document.createElement('span');
+        chip.className = 'nav-hit';
+        chip.textContent = label;
+        hitsEl.appendChild(chip);
+      }
+    }
+    if (this.navEmpty) {
+      this.navEmpty.hidden = !(q && !hits.length);
+      this.navEmpty.textContent = t('无匹配设置');
+    }
+    this._filterRows(q);
+  }
+
+  /** 当前分区设置行过滤（title/desc 命中保留；组内全隐藏则整组隐藏）。 */
+  _filterRows(q) {
+    const scroll = this.modal?.querySelector('.modal-scroll');
+    if (!scroll) return;
+    const rows = scroll.querySelectorAll('.setting-row');
+    const groups = scroll.querySelectorAll('.settings-group');
+    if (!q) {
+      rows.forEach((r) => r.classList.remove('sr-hidden'));
+      groups.forEach((g) => g.classList.remove('sr-hidden'));
+      return;
+    }
+    rows.forEach((r) => {
+      const title = r.querySelector('.title')?.textContent || '';
+      const desc = r.querySelector('.desc')?.textContent || '';
+      r.classList.toggle('sr-hidden', !(`${title} ${desc}`.toLowerCase().includes(q)));
+    });
+    groups.forEach((g) => {
+      const visible = [...g.querySelectorAll('.setting-row')].some((r) => !r.classList.contains('sr-hidden'));
+      g.classList.toggle('sr-hidden', !visible);
+    });
   }
 
   // MARK: 外观
@@ -369,13 +534,18 @@ export class SettingsView {
     cleanupButton.addEventListener('click', async () => {
       cleanupButton.disabled = true;
       cleanupButton.textContent = t('清理中…');
+      const p = Toast.progress(t('正在清理历史文章…'), { note: t('按保留期限淘汰超期已读') });
       try {
         const result = await window.robin.cleanupNow();
         const mb = (result.freedBytes || 0) / (1024 * 1024);
-        cleanupButton.textContent = mb >= 0.1
+        const summary = mb >= 0.1
           ? t(`已清理 ${result.pruned} 篇，释放 ${mb.toFixed(1)} MB`)
           : t(`已清理 ${result.pruned} 篇`);
+        p.set(100, t('写入完成'));
+        p.done(summary);
+        cleanupButton.textContent = summary;
       } catch (_) {
+        p.fail(t('清理失败，请重试'));
         cleanupButton.textContent = t('清理失败，请重试');
       }
       setTimeout(() => { cleanupButton.disabled = false; cleanupButton.textContent = t('立即清理'); }, 4000);
@@ -1850,12 +2020,16 @@ export class SettingsView {
         }
         const go = await confirmBox(t('立即导出？'), { message: previewText(pv.data), okLabel: t('立即导出') });
         if (!go) return;
+        // U13 进度通知：导出为长任务，活跃期呼吸不消退，落定后收口
+        const p = Toast.progress(t('正在导出 Obsidian 库…'), { note: t('增量比对中…') });
         const result = await window.robin.obsidianExport().catch(() => null);
         if (result?.ok) {
-          showToast(exportResultText(result.data));
+          p.set(100, t('写入完成'));
+          p.done(exportResultText(result.data));
           if (result.data?.contentTruncatedCount) await alertBox(t('已按上限截断'), t('部分文件正文超过单文件 1MB 上限，已截断（%lld 个文件）。').replace('%lld', String(result.data.contentTruncatedCount)));
           else if (result.data?.truncated) await alertBox(t('已按上限截断'), t('已达单次 2000 文件上限，更早的文章未包含在本次导出。'));
         } else {
+          p.fail(t('导出失败'));
           await alertBox(t('导出失败'), String(result?.error || ''));
         }
       } catch (err) {
@@ -1878,13 +2052,16 @@ export class SettingsView {
       });
       if (!go) return;
       fullButton.disabled = true;
+      const p = Toast.progress(t('正在全量重导…'), { note: t('忽略增量游标，重写全部文件') });
       try {
         const result = await window.robin.obsidianFullExport().catch(() => null);
         if (result?.ok) {
-          showToast(exportResultText(result.data));
+          p.set(100, t('写入完成'));
+          p.done(exportResultText(result.data));
           if (result.data?.contentTruncatedCount) await alertBox(t('已按上限截断'), t('部分文件正文超过单文件 1MB 上限，已截断（%lld 个文件）。').replace('%lld', String(result.data.contentTruncatedCount)));
           else if (result.data?.truncated) await alertBox(t('已按上限截断'), t('已达单次 2000 文件上限，更早的文章未包含在本次导出。'));
         } else {
+          p.fail(t('导出失败'));
           await alertBox(t('导出失败'), String(result?.error || ''));
         }
       } catch (err) {
@@ -3075,18 +3252,9 @@ function regexProblem(value) {
   return null;
 }
 
-/** 设置弹层内轻量 toast（与 app.js 的 toast-capsule 同款 DOM；补齐本模块 4 处既有调用的未定义引用）。 */
-let ruleToastTimer = null;
+/** 设置弹层内轻量 toast（U13：委托自绘 toast 栈，与 app.js 全局提示同栈同语言）。 */
 function showToast(message, duration = 1800) {
-  document.getElementById('toast-capsule')?.remove();
-  const toast = document.createElement('div');
-  toast.className = 'toast-capsule';
-  toast.id = 'toast-capsule';
-  toast.innerHTML = `<span class="check">${icon('checkCircle')}</span><span class="toast-msg"></span>`;
-  toast.querySelector('.toast-msg').textContent = message;
-  document.body.appendChild(toast);
-  clearTimeout(ruleToastTimer);
-  ruleToastTimer = setTimeout(() => { toast.remove(); }, duration);
+  return Toast.show(message, { duration });
 }
 
 /** F11：Obsidian 导出结果 toast 文案（新增/更新/跳过 + 截断标注）。 */

@@ -6,6 +6,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { promptBox, confirmBox } from '../ui-prompt.js';
+import { emptyArtSVG } from './empty-art.js';
 import { renderMarkdown } from '../markdown.js';
 
 const TABS = [
@@ -554,7 +555,8 @@ export class KnowledgeCenter {
   }
 
   _emptyIn(host, title, desc) {
-    host.innerHTML = `<div class="list-empty"><div class="glyph">${icon('spark')}</div><h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
+    const art = emptyArtSVG('spark'); // U11 插画空态
+    host.innerHTML = `<div class="list-empty">${art ? `<div class="empty-art">${art}</div>` : `<div class="glyph">${icon('spark')}</div>`}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
   }
 
   _renderHighlights(items) {
@@ -2413,7 +2415,8 @@ export class KnowledgeCenter {
   }
 
   _empty(title, desc) {
-    this.contentHost.innerHTML = `<div class="list-empty"><div class="glyph">${icon('spark')}</div><h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
+    const art = emptyArtSVG('spark'); // U11 插画空态
+    this.contentHost.innerHTML = `<div class="list-empty">${art ? `<div class="empty-art">${art}</div>` : `<div class="glyph">${icon('spark')}</div>`}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
   }
 }
 

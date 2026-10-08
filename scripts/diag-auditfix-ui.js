@@ -228,6 +228,7 @@ app.whenReady().then(async () => {
       const refColor = getComputedStyle(ref).color;
       const ratio = te2.contrastRatio(pal['--accent-ink'], pal._meta.accent);
       te2.clearPalette();
+      btn.style.transition = 'none'; /* U12 起 color 参与过渡——同步读会拿到过渡起点，断言终态前先关过渡 */
       const afterClear = getComputedStyle(btn).color;
       btn.remove(); ref.remove();
       const nums = (btnColor.match(/[\\d.]+/g) || []).map(Number);

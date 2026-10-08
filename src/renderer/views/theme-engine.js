@@ -463,6 +463,41 @@ export function tokensFromTraditionalColor(entry, baseTokens) {
   };
 }
 
+// MARK: - 季节套包（U7）
+
+/**
+ * 四季预制色板：accent / 链接色（副色·星标）/ 纸面色相 成套，传统中国色口径。
+ * 春竹青 / 夏黛蓝 / 秋柿橙 / 冬墨灰——一键应用走既有 applyPalette 通路（fullPalette 映射全部变量）。
+ * 形状与 TRADITIONAL_THEMES 条目同构（key/tokens/name/note/colorHex），可复用 proposalCard 渲染。
+ */
+export const SEASON_PACKS = [
+  { key: 'season-spring', season: 'spring', label: '春', name: '春·竹青',
+    note: '竹青染纸，新篁解箨——万物初生的青', accent: '#789262', link: '#4A6C4E', ths: 130 },
+  { key: 'season-summer', season: 'summer', label: '夏', name: '夏·黛蓝',
+    note: '黛蓝入夏，静水深流——浓夏夜空的沉蓝', accent: '#425066', link: '#2E4A6B', ths: 215 },
+  { key: 'season-autumn', season: 'autumn', label: '秋', name: '秋·柿橙',
+    note: '柿橙晒秋，暖纸宜读——霜后柿子的熟橙', accent: '#D2691E', link: '#A3573D', ths: 65 },
+  { key: 'season-winter', season: 'winter', label: '冬', name: '冬·墨灰',
+    note: '墨灰覆雪，素笺淡写——鸦青入墨的静灰', accent: '#424C50', link: '#75878A', ths: 200 },
+].map((entry) => {
+  const a = hexToOklch(entry.accent);
+  const l = hexToOklch(entry.link);
+  return {
+    key: entry.key, season: entry.season, label: entry.label,
+    name: entry.name, note: entry.note,
+    colorHex: entry.accent, linkHex: entry.link,
+    tokens: {
+      ...PAPER_TOKENS,
+      th: Math.round(a.h),                                             /* accent 色相 */
+      c1: Number(clamp(a.c, 0.02, 0.24).toFixed(3)),
+      l1: Number(a.l.toFixed(2)),
+      th2: Math.round(l.h),                                            /* 链接/副色色相 */
+      c2: Number(clamp(l.c, 0.02, 0.26).toFixed(3)),
+      ths: entry.ths,                                                  /* 纸面色相 */
+    },
+  };
+});
+
 // MARK: - 最近应用
 
 const RECENT_KEY = 'robinread.recentThemes';

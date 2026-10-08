@@ -77,6 +77,8 @@ const OFFLINE = [
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },
   { file: 'scripts/diag-u1-u5.js', runner: 'electron', desc: 'U1–U5 视觉轮：阴影/动效令牌归簇+侧栏折叠动画与指示条+行卡抬升与光标左条+阅读排版（离线）' },
+  { file: 'scripts/diag-u6-u10.js', runner: 'electron', desc: 'U6–U10 视觉轮：暗色表面三档与阴影加深档+季节套包+图标描边/阶梯统一+滚动条 hover 加宽与 smooth 限锚点+resize 过渡抑制（离线）' },
+  { file: 'scripts/diag-u11-u15.js', runner: 'electron', desc: 'U11–U15 视觉轮：插画空态与骨架屏/进度语言+按压开关悬停微交互+Toast 栈三态与进度通知+设置全屏化导航搜索+期刊封面确定性版画（离线）' },
   { file: 'scripts/diag-r45-details.js', runner: 'electron', desc: 'R45 细节三连：chips 卫生/清除键 aria/批量条 toolbar（离线）' },
   { file: 'scripts/diag-r39-details.js', runner: 'electron', desc: 'R39 细节三连：时间/来源悬停全量+清除键命中区（离线）' },
   { file: 'scripts/diag-r40-details.js', runner: 'electron', desc: 'R40 细节三连：chips 换行/历史键盘导航/工具条 aria（离线）' },

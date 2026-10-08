@@ -107,6 +107,9 @@
   transition: transform var(--dur-instant) ease, box-shadow var(--dur-instant) ease, border-color var(--dur-instant) ease;
 }
 .fs-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px -14px rgba(0, 0, 0, 0.4); border-color: var(--note-border); }
+/* U12 微交互全家桶：商店卡片抬升归 --lift-y/--shadow-1 令牌；按压统一下沉 */
+.fs-card:hover { transform: translateY(var(--lift-y)); box-shadow: var(--shadow-1); }
+.fs-card:active { transform: scale(var(--press-scale)); }
 .fs-card.top { border-color: var(--note-border); background: linear-gradient(135deg, rgba(97, 115, 87, 0.05), transparent 55%), var(--page-background); }
 
 .fs-card-rank {
@@ -289,7 +292,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
 .wc-bridge-form select,
 .wc-bridge-form input {
   appearance: none; border: 1px solid var(--separator); border-radius: 8px;
-  background: var(--page-background); color: var(--text-primary);
+  background: var(--surface-1); color: var(--text-primary); /* U6：输入框归表面第一档 */
   font-size: 12px; padding: 6px 10px; min-width: 0;
 }
 .wc-bridge-form select { flex: 0 0 auto; cursor: pointer; }
@@ -311,7 +314,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
 .wc-bridge-quick-label { font-size: 11.5px; font-weight: 700; color: var(--accent); }
 .wc-bridge-quick input {
   appearance: none; border: 1px solid var(--separator); border-radius: 8px;
-  background: var(--page-background); color: var(--text-primary);
+  background: var(--surface-1); color: var(--text-primary); /* U6：输入框归表面第一档 */
   font-size: 12px; padding: 6px 10px; flex: 1 1 160px; font-family: Consolas, monospace;
 }
 
@@ -323,7 +326,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
 .wc-search-row { display: flex; }
 .wc-search-input {
   flex: 1; appearance: none; border: 1px solid var(--separator); border-radius: 9px;
-  background: var(--page-background); color: var(--text-primary);
+  background: var(--surface-1); color: var(--text-primary); /* U6：输入框归表面第一档 */
   font-size: 13px; padding: 8px 12px; outline: none;
 }
 .wc-search-input:focus { border-color: var(--accent); }

@@ -83,7 +83,7 @@ export class ContextMenu {
       }
       const row = document.createElement('div');
       row.className = `context-menu-item ${item.destructive ? 'destructive' : ''} ${item.disabled ? 'disabled' : ''}`;
-      row.innerHTML = `${item.icon ? icon(item.icon) : '<span style="width:15px"></span>'}<span class="label"></span>${item.checked ? `<span class="check">✓</span>` : ''}${item.children ? `<span class="check" style="color:var(--text-tertiary)">${icon('chevronMenuRight')}</span>` : ''}`;
+      row.innerHTML = `${item.icon ? icon(item.icon) : '<span style="width:18px;flex:none"></span>'}<span class="label"></span>${item.checked ? `<span class="check">✓</span>` : ''}${item.children ? `<span class="check" style="color:var(--text-tertiary)">${icon('chevronMenuRight')}</span>` : ''}`;
       row.querySelector('.label').textContent = item.label;
 
       if (item.disabled) {
