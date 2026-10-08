@@ -18,6 +18,7 @@ const SECTIONS = [
   { id: 'accounts', title: '账号', icon: 'person' },
   { id: 'mail', title: '邮件订阅', icon: 'envelopeClosed' },
   { id: 'ai', title: 'AI 功能', icon: 'ai' },
+  { id: 'knowledge', title: '知识', icon: 'bookOpen' },
   { id: 'refresh', title: '刷新', icon: 'refresh' },
   { id: 'rules', title: '过滤规则', icon: 'funnel' },
   { id: 'language', title: '语言', icon: 'globe' },
@@ -127,6 +128,7 @@ export class SettingsView {
       case 'accounts': this._accounts(scroll); break;
       case 'mail': this._mail(scroll); break;
       case 'ai': this._ai(scroll, llm); break;
+      case 'knowledge': this._knowledge(scroll); break;
       case 'refresh': this._refresh(scroll, prefs); break;
       case 'rules': this._rules(scroll); break;
       case 'language': this._language(scroll, prefs); break;
@@ -965,6 +967,59 @@ export class SettingsView {
       card.append(head, actions, selfSignedRow, senderHost);
       container.appendChild(card);
     }
+  }
+
+  // MARK: 知识（F15 AI 自动标签）
+
+  async _knowledge(container) {
+    const snap = (await window.robin.tagsAutoSnapshot?.().catch(() => null)) || { enabled: false };
+    const statusEl = staticText('');
+    const statusText = () => {
+      if (!snap.enabled) return t('已关闭');
+      const last = snap.lastRunAt ? timeAgoSecondsAgo(snap.lastRunAt) : t('尚未运行');
+      return tf('每小时自动打标 · 上次运行 %@', last);
+    };
+    container.appendChild(group(
+      t('AI 自动标签'),
+      t('开启后每小时为最近入库、还没有标签的文章调用 AI 打 1-3 个标签（每批最多 20 篇）。新文章同时会继承订阅源的高频标签（不消耗 AI）。AI 与继承标签进入知识中心「标签」复核视图与图谱，不影响已有标签。'),
+      [
+        row(t('AI 自动标签'), t('需要已配置 AI 服务商；未配置时静默跳过，不影响其他功能。'), toggleControl(snap.enabled === true, async (next) => {
+          const fresh = await window.robin.tagsAutoConfig?.({ enabled: next });
+          if (fresh) Object.assign(snap, fresh);
+          statusEl.textContent = statusText();
+        })),
+        row(t('运行状态'), null, (() => {
+          const wrap = document.createElement('div');
+          wrap.className = 'setting-control';
+          wrap.style.flexDirection = 'column';
+          wrap.style.alignItems = 'flex-end';
+          wrap.style.gap = '6px';
+          statusEl.textContent = statusText();
+          const kick = document.createElement('button');
+          kick.className = 'btn-text bordered';
+          kick.textContent = t('立即打标一批');
+          kick.addEventListener('click', async () => {
+            if (kick.disabled) return;
+            kick.disabled = true;
+            kick.textContent = t('打标中…');
+            try {
+              const result = await window.robin.tagsAutoKick?.();
+              if (result && result.skipped) {
+                kick.textContent = { noKey: t('未配置 AI，已跳过'), disabled: t('请先开启开关'), throttled: t('刚运行过，已跳过') }[result.reason] || t('已跳过');
+              } else {
+                kick.textContent = tf('已处理 %lld 篇', (result && result.taggedEntries) || 0);
+                const fresh = await window.robin.tagsAutoSnapshot?.();
+                if (fresh) Object.assign(snap, fresh);
+                statusEl.textContent = statusText();
+              }
+            } catch (_) { kick.textContent = t('打标失败'); }
+            setTimeout(() => { kick.textContent = t('立即打标一批'); kick.disabled = false; }, 2400);
+          });
+          wrap.append(statusEl, kick);
+          return wrap;
+        })()),
+      ],
+    ));
   }
 
   // MARK: AI 功能
@@ -3161,6 +3216,16 @@ function submitBar(modal, cancelLabel, confirmLabel, onSubmit) {
 
 function escapeHTML(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** 秒级时间戳 → 相对时间（F15 知识分区「上次运行」回显）。 */
+function timeAgoSecondsAgo(seconds) {
+  const diff = Math.max(0, Date.now() / 1000 - Number(seconds || 0));
+  const m = Math.floor(diff / 60), h = Math.floor(diff / 3600), d = Math.floor(diff / 86400);
+  if (d > 0) return tf('%lld 天前', d);
+  if (h > 0) return tf('%lld 小时前', h);
+  if (m > 0) return tf('%lld 分钟前', m);
+  return t('刚刚');
 }
 
 function attr(value) {

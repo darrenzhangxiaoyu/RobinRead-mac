@@ -6001,3 +6001,94 @@ body[data-list-density="relaxed"] .entry-row .entry-title { line-height: 1.75; }
 .kb-thread-item-title { font-size: 13px; color: var(--text-primary); line-height: 1.5; }
 .kb-thread-item:hover .kb-thread-item-title { color: var(--accent); }
 .kb-thread-item-meta { font-size: 11.5px; color: var(--text-tertiary); }
+
+/* ═══ F15 标签复核过滤 chips ═══ */
+.kb-tag-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.kb-tag-chip {
+  appearance: none; cursor: pointer; font: inherit; font-size: 12px;
+  color: var(--text-secondary); background: transparent;
+  border: 1px solid color-mix(in oklch, var(--accent) 30%, transparent);
+  padding: 3px var(--space-3); border-radius: var(--radius-full);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.kb-tag-chip:hover { background: color-mix(in oklch, var(--accent) 12%, transparent); }
+.kb-tag-chip:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+.kb-tag-chip.active {
+  background: color-mix(in oklch, var(--accent) 82%, white);
+  color: var(--page-background); border-color: transparent; font-weight: 600;
+}
+
+/* ═══ F16 源体检仪表盘 ═══ */
+.kb-dash-cards { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.kb-dash-card {
+  appearance: none; cursor: pointer; font: inherit; flex: 1 1 120px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: color-mix(in oklch, var(--accent) 7%, transparent);
+  border: 1px solid color-mix(in oklch, var(--accent) 22%, transparent);
+  border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.kb-dash-card:hover { background: color-mix(in oklch, var(--accent) 14%, transparent); }
+.kb-dash-card:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+.kb-dash-card.active { background: color-mix(in oklch, var(--accent) 26%, transparent); border-color: color-mix(in oklch, var(--accent) 45%, transparent); }
+.kb-dash-card-num { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.kb-dash-card-label { font-size: 11.5px; color: var(--text-tertiary); }
+.kb-dash-list { display: flex; flex-direction: column; }
+.kb-dash-row {
+  appearance: none; cursor: pointer; font: inherit; text-align: left;
+  display: flex; align-items: center; gap: var(--space-3); width: 100%;
+  background: transparent; border: none; border-bottom: 1px solid var(--hairline);
+  padding: var(--space-2) var(--space-1); border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.kb-dash-row:hover { background: var(--row-hover); }
+.kb-dash-row:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+.kb-dash-icon { flex: 0 0 auto; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; }
+.kb-dash-icon img { width: 18px; height: 18px; border-radius: var(--radius-xs); }
+.kb-dash-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.kb-dash-title { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-dash-row:hover .kb-dash-title { color: var(--accent); }
+.kb-dash-meta { font-size: 11px; color: var(--text-tertiary); }
+.kb-dash-bars { display: flex; align-items: flex-end; gap: 1px; height: 18px; }
+.kb-dash-bars i {
+  width: 3px; min-height: 2px; border-radius: 1px;
+  background: color-mix(in oklch, var(--accent) 62%, transparent);
+}
+.kb-dash-score-badge {
+  flex: 0 0 auto; min-width: 34px; text-align: center;
+  font-size: 12px; font-weight: 700; padding: 2px var(--space-2);
+  border-radius: var(--radius-full); border: 1px solid transparent;
+}
+.kb-dash-score-badge.good {
+  color: color-mix(in oklch, var(--accent) 78%, black);
+  background: color-mix(in oklch, var(--accent) 26%, transparent);
+  border-color: color-mix(in oklch, var(--accent) 45%, transparent);
+}
+.kb-dash-score-badge.warn {
+  color: color-mix(in oklch, var(--accent) 60%, black);
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  border-color: color-mix(in oklch, var(--accent) 30%, transparent);
+}
+.kb-dash-score-badge.bad {
+  color: color-mix(in oklch, var(--accent) 30%, black);
+  background: color-mix(in oklch, var(--accent) 6%, transparent);
+  border-color: color-mix(in oklch, var(--accent) 16%, transparent);
+}
+body.dark .kb-dash-score-badge.good { color: color-mix(in oklch, var(--accent) 70%, white); }
+body.dark .kb-dash-score-badge.warn { color: color-mix(in oklch, var(--accent) 45%, white); }
+body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24%, white); }
+.kb-dash-metrics { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-4); }
+.kb-dash-metric { display: flex; justify-content: space-between; gap: var(--space-3); font-size: 12.5px; }
+.kb-dash-metric span { color: var(--text-tertiary); }
+.kb-dash-metric b { color: var(--text-primary); font-weight: 600; }
+.kb-dash-trend { display: flex; align-items: flex-end; gap: 2px; height: 40px; margin-bottom: var(--space-4); }
+.kb-dash-trend i {
+  flex: 1 1 0; min-height: 2px; border-radius: 2px 2px 0 0;
+  background: color-mix(in oklch, var(--accent) 62%, transparent);
+}
+.kb-dash-suggestion {
+  font-size: 12.5px; color: var(--text-secondary);
+  border-left: 2px solid color-mix(in oklch, var(--accent) 45%, transparent);
+  padding: 4px var(--space-3); margin-bottom: 6px;
+}
+

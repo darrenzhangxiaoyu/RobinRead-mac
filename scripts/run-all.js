@@ -93,6 +93,8 @@ const OFFLINE = [
   { file: 'scripts/diag-f11-obsidian.js', runner: 'electron', desc: 'F11 Obsidian 导出：pickDirectory对话框mock与内存token授权(未授权拒绝/取消不变/重启实例失效)/文件树Articles+Highlights+_meta游标/文件名sanitize与id8/frontmatter字段与YAML冒号引号转义与tags并集/HTML转MD无残留标签/1MB截断/增量hash命中零写mtime不变/改1条仅重写该文件/用户文件永不删除/全量重导全重写/坏JSON游标容错自愈/3000高亮2000护栏/只导高亮范围开关/设置Obsidian分区渲染与预览统计（离线）' },
   { file: 'scripts/diag-f13-similar.js', runner: 'electron', desc: 'F13 相关文章+线索：similar 相关性/500 篇性能/reader 文末卡片/线索聚类/追踪话题（离线）' },
   { file: 'scripts/diag-f14-sort.js', runner: 'electron', desc: 'F14 智能排序+密度：画像排序/空画像降级/密度三档/四态透传/200ms（离线）' },
+  { file: 'scripts/diag-f15-tags.js', runner: 'electron', desc: 'F15 AI 自动标签：继承打标(v20)/AI 批量打标(mock LLM)/解析失败静默/每小时节流注入时间/复核过滤 chips/图谱含 AI 标签/无 Key 静默/开关持久化+设置知识分区（离线）' },
+  { file: 'scripts/diag-f16-dashboard.js', runner: 'electron', desc: 'F16 源体检仪表盘：指标聚合与健康分(A>B,B红)/总览三计数/缓存 60s 注入时钟/建议文案/详情接口/UI tab 渲染与过滤/203 源 <300ms 无 N+1（离线）' },
   { file: 'scripts/diag-f12-books.js', runner: 'electron', desc: 'F12 文集成书：v19迁移与幂等与老库无损/文集CRUD与右键加入文集菜单/60篇成书EPUB结构(mimetype/nav/3月分章/60篇/源icon封面与纯色回退)/1000篇5卷每卷200确定性/自动成书24h节流与有新文章才成与manual不自动/书架UI列表待取徽标按钮/打开目录showItemInFolder与待取清除/200篇<2s/feed_ids持久化独立连接回读/删除清理自动目录且用户pickSavePath书保留（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },

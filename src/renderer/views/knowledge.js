@@ -63,6 +63,10 @@ export class KnowledgeCenter {
     this._research = { running: false, mode: null, unsubscribe: null, seq: 0 };
     // 全库问答（F9）会话态：当前会话 ID + 流式运行标记 + 订阅退订器
     this._rag = { running: false, mode: null, unsubscribe: null, seq: 0, sessionID: null };
+    // F15 复核过滤：标签云当前来源过滤（只过滤展示，不改数据）
+    this.tagFilter = 'all';
+    // F16 源体检：总览卡点击过滤（null=不过滤）+ 当前展开的源详情
+    this.dashFilter = null;
   }
 
   present(initialTab = null) {
@@ -200,11 +204,12 @@ export class KnowledgeCenter {
       case 'search': this._renderSearch(); break;
       case 'heatmap': this._renderHeatmap(data || {}); break;
       case 'stats': this._renderStats(data || {}); break;
-      case 'tags': this._renderTags(data || []); break;
+      case 'tags': this._renderTags(data || {}); break;
       case 'graph': this._renderGraph(data || {}); break;
       case 'ask': this._renderAsk(data || {}); break;
       case 'research': this._renderResearch(Array.isArray(data) ? data : []); break;
       case 'threads': this._renderThreads(); break;
+      case 'dash': this._renderDash(data || {}); break;
     }
   }
 
@@ -2071,13 +2076,58 @@ export class KnowledgeCenter {
     }, 0);
   }
 
-  _renderTags(tags) {
-    if (!tags.length) { this._empty('还没有标签', 'AI 质量评估会自动生成标签，也可以手动添加。'); return; }
+  _renderTags(data) {
+    // F15：数据面 = { all: 全部标签计数, rows: [{tag,source,count}] }。
+    // 复核过滤 chips（全部/手动/AI/继承）只切换展示口径——数据与既有标签逻辑零改动。
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    const all = Array.isArray(data.all) ? data.all : [];
     const wrap = document.createElement('div');
     const head = document.createElement('div');
     head.className = 'kb-daily-head';
     head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('标签云'))}</span><span class="kb-daily-sub">${escapeHTML(t('点击标签查看相关文章 · 字号与色深代表文章数'))}</span>`;
     wrap.appendChild(head);
+
+    // 复核过滤 chips
+    const chips = document.createElement('div');
+    chips.className = 'kb-tag-chips';
+    chips.setAttribute('role', 'tablist');
+    for (const f of TAG_FILTERS) {
+      const chip = document.createElement('button');
+      chip.className = `kb-tag-chip ${this.tagFilter === f.id ? 'active' : ''}`;
+      chip.setAttribute('role', 'tab');
+      chip.setAttribute('aria-selected', this.tagFilter === f.id ? 'true' : 'false');
+      chip.textContent = t(f.label);
+      chip.addEventListener('click', () => {
+        if (this.tagFilter === f.id) return;
+        this.tagFilter = f.id;
+        this._renderContent(); // 清空 contentHost 后按缓存数据重渲染（只过滤展示，不重拉）
+      });
+      chips.appendChild(chip);
+    }
+    wrap.appendChild(chips);
+
+    // 按当前过滤口径聚合：all=全部求和；manual/ai/inherit=仅该来源
+    const counts = new Map();
+    if (this.tagFilter === 'all') {
+      for (const { tag, count } of all) counts.set(tag, (counts.get(tag) || 0) + (Number(count) || 0));
+    } else {
+      for (const row of rows) {
+        if (row.source !== this.tagFilter) continue;
+        counts.set(row.tag, (counts.get(row.tag) || 0) + (Number(row.count) || 0));
+      }
+    }
+    const tags = [...counts.entries()]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+    if (!tags.length) {
+      const empty = document.createElement('div');
+      empty.className = 'list-empty';
+      empty.innerHTML = `<div class="glyph">${icon('spark')}</div><h3>${escapeHTML(t('该来源暂无标签'))}</h3><p>${escapeHTML(t('AI 自动标签开启后，新文章会在这里等待复核。'))}</p>`;
+      wrap.appendChild(empty);
+      this.contentHost.appendChild(wrap);
+      return;
+    }
     const cloud = document.createElement('div');
     cloud.className = 'kb-tag-cloud';
     const max = Math.max(1, ...tags.map((x) => x.count));
@@ -2133,9 +2183,187 @@ export class KnowledgeCenter {
     }
   }
 
-  /** 智能文件夹：列出 + 新建 + 删除。 */
-  _renderSmartFolders(folders) {
+  // ── 源体检（F16）：总览卡 + 健康分排序列表 + 单源详情 ──
+
+  static DASH_CARDS = [
+    { id: 'top', label: '健康源' },
+    { id: 'silent', label: '沉默源' },
+    { id: 'failing', label: '失败源' },
+  ];
+
+  _renderDash(data) {
+    const feeds = Array.isArray(data.feeds) ? data.feeds : [];
+    const summary = data.summary || { total: feeds.length, top: 0, silent: 0, failing: 0 };
     const wrap = document.createElement('div');
+    const head = document.createElement('div');
+    head.className = 'kb-daily-head';
+    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('源体检'))}</span><span class="kb-daily-sub">${escapeHTML(t('每源近 30 天发文 / 阅读 / 抓取健康，按健康分排序。'))}</span>`;
+    wrap.appendChild(head);
+
+    if (!feeds.length) {
+      const empty = document.createElement('div');
+      empty.className = 'list-empty';
+      empty.innerHTML = `<div class="glyph">${icon('flame')}</div><h3>${escapeHTML(t('暂无订阅源'))}</h3><p>${escapeHTML(t('添加订阅后，这里会给出每份源的健康体检。'))}</p>`;
+      wrap.appendChild(empty);
+      this.contentHost.appendChild(wrap);
+      return;
+    }
+
+    // 总览三卡：点击过滤（再点一次取消）
+    const cards = document.createElement('div');
+    cards.className = 'kb-dash-cards';
+    for (const def of KnowledgeCenter.DASH_CARDS) {
+      const card = document.createElement('button');
+      card.className = `kb-dash-card ${this.dashFilter === def.id ? 'active' : ''}`;
+      card.innerHTML = `<span class="kb-dash-card-num"></span><span class="kb-dash-card-label"></span>`;
+      card.querySelector('.kb-dash-card-num').textContent = String(summary[def.id] ?? 0);
+      card.querySelector('.kb-dash-card-label').textContent = t(def.label);
+      card.title = t('点击筛选') + ' · ' + t(def.label);
+      card.addEventListener('click', () => {
+        this.dashFilter = this.dashFilter === def.id ? null : def.id;
+        this._renderContent(); // 清空 contentHost 后按缓存数据重渲染（不发新请求）
+      });
+      cards.appendChild(card);
+    }
+    wrap.appendChild(cards);
+
+    const filtered = this.dashFilter
+      ? feeds.filter((f) => this.dashFilter === 'top' ? f.score >= 80
+        : this.dashFilter === 'silent' ? f.posts30 === 0
+          : (f.consecutiveFailures >= 3 || f.isDead))
+      : feeds;
+    if (!filtered.length) {
+      const empty = document.createElement('div');
+      empty.className = 'list-empty';
+      empty.innerHTML = `<div class="glyph">${icon('flame')}</div><h3>${escapeHTML(t('没有匹配的源'))}</h3><p>${escapeHTML(t('换个筛选条件试试。'))}</p>`;
+      wrap.appendChild(empty);
+      this.contentHost.appendChild(wrap);
+      return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'kb-dash-list';
+    const maxTrend = Math.max(1, ...filtered.map((f) => Math.max(...(f.trend || [0]))));
+    for (const f of filtered) {
+      const row = document.createElement('button');
+      row.className = 'kb-dash-row';
+      row.innerHTML = `
+        <span class="kb-dash-icon"><img alt="" referrerpolicy="no-referrer"/></span>
+        <span class="kb-dash-main">
+          <span class="kb-dash-title"></span>
+          <span class="kb-dash-meta"></span>
+          <span class="kb-dash-bars"></span>
+        </span>
+        <span class="kb-dash-score-badge"></span>`;
+      const img = row.querySelector('img');
+      if (f.iconURL) { img.src = f.iconURL; img.onerror = () => { img.remove(); }; }
+      else img.remove();
+      row.querySelector('.kb-dash-title').textContent = f.title || f.feedID;
+      row.querySelector('.kb-dash-meta').textContent = f.lastSuccessAt
+        ? `${t('最近成功抓取')} · ${timeAgo(f.lastSuccessAt)}`
+        : t('暂无抓取记录');
+      const bars = row.querySelector('.kb-dash-bars');
+      for (const n of (f.trend || [])) {
+        const bar = document.createElement('i');
+        bar.style.height = `${Math.max(2, Math.round((n / maxTrend) * 18))}px`;
+        bar.title = `${n}`;
+        bars.appendChild(bar);
+      }
+      const badge = row.querySelector('.kb-dash-score-badge');
+      badge.className = `kb-dash-score-badge ${f.band || 'bad'}`;
+      badge.textContent = String(f.score ?? 0);
+      badge.title = t('健康分') + ` ${f.score} / 100`;
+      row.addEventListener('click', () => this._dashDetail(f.feedID));
+      list.appendChild(row);
+    }
+    wrap.appendChild(list);
+    this.contentHost.appendChild(wrap);
+  }
+
+  /** 单源详情：7 天失败口径 + 月发文趋势 + 建议文案。 */
+  async _dashDetail(feedID) {
+    this.contentHost.innerHTML = '';
+    const back = document.createElement('button');
+    back.className = 'btn-text bordered';
+    back.style.marginBottom = '12px';
+    back.innerHTML = `${icon('chevronMenuRight')}<span style="margin-left:4px">${escapeHTML(t('返回源体检'))}</span>`;
+    back.addEventListener('click', () => { this.tab = 'dash'; this._render(); this._load(); });
+    this.contentHost.appendChild(back);
+
+    const d = await window.robin.dashFeed(feedID);
+    if (!d) { this._emptyIn(this.contentHost, '暂无数据', '该订阅源可能已被删除。'); return; }
+
+    const wrap = document.createElement('div');
+    const head = document.createElement('div');
+    head.className = 'kb-daily-head';
+    head.innerHTML = `<span class="kb-daily-title"></span><span class="kb-dash-score-badge"></span>`;
+    head.querySelector('.kb-daily-title').textContent = d.title || feedID;
+    const badge = head.querySelector('.kb-dash-score-badge');
+    badge.className = `kb-dash-score-badge ${d.band || 'bad'}`;
+    badge.textContent = `${d.score ?? 0} / 100`;
+    wrap.appendChild(head);
+
+    const metrics = document.createElement('div');
+    metrics.className = 'kb-dash-metrics';
+    const rows = [
+      [t('30 天发文'), String(d.posts30 ?? 0)],
+      [t('阅读率'), `${Math.round((d.readRate || 0) * 100)}%`],
+      [t('收藏率'), `${Math.round((d.starRate || 0) * 100)}%`],
+      [t('打开次数'), String(d.opens30 ?? 0)],
+      [t('抓取失败率'), `${Math.round((d.failureRate || 0) * 100)}%`],
+      [t('连续失败'), String(d.consecutiveFailures ?? 0)],
+      [t('最近成功抓取'), d.lastSuccessAt ? timeAgo(d.lastSuccessAt) : t('暂无抓取记录')],
+    ];
+    for (const [label, value] of rows) {
+      const line = document.createElement('div');
+      line.className = 'kb-dash-metric';
+      line.innerHTML = `<span></span><b></b>`;
+      line.querySelector('span').textContent = label;
+      line.querySelector('b').textContent = value;
+      metrics.appendChild(line);
+    }
+    wrap.appendChild(metrics);
+
+    // 30 天发文趋势（迷你条形，纯 div 条——与列表共用画法）
+    const trendHead = document.createElement('div');
+    trendHead.className = 'td-section-label';
+    trendHead.textContent = t('30 天发文趋势');
+    wrap.appendChild(trendHead);
+    const trend = document.createElement('div');
+    trend.className = 'kb-dash-trend';
+    const maxN = Math.max(1, ...(d.trend || [0]));
+    for (const n of (d.trend || [])) {
+      const bar = document.createElement('i');
+      bar.style.height = `${Math.max(2, Math.round((n / maxN) * 40))}px`;
+      bar.title = String(n);
+      trend.appendChild(bar);
+    }
+    wrap.appendChild(trend);
+
+    // 建议文案
+    const sugHead = document.createElement('div');
+    sugHead.className = 'td-section-label';
+    sugHead.textContent = t('体检建议');
+    wrap.appendChild(sugHead);
+    for (const sug of (d.suggestions || [])) {
+      const line = document.createElement('div');
+      line.className = 'kb-dash-suggestion';
+      line.textContent = sug.code === 'consecutiveFailures'
+        ? tf('连续失败 %lld 次，建议检查源', sug.count)
+        : sug.code === 'highFailureRate'
+          ? tf('抓取失败率 %lld%，建议检查源', sug.rate)
+          : t({
+            noUpdate30d: '30 天无更新',
+            neverSucceeded: '从未成功抓取，请检查源地址',
+            healthy: '运行良好',
+          }[sug.code] || '运行良好');
+      wrap.appendChild(line);
+    }
+    this.contentHost.appendChild(wrap);
+  }
+
+  /** 智能文件夹：列出 + 新建 + 删除。 */
+  _renderSmartFolders(folders) {    const wrap = document.createElement('div');
     const head = document.createElement('div');
     head.className = 'kb-daily-head';
     head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('智能文件夹'))}</span><span class="kb-daily-sub">${escapeHTML(t('按关键词自动归档'))}</span>`;

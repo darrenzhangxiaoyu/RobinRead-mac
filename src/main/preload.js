@@ -290,6 +290,7 @@ contextBridge.exposeInMainWorld('robin', {
   kbAddToReview: (payload) => invoke('kb:addToReview', payload),
   kbRemoveFromReview: (id) => invoke('kb:removeFromReview', id),
   kbTags: (itemID) => data('kb:tags', itemID),
+  kbTagsSource: () => data('kb:tagsSource'), // F15：标签×来源计数（复核过滤 chips）
   kbEntriesForTag: (tag, limit) => data('kb:entriesForTag', tag, limit),
   kbAddTag: (itemID, tag) => invoke('kb:addTag', itemID, tag),
   kbRemoveTag: (itemID, tag) => invoke('kb:removeTag', itemID, tag),
