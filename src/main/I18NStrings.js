@@ -1819,6 +1819,8 @@ const STRINGS = {
   "先看看将新增、变更多少文件，再决定是否执行。": { zh: "先看看将新增、变更多少文件，再决定是否执行。", en: "See how many files would be added or changed before running the export." },
   "正在统计…": { zh: "正在统计…", en: "Counting…" },
   "预览：%lld 篇文章 · %lld 条高亮 · 新增 %lld · 变更 %lld · 不变 %lld": { zh: "预览：%lld 篇文章 · %lld 条高亮 · 新增 %lld · 变更 %lld · 不变 %lld", en: "Preview: %lld articles · %lld highlights · %lld new · %lld changed · %lld unchanged" },
+  "部分文件正文超过单文件 1MB 上限，已截断（%lld 个文件）。": { zh: "部分文件正文超过单文件 1MB 上限，已截断（%lld 个文件）。", en: "%lld file(s) exceeded the 1MB per-file limit and were truncated." },
+  "已达单次 2000 文件上限，更早的文章未包含在本次导出。": { zh: "已达单次 2000 文件上限，更早的文章未包含在本次导出。", en: "Reached the 2000-file export limit; older articles were not included." },
   "已达单次 2000 文件上限，本次将截断。": { zh: "已达单次 2000 文件上限，本次将截断。", en: "Reached the 2,000-file limit; this export will be truncated." },
   "立即导出": { zh: "立即导出", en: "Export Now" },
   "立即导出？": { zh: "立即导出？", en: "Export now?" },

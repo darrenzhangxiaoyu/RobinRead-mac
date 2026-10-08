@@ -1733,7 +1733,8 @@ export class SettingsView {
         const result = await window.robin.obsidianExport().catch(() => null);
         if (result?.ok) {
           showToast(exportResultText(result.data));
-          if (result.data?.truncated) await alertBox(t('已按上限截断'), t('部分文件因超过单文件 1MB 上限被截断。'));
+          if (result.data?.contentTruncatedCount) await alertBox(t('已按上限截断'), t('部分文件正文超过单文件 1MB 上限，已截断（%lld 个文件）。').replace('%lld', String(result.data.contentTruncatedCount)));
+          else if (result.data?.truncated) await alertBox(t('已按上限截断'), t('已达单次 2000 文件上限，更早的文章未包含在本次导出。'));
         } else {
           await alertBox(t('导出失败'), String(result?.error || ''));
         }
@@ -1761,7 +1762,8 @@ export class SettingsView {
         const result = await window.robin.obsidianFullExport().catch(() => null);
         if (result?.ok) {
           showToast(exportResultText(result.data));
-          if (result.data?.truncated) await alertBox(t('已按上限截断'), t('部分文件因超过单文件 1MB 上限被截断。'));
+          if (result.data?.contentTruncatedCount) await alertBox(t('已按上限截断'), t('部分文件正文超过单文件 1MB 上限，已截断（%lld 个文件）。').replace('%lld', String(result.data.contentTruncatedCount)));
+          else if (result.data?.truncated) await alertBox(t('已按上限截断'), t('已达单次 2000 文件上限，更早的文章未包含在本次导出。'));
         } else {
           await alertBox(t('导出失败'), String(result?.error || ''));
         }

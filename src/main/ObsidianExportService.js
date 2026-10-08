@@ -77,7 +77,9 @@ const YAML_NUMERIC_RE = /^[-+]?(\d[\d_]*(\.\d+)?|\.\d+)([eE][-+]?\d+)?$/;
 
 /** Obsidian Properties（YAML）标量转义：含冒号/引号等特殊字符时双引号包裹并转义。 */
 function yamlValue(v) {
-  const s = String(v ?? '');
+  // 验证轮 P2：先剥离 \r 与全部 C0/DEL 控制符——RSS `&#13;` 可解码出裸 CR，
+  // YAML 把 CR 视作换行，frontmatter 行结构会被静默断裂（伪行含冒号即成新键）。
+  const s = String(v ?? '').replace(/[\u0000-\u001F\u007F]/g, (c) => (c === '\t' ? '\t' : ' '));
   if (!s.length) return '""';
   const unsafe = YAML_UNSAFE_RE.test(s) || YAML_AMBIGUOUS_RE.test(s) || YAML_NUMERIC_RE.test(s)
     || /^\s/.test(s) || /\s$/.test(s) || /^[-?:]/.test(s);
@@ -110,9 +112,10 @@ function isoDateTime(seconds) {
   return d.toISOString();
 }
 
-/** 行首 Markdown 结构符转义（#/引用/列表/有序列表），避免正文被 Obsidian 重新解释。 */
+/** 行首 Markdown 结构符转义（#/引用/列表/有序列表），避免正文被 Obsidian 重新解释。
+ * 有序列表的转义须落在标点上（`1\.`）——`\1` 是反向引用转义，渲染出可见游离反斜杠（验证轮 P3）。 */
 function escapeMdLeading(paragraph) {
-  return paragraph.replace(/^(\s*)([#>|]|[-*+]\s|\d+[.)]\s)/, (m, sp, mark) => `${sp}\\${mark}`);
+  return paragraph.replace(/^(\s*)([#>|]|[-*+]\s|\d+[.)]\s)/, (m, sp, mark) => `${sp}${mark.replace(/^(\d+)([.)])$/, '$1\\$2')}`);
 }
 
 /** 纯文本 → MD 段落（空行分段；正文来自 plainText，天然无残留标签）。 */
@@ -297,13 +300,14 @@ class ObsidianExportService {
   /**
    * 构建将写入 vault 的文件清单。
    * options: { scope?: {articles,highlights,tags}, force?: boolean（buildFiles 忽略 force，仅供 orchestrate） }
-   * 返回 { files: [{relPath, content, hash, kind, key}], truncated, dropped: {articles, highlights} }
+   * 返回 { files, truncated(2000 文件上限), contentTruncatedCount(单文件 1MB 截断计数), dropped: {articles, highlights} }
    */
   buildFiles(options = {}) {
     const scope = options.scope || this.scope();
     const files = [];
     const used = new Set();
     let truncated = false;
+    let contentTruncatedCount = 0;
     const dropped = { articles: 0, highlights: 0 };
 
     const pushFile = (relPath, content, kind, key) => {
@@ -387,11 +391,11 @@ class ObsidianExportService {
         ].join('\n');
         const { content, truncated: fileTruncated } = assembleWithCap(fm, body);
         if (!pushFile(relPath, content, 'highlight', h.id)) { dropped.highlights += 1; continue; }
-        if (fileTruncated) truncated = true;
+        if (fileTruncated) { contentTruncatedCount += 1; }
       }
     }
 
-    return { files, truncated, dropped };
+    return { files, truncated, contentTruncatedCount, dropped };
   }
 
   // MARK: sync-state（增量游标）
@@ -471,7 +475,7 @@ class ObsidianExportService {
       scope: options.scope || this.scope(),
       counts: { articles, highlights, total: built.files.length },
       newFiles, changedFiles, unchangedFiles,
-      truncated: built.truncated,
+      truncated: built.truncated, contentTruncatedCount: built.contentTruncatedCount,
       dropped: built.dropped,
     };
   }
@@ -494,7 +498,13 @@ class ObsidianExportService {
     await fs.promises.mkdir(path.join(dir, ROOT_DIR, HIGHLIGHTS_DIR), { recursive: true });
 
     for (const f of built.files) {
-      if (!force && state.files[f.relPath] === f.hash) { skipped += 1; continue; } // hash 命中：零写入（保 mtime）
+      if (!force && state.files[f.relPath] === f.hash) {
+        // 验证轮 P2：hash 命中还要看文件在不在——用户在 Obsidian 侧删除后，
+        // 只看 hash 会永久跳过重建（与「永不删除」自洽但文件缺失）。缺失即重建。
+        let exists = true;
+        try { exists = Boolean(await fs.promises.stat(this._assertOwnPath(dir, f.relPath))); } catch (_) { exists = false; }
+        if (exists) { skipped += 1; continue; }
+      }
       const full = this._assertOwnPath(dir, f.relPath);
       await fs.promises.writeFile(full, f.content, 'utf8');
       nextFiles[f.relPath] = f.hash;
@@ -510,14 +520,14 @@ class ObsidianExportService {
       force,
       added, updated, skipped,
       totalFiles: built.files.length,
-      truncated: built.truncated,
+      truncated: built.truncated, contentTruncatedCount: built.contentTruncatedCount,
       dropped: built.dropped,
       elapsedMs: Date.now() - t0,
     };
     try {
       this.store.preferences.set(PREF.lastExportAt, nowSeconds());
       this.store.preferences.set(PREF.lastStats, JSON.stringify({
-        at: nowSeconds(), added, updated, skipped, truncated: built.truncated, totalFiles: built.files.length,
+        at: nowSeconds(), added, updated, skipped, truncated: built.truncated, contentTruncatedCount: built.contentTruncatedCount, totalFiles: built.files.length,
       }));
     } catch (_) { /* 统计落偏好失败不影响导出结果 */ }
     return stats;
