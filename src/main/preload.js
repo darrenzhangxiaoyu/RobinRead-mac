@@ -134,6 +134,13 @@ contextBridge.exposeInMainWorld('robin', {
   reportSyncProgress: (entries) => ipcRenderer.send('sync:reportProgress', entries),
   onSyncProgress: (listener) => subscribe('sync:progress', listener),
 
+  // Obsidian 知识库导出（F11：目录授权 / 预览 / 增量导出 / 全量重导 / 配置读写）
+  obsidianConfig: (patch) => invoke('obsidian:config', patch),
+  obsidianPickDir: () => invoke('obsidian:pickDir'),
+  obsidianPreview: () => invoke('obsidian:preview'),
+  obsidianExport: () => invoke('obsidian:export'),
+  obsidianFullExport: () => invoke('obsidian:fullExport'),
+
   // AI 深度研究（F8：列表 / 详情 / 删除 / 流式生成 / 追问 / 取消；onResearchDelta 收流式分片）
   researchList: () => data('research:list'),
   researchGet: (id) => data('research:get', id),

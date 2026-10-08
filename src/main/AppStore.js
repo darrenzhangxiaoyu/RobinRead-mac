@@ -39,6 +39,7 @@ const { SyncService } = require('./SyncService');
 const { ResearchService } = require('./ResearchService');
 const { RAGService } = require('./RAGService');
 const { SmartPicksService } = require('./SmartPicksService');
+const { ObsidianExportService } = require('./ObsidianExportService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -158,6 +159,7 @@ class AppStore extends EventEmitter {
     this.research = new ResearchService(this); // AI 深度研究（F8）：素材聚合 + 流式带引用报告 + 追问
     this.rag = new RAGService(this); // 全库 RAG 问答（F9）：全库检索 + 多轮会话 + 引用跳转
     this.smartPicks = new SmartPicksService(this); // 智能每日精选（F10）：本地画像重排 + 播报文稿
+    this.obsidian = new ObsidianExportService(this); // Obsidian 知识库导出（F11）：Markdown 库 + 增量游标（目录授权仅内存态）
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}

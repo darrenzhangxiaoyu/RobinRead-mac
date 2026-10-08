@@ -90,6 +90,7 @@ const OFFLINE = [
   { file: 'scripts/diag-f8-research.js', runner: 'electron', desc: 'F8 AI 研究：v17迁移与老库升级/gather本地FTS相关度与AIHOT注入与去重与上限/AIHOT失败降级/流式生成落库/引用编号约束提示词/取消草稿保留与再次覆盖/追问追加区段/历史重开删除/单飞锁/无Key降级/知识中心tab与命令面板与引用芯片UI（离线）' },
   { file: 'scripts/diag-f9-rag.js', runner: 'electron', desc: 'F9 全库 RAG：v18迁移与老库升级/gather四路(FTS文章+知识库+正文缓存命中段截窗+AIHOT)与去重与上限30/正文检索限集EXPLAIN与200篇10MB级耗时<300ms/ask流式落库与sources_json与引用编号约束prompt/多轮上下文同会话含首轮QA新会话隔离/无Key明确报错与纯检索不调LLM/单飞锁与取消保留已流/会话列表重开删除级联重命名/知识中心会话侧栏与消息气泡与引用芯片与素材浮层与取消按钮UI/旧kb:ask入口与tab切换清理订阅回归（离线）' },
   { file: 'scripts/diag-f10-picks.js', runner: 'electron', desc: 'F10 智能精选：标题分词画像(30天行为×词频 Top120)/评分排序(命中0.6+源打开率0.25+新鲜度0.15)与已读稍后读排除/新鲜度同分新者先/空画像降级纯新鲜度+提示态/不感兴趣24h排除注入时间过期/UI精选切换与画像摘要条Top8chips与行渲染与名次/播报文稿本地模板含TopN标题与TTS mock与媒体互斥/200篇<200ms/排除重启持久化/列表简报媒体回归（离线）' },
+  { file: 'scripts/diag-f11-obsidian.js', runner: 'electron', desc: 'F11 Obsidian 导出：pickDirectory对话框mock与内存token授权(未授权拒绝/取消不变/重启实例失效)/文件树Articles+Highlights+_meta游标/文件名sanitize与id8/frontmatter字段与YAML冒号引号转义与tags并集/HTML转MD无残留标签/1MB截断/增量hash命中零写mtime不变/改1条仅重写该文件/用户文件永不删除/全量重导全重写/坏JSON游标容错自愈/3000高亮2000护栏/只导高亮范围开关/设置Obsidian分区渲染与预览统计（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

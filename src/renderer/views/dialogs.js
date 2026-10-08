@@ -21,6 +21,7 @@ const SECTIONS = [
   { id: 'rules', title: '过滤规则', icon: 'funnel' },
   { id: 'language', title: '语言', icon: 'globe' },
   { id: 'sync', title: '同步', icon: 'cloud' },
+  { id: 'obsidian', title: 'Obsidian', icon: 'bookOpen' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
   { id: 'about', title: '关于', icon: 'info' },
 ];
@@ -128,6 +129,7 @@ export class SettingsView {
       case 'rules': this._rules(scroll); break;
       case 'language': this._language(scroll, prefs); break;
       case 'sync': this._sync(scroll); break;
+      case 'obsidian': this._obsidian(scroll); break;
       case 'feedback': this._feedback(scroll); break;
       case 'about': this._about(scroll); break;
       default: break;
@@ -1655,6 +1657,153 @@ export class SettingsView {
     ]));
   }
 
+  // MARK: Obsidian 知识库导出（F11）
+
+  async _obsidian(container) {
+    const cfg = (await window.robin.obsidianConfig?.().catch(() => null)) || {};
+    const conf = cfg?.data || {};
+
+    container.appendChild(group(t('Obsidian 知识库导出'), t('把文章、高亮与批注导出为 Obsidian 友好的 Markdown 库。知更只在你选择的目录里维护 RobinRead/ 命名空间：增量更新、重复导出零写入，永不删除你在 Obsidian 侧添加的内容。'), []));
+
+    // ── 库目录（授权态仅内存；重启后需重新选择）──
+    const dirGroup = group(t('库目录'), t('目录授权仅在本次会话内有效：重启知更后需重新选择目录，避免长期持有对任意文件夹的写权限。'), []);
+    container.appendChild(dirGroup);
+    const dirHost = dirGroup.querySelector('.group-rows');
+
+    const dirLabel = document.createElement('span');
+    dirLabel.style.cssText = 'font-size:12px;color:var(--text-secondary);max-width:240px;text-align:right;word-break:break-all;';
+    if (conf.authorized && conf.dir) {
+      dirLabel.textContent = conf.dir;
+      dirLabel.style.color = 'var(--text-primary)';
+    } else if (conf.lastDir) {
+      dirLabel.textContent = `${t('上次使用（本次会话未授权）')}：${conf.lastDir}`;
+    } else {
+      dirLabel.textContent = t('尚未选择目录');
+    }
+    const pickButton = document.createElement('button');
+    pickButton.className = 'btn-text bordered';
+    pickButton.textContent = conf.authorized ? t('更改目录') : t('选择目录…');
+    pickButton.addEventListener('click', async () => {
+      const result = await window.robin.obsidianPickDir().catch(() => null);
+      if (result?.ok && result.data?.dir) showToast(t('已授权导出目录'));
+      this.render();
+    });
+    dirHost.appendChild(row(t('导出目录'), t('选择 vault 内的一个目录；知更只写入其中的 RobinRead/ 子目录。'), (() => {
+      const wrap = document.createElement('div');
+      wrap.className = 'setting-control';
+      wrap.style.gap = '8px';
+      wrap.append(dirLabel, pickButton);
+      return wrap;
+    })()));
+
+    // ── 导出范围 ──
+    const scope = conf.scope || { articles: true, highlights: true, tags: true };
+    container.appendChild(group(t('导出范围'), null, [
+      toggleRow(t('导出文章'), t('整篇正文与 frontmatter（标题 / 来源 / 链接 / 发布时间 / 标签）。'), scope.articles !== false,
+        (v) => window.robin.obsidianConfig({ scope: { articles: v === true } })),
+      toggleRow(t('导出高亮与批注'), t('每条高亮一个文件：引用块加上你的笔记，随文章信息带 frontmatter。'), scope.highlights !== false,
+        (v) => window.robin.obsidianConfig({ scope: { highlights: v === true } })),
+      toggleRow(t('标签写入 frontmatter'), t('文章的 tags 属性 = 手动 / AI 标签 ∪ 知识笔记标签。'), scope.tags !== false,
+        (v) => window.robin.obsidianConfig({ scope: { tags: v === true } })),
+    ]));
+
+    // ── 导出动作 ──
+    const statusLine = document.createElement('div');
+    statusLine.style.cssText = 'font-size:12px;color:var(--text-secondary);text-align:right;max-width:300px;line-height:1.6;';
+
+    const previewText = (p) => tf('预览：%lld 篇文章 · %lld 条高亮 · 新增 %lld · 变更 %lld · 不变 %lld',
+      p?.counts?.articles ?? 0, p?.counts?.highlights ?? 0, p?.newFiles ?? 0, p?.changedFiles ?? 0, p?.unchangedFiles ?? 0)
+      + (p?.truncated ? `\n${t('已达单次 2000 文件上限，本次将截断。')}` : '');
+
+    const exportButton = document.createElement('button');
+    exportButton.className = 'btn-text primary';
+    exportButton.textContent = t('立即导出');
+    exportButton.addEventListener('click', async () => {
+      if (exportButton.disabled) return;
+      exportButton.disabled = true;
+      exportButton.textContent = t('正在导出…');
+      try {
+        const pv = await window.robin.obsidianPreview().catch(() => null);
+        if (!pv?.ok) {
+          await alertBox(t('导出失败'), String(pv?.error || t('请先选择 Obsidian 库目录。')));
+          return;
+        }
+        const go = await confirmBox(t('立即导出？'), { message: previewText(pv.data), okLabel: t('立即导出') });
+        if (!go) return;
+        const result = await window.robin.obsidianExport().catch(() => null);
+        if (result?.ok) {
+          showToast(exportResultText(result.data));
+          if (result.data?.truncated) await alertBox(t('已按上限截断'), t('部分文件因超过单文件 1MB 上限被截断。'));
+        } else {
+          await alertBox(t('导出失败'), String(result?.error || ''));
+        }
+      } catch (err) {
+        await alertBox(t('导出失败'), String(err?.message || err));
+      } finally {
+        exportButton.disabled = false;
+        exportButton.textContent = t('立即导出');
+        if (this.overlay) this.render();
+      }
+    });
+
+    const fullButton = document.createElement('button');
+    fullButton.className = 'btn-text bordered';
+    fullButton.textContent = t('全量重导');
+    fullButton.addEventListener('click', async () => {
+      if (fullButton.disabled) return;
+      const go = await confirmBox(t('全量重导？'), {
+        message: t('将忽略增量游标重写全部导出文件（仍不删除你在 Obsidian 侧添加的内容）。'),
+        okLabel: t('重新导出'),
+      });
+      if (!go) return;
+      fullButton.disabled = true;
+      try {
+        const result = await window.robin.obsidianFullExport().catch(() => null);
+        if (result?.ok) {
+          showToast(exportResultText(result.data));
+          if (result.data?.truncated) await alertBox(t('已按上限截断'), t('部分文件因超过单文件 1MB 上限被截断。'));
+        } else {
+          await alertBox(t('导出失败'), String(result?.error || ''));
+        }
+      } catch (err) {
+        await alertBox(t('导出失败'), String(err?.message || err));
+      } finally {
+        fullButton.disabled = false;
+        if (this.overlay) this.render();
+      }
+    });
+
+    const previewButton = document.createElement('button');
+    previewButton.className = 'btn-text bordered';
+    previewButton.textContent = t('预览统计');
+    previewButton.addEventListener('click', async () => {
+      previewButton.disabled = true;
+      statusLine.textContent = t('正在统计…');
+      try {
+        const pv = await window.robin.obsidianPreview().catch(() => null);
+        statusLine.textContent = pv?.ok ? previewText(pv.data) : String(pv?.error || t('请先选择 Obsidian 库目录。'));
+      } finally {
+        previewButton.disabled = false;
+      }
+    });
+
+    const lastExportAt = Number(conf.lastExportAt) || 0;
+    container.appendChild(group(t('导出'), t('单次最多 2000 个文件；单个文件超过 1MB 时正文自动截断。'), [
+      row(t('预览统计'), t('先看看将新增、变更多少文件，再决定是否执行。'), (() => {
+        const wrap = document.createElement('div');
+        wrap.className = 'setting-control';
+        wrap.style.gap = '8px';
+        wrap.append(statusLine, previewButton);
+        return wrap;
+      })()),
+      row(t('立即导出'), t('增量导出：只写入新增或内容变化的文件。'), exportButton),
+      row(t('全量重导'), t('忽略增量游标，重写全部文件（仍不删除你在 Obsidian 侧的内容）。'), fullButton),
+      row(t('最后导出'), null, staticText(lastExportAt
+        ? tf('上次导出：%@', new Date(lastExportAt * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+        : t('尚未导出'))),
+    ]));
+  }
+
   _feedback(container) {
     const card = document.createElement('div');
     card.className = 'settings-group';
@@ -2609,6 +2758,13 @@ function showToast(message, duration = 1800) {
   document.body.appendChild(toast);
   clearTimeout(ruleToastTimer);
   ruleToastTimer = setTimeout(() => { toast.remove(); }, duration);
+}
+
+/** F11：Obsidian 导出结果 toast 文案（新增/更新/跳过 + 截断标注）。 */
+function exportResultText(stats) {
+  const base = tf('导出完成：新增 %lld · 更新 %lld · 跳过 %lld',
+    Number(stats?.added) || 0, Number(stats?.updated) || 0, Number(stats?.skipped) || 0);
+  return stats?.truncated ? `${base} · ${t('已达单次 2000 文件上限，本次将截断。')}` : base;
 }
 
 function group(title, footer, rows) {

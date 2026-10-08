@@ -704,6 +704,24 @@ function registerIPCHandlers(store, window) {
   handle('sync:setAuto', (enabled) => (store.sync ? SY().setAutoEnabled(enabled === true) : null));
   handle('sync:now', () => (store.sync ? SY().syncNow({ origin: 'manual' }) : null));
 
+  // MARK: Obsidian 知识库导出（F11：选目录授权 / 预览 / 增量导出 / 全量重导 / 配置）
+  // 目录授权与 pickSavePath 写盘 token 同源不同形：openDirectory 结果只登记进
+  // ObsidianExportService 的内存态（DAV 式），重启/换实例即失效，绝不持久化写权限。
+  const OB = () => store.obsidian;
+  handle('obsidian:pickDir', async () => {
+    const result = await dialog.showOpenDialog(window, {
+      title: '选择 Obsidian 库目录',
+      buttonLabel: '授权此目录',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return { dir: OB().authorizeDirectory(result.filePaths[0]) };
+  });
+  handle('obsidian:preview', () => OB().preview());
+  handle('obsidian:export', () => OB().exportOrchestrate());
+  handle('obsidian:fullExport', () => OB().fullExport());
+  handle('obsidian:config', (patch) => (patch ? OB().saveConfig(patch) : OB().getConfig()));
+
   // MARK: AI 深度研究（F8：素材聚合 / 流式生成 / 追问 / 历史 / 取消）
   // 流式分片与阶段经推送通道下行（research:delta / research:status），最终结果走信封返回。
   const RS = () => store.research;
