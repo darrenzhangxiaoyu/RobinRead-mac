@@ -851,8 +851,10 @@ async function broadcastSmartPicks() {
 async function dismissSmartPick(entryID) {
   try {
     await window.robin.picksExclude(entryID);
-  } catch (_) { /* 排除失败不阻塞前端重排 */ }
-  showToast(t('已移出精选，24 小时内不再推荐。'));
+    showToast(t('已移出精选，24 小时内不再推荐。'));
+  } catch (e) {
+    showToast(String(e && e.message || e) || t('操作失败'));
+  }
   await refreshSmartPicks();
 }
 

@@ -3965,6 +3965,9 @@ export class ReaderView {
     // 媒体中心（F3）互斥 2/2：TTS 开播前先暂停媒体迷你播放器
     // （反向互斥在 MediaMiniPlayer.open/toggle 内：开媒体先停 TTS）
     window.__robinMedia?.pauseForTTS?.();
+    // 智能精选播报（F10）互斥：朗读启播同样停掉精选播报（否则双声源——
+    // 场景：列表播报精选 → 点开文章按「听」。P→R 边已有，此处补 R→P 边）
+    window.__robinPicksTTS?.stop?.();
     this._ttsStarting = true;
     Promise.resolve(this._ttsStart()).finally(() => { this._ttsStarting = false; });
   }

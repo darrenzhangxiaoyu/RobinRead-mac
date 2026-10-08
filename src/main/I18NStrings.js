@@ -1786,6 +1786,8 @@ const STRINGS = {
   "缺少文章 ID。": { zh: "缺少文章 ID。", en: "Missing article ID." },
   "你的阅读画像还在积累，读得越多推荐越准。": { zh: "你的阅读画像还在积累，读得越多推荐越准。", en: "Your reading profile is still building — the more you read, the smarter the picks." },
   "X年X月X日": { zh: "%lld年%lld月%lld日", en: "%lld-%lld-%lld" },
+  "。": { zh: "。", en: "." },
+  "操作失败": { zh: "操作失败", en: "Action failed" },
   "知更智能精选，%lld 篇。": { zh: "知更智能精选，%lld 篇。", en: "RobinRead Smart Picks, %lld articles." },
   "第 %lld 篇，《%@》": { zh: "第 %lld 篇，《%@》", en: "Number %lld, \"%@\"" },
   "，来自%@。": { zh: "，来自%@。", en: ", from %@." },

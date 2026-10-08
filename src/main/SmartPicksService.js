@@ -85,7 +85,14 @@ function buildProfileFromBehavior(rows, { maxWords = PROFILE_MAX_WORDS } = {}) {
     if (weight > 0) words.push({ word, weight: Math.round(weight * 1000) / 1000 });
   }
   words.sort((a, b) => b.weight - a.weight || (a.word < b.word ? -1 : a.word > b.word ? 1 : 0));
-  return words.slice(0, maxWords);
+  // 滑窗重叠词剪枝（验证轮 P2）：步长 1 滑窗会让「量子计算」衍生 6 个等权变体
+  // （量子/子计/计算/…），污染词表且「子计」类噪声造成伪命中——
+  // 按权重降序保留长词，丢弃其子串（子串权重已自然并入长词的累计）。
+  const kept = [];
+  for (const w of words) {
+    if (!kept.some((k) => k.word.includes(w.word) && k.word !== w.word)) kept.push(w);
+  }
+  return kept.slice(0, maxWords);
 }
 
 /** 新鲜度：24h 半衰指数衰减，封顶 30 天（0 下限）。 */
@@ -97,18 +104,27 @@ function freshnessOf(publishedAt, now) {
 }
 
 /**
- * 单篇评分：score = 画像命中权重和 × 0.6 + 订阅源打开率 × 0.25 + 新鲜度 × 0.15。
+ * 单篇评分：score = 画像命中权重 × 0.6 + 订阅源打开率 × 0.25 + 新鲜度 × 0.15。
  * wordWeights 为 Map（画像词 → 权重）；命中 = 词是 标题+摘要 的子串。
+ * 长摘要偏置防护（验证轮 P1）：标题命中全额计权；摘要命中每词 0.3 折算且最多计 5 词——
+ * 长摘要「蹭满」画像词无法再压过精准命中短标题（实测 9 倍偏差根因）。
  */
 function scoreArticle(item, wordWeights, feedOpenRate, now) {
-  const haystack = `${item.title || ''} ${item.summary || item.summaryPreview || ''}`;
+  const title = item.title || '';
+  const summary = item.summary || item.summaryPreview || '';
   let interest = 0;
+  let summaryHits = 0;
   for (const [word, weight] of wordWeights) {
-    if (haystack.includes(word)) interest += weight;
+    if (title.includes(word)) {
+      interest += weight;
+    } else if (summary && summary.includes(word) && summaryHits < 5) {
+      summaryHits += 1;
+      interest += weight * 0.3;
+    }
   }
   const freshness = freshnessOf(item.publishedAt, now);
   const score = interest * SCORE_W_INTEREST + (Number(feedOpenRate) || 0) * SCORE_W_FEED + freshness * SCORE_W_FRESH;
-  return { score: Math.round(score * 10000) / 10000, interest };
+  return { score: Math.round(score * 10000) / 10000, interest: Math.round(interest * 1000) / 1000 };
 }
 
 /**
@@ -147,7 +163,7 @@ function composeBroadcastScript(picks, { now = Date.now() / 1000, degraded = fal
   (picks || []).forEach((pick, index) => {
     const summary = String(pick.summary || pick.summaryPreview || '')
       .replace(/\s+/g, ' ').trim().slice(0, BROADCAST_SUMMARY_MAX);
-    const source = pick.sourceTitle ? i18n.localizedFormat('，来自%@。', pick.sourceTitle) : '。';
+    const source = pick.sourceTitle ? i18n.localizedFormat('，来自%@。', pick.sourceTitle) : i18n.localized('。');
     lines.push(i18n.localizedFormat('第 %lld 篇，《%@》', index + 1, String(pick.title || '').replace(/[《》]/g, '')) + source + (summary || ''));
   });
   lines.push(i18n.localized('以上就是本期的智能精选。'));
