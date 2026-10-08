@@ -141,6 +141,15 @@ contextBridge.exposeInMainWorld('robin', {
   obsidianExport: () => invoke('obsidian:export'),
   obsidianFullExport: () => invoke('obsidian:fullExport'),
 
+  // 个人文集自动成书（F12：书架 CRUD / 立即成书 / 打开目录 / 加入文集）
+  booksList: () => invoke('books:list'),
+  booksCreate: (payload) => invoke('books:create', payload),
+  booksUpdate: (payload) => invoke('books:update', payload),
+  booksAddFeeds: (payload) => invoke('books:addFeeds', payload),
+  booksDelete: (id) => invoke('books:delete', id),
+  booksBuild: (id) => invoke('books:build', id),
+  booksOpenDir: (id) => invoke('books:openDir', id),
+
   // AI 深度研究（F8：列表 / 详情 / 删除 / 流式生成 / 追问 / 取消；onResearchDelta 收流式分片）
   researchList: () => data('research:list'),
   researchGet: (id) => data('research:get', id),

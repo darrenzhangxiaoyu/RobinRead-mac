@@ -73,6 +73,7 @@ export const icons = {
   funnel: i('<path d="M1.8 2.6h12.4L9.6 8v4.4c0 .4-.4.7-.8.5l-2.4-1.2c-.3-.1-.4-.4-.4-.6V8L1.8 2.6z"/>'),
   chevronUp: `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`,
   playCircle: i('<circle cx="8" cy="8" r="6.4"/><path d="M6.6 5.6l4 2.4-4 2.4v-4.8z"/>'),
+  books: i('<rect x="2" y="2.6" width="3.6" height="10.8" rx="0.8"/><rect x="7" y="2.6" width="3.6" height="10.8" rx="0.8"/><path d="M11.6 3.7l3.2-.9 2 10.5-3.2.9z"/>'),
 };
 
 export function icon(name, extraClass = '') {

@@ -61,6 +61,20 @@ class FeedIconStore {
     return promise;
   }
 
+  /** 仅本地缓存（内存/磁盘）读取，不打网络——成书封面等离线确定性场景用（F12）。 */
+  loadCached(params) {
+    const key = this._key(params);
+    const mem = this.memory.get(key);
+    if (mem) return mem;
+    const disk = this._readDisk(key);
+    if (disk) {
+      this.memory.set(key, disk);
+      this._trimMemory();
+      return disk;
+    }
+    return null;
+  }
+
   async _fetchAndStore(key, params) {
     const candidates = [];
     if (params.storedIconURL && /^https?:/i.test(params.storedIconURL)) {

@@ -722,6 +722,39 @@ function registerIPCHandlers(store, window) {
   handle('obsidian:fullExport', () => OB().fullExport());
   handle('obsidian:config', (patch) => (patch ? OB().saveConfig(patch) : OB().getConfig()));
 
+  // MARK: 个人文集自动成书（F12：书架 CRUD / 手动成书 / 自动目录 / 打开目录）
+  // 手动成书走保存对话框（EPUB 过滤器）后由主进程直接落盘（backup:export 同款先例，
+  // 不经渲染层 writeBinaryFile 通道）；多卷时第 1 卷用所选路径，第 N 卷落其旁 ` vol.N.epub`。
+  const BK = () => store.books;
+  handle('books:list', () => ({ books: BK().listBooks() }));
+  handle('books:create', (payload) => BK().createBook(payload || {}));
+  handle('books:update', (payload) => BK().updateBook(payload?.id, payload || {}));
+  handle('books:addFeeds', (payload) => BK().addFeeds(payload?.id, payload?.feedIDs));
+  handle('books:delete', (id) => BK().deleteBook(id));
+  handle('books:build', async (id) => {
+    const book = BK().listBooks().find((b) => b.id === id);
+    if (!book) throw new Error('文集不存在');
+    const safeName = `${book.title}`.replace(/[\\/:*?"<>|]/g, ' ').trim() || 'RobinRead Book';
+    const result = await dialog.showSaveDialog(window, {
+      title: '立即成书',
+      defaultPath: `${safeName}.epub`,
+      filters: [{ name: 'EPUB 电子书', extensions: ['epub'] }, { name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    return BK().buildToPath(book, result.filePath);
+  });
+  handle('books:openDir', (id) => {
+    const book = BK().listBooks().find((b) => b.id === id);
+    if (!book) throw new Error('文集不存在');
+    BK().markPicked(id); // 打开目录即「已取」：清除书架「待取」徽标
+    const dir = BK().autoDir(id);
+    try { fs.mkdirSync(dir, { recursive: true }); } catch (_) { /* 已存在 */ }
+    const files = book.lastFiles;
+    if (files.length) shell.showItemInFolder(path.join(dir, files[0]));
+    else shell.openPath(dir);
+    return { dir, file: files[0] || null };
+  });
+
   // MARK: AI 深度研究（F8：素材聚合 / 流式生成 / 追问 / 历史 / 取消）
   // 流式分片与阶段经推送通道下行（research:delta / research:status），最终结果走信封返回。
   const RS = () => store.research;

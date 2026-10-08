@@ -1767,6 +1767,43 @@ function setupSplitter(splitterID, columnID, min, max) {
 
 // MARK: - 右键菜单
 
+/** 书架文集缓存（F12）：右键菜单打开前按需拉取一次（文集量小，直接拉全量）。 */
+async function fetchBooksForMenu() {
+  try {
+    const result = await window.robin.booksList();
+    return (result?.ok && Array.isArray(result.data?.books)) ? result.data.books : [];
+  } catch (_) { return []; }
+}
+
+/** 「加入文集」动作：并入文集（幂等）+ toast 回执。 */
+async function addFeedsToBook(bookID, feedIDs) {
+  const result = await window.robin.booksAddFeeds({ id: bookID, feedIDs }).catch(() => null);
+  if (result?.ok) showToast(t('已加入文集'));
+  else showToast(String(result?.error || t('加入文集失败')));
+}
+
+/** 「加入文集」子菜单项（既有文集 + 新建文集入口；文集可含多源）。 */
+async function addToBookMenuItems(feedIDs) {
+  const { bookMenuItems, showCreateBookDialog } = await import('./views/bookshelf.js');
+  const books = await fetchBooksForMenu();
+  return bookMenuItems({
+    books,
+    feedIDs,
+    onAddToBook: (bookID, ids) => addFeedsToBook(bookID, ids),
+    onCreateBook: async (ids) => {
+      const feeds = state.sidebar.flatMap((a) => a.allFeeds || []);
+      await showCreateBookDialog({
+        feeds,
+        preselectedFeedIDs: ids,
+        onCreate: async ({ title, feedIDs: picked }) => {
+          const result = await window.robin.booksCreate({ title, feedIDs: picked, schedule: 'manual' }).catch(() => null);
+          showToast(result?.ok ? t('文集已创建') : String(result?.error || t('创建失败')));
+        },
+      });
+    },
+  });
+}
+
 function collectFolders() {
   const folders = [];
   for (const account of state.sidebar) {
@@ -1799,7 +1836,7 @@ function folderMenuItems(feedIDs, currentFolder) {
   return items;
 }
 
-function onFeedContext(event, { feed, selectedFeedIDs }) {
+async function onFeedContext(event, { feed, selectedFeedIDs }) {
   const multi = selectedFeedIDs && selectedFeedIDs.size > 1 && selectedFeedIDs.has(feed.id);
   if (multi) {
     const ids = [...selectedFeedIDs];
@@ -1819,6 +1856,7 @@ function onFeedContext(event, { feed, selectedFeedIDs }) {
       },
       { type: 'separator' },
       { label: t('移动选中项到文件夹'), icon: 'folder', children: folderMenuItems(ids) },
+      { label: t('加入文集'), icon: 'books', children: await addToBookMenuItems(ids) },
       { type: 'separator' },
       {
         label: tf('删除选中的订阅 (%lld)', ids.length), icon: 'trash', destructive: true,
@@ -1844,6 +1882,7 @@ function onFeedContext(event, { feed, selectedFeedIDs }) {
     ] },
     { type: 'separator' },
     { label: t('移动到文件夹'), icon: 'folder', children: folderMenuItems([feed.id], feedFolderName(feed)) },
+    { label: t('加入文集'), icon: 'books', children: await addToBookMenuItems([feed.id]) },
     { type: 'separator' },
     { label: t('删除订阅'), icon: 'trash', destructive: true, onClick: () => confirmDeleteFeeds([feed], 1) },
   ]);
@@ -1898,7 +1937,7 @@ function onFolderContext(event, { folder }) {
   ]);
 }
 
-function showListRowContext(event, item) {
+async function showListRowContext(event, item) {
   ContextMenu.show(event.clientX, event.clientY, [
     {
       label: t(item.isRead ? '标为未读' : '标为已读'), icon: 'checkAll',
@@ -1911,6 +1950,10 @@ function showListRowContext(event, item) {
     {
       label: t('盯梢这类内容'), icon: 'search',
       onClick: () => openTopicsView(item.title || ''),
+    },
+    {
+      // 加入文集（F12）：把文章所属订阅源并入文集——文集按源成书，后续新文章自动入册
+      label: t('加入文集'), icon: 'books', children: await addToBookMenuItems([item.feedID]),
     },
   ]);
 }

@@ -736,6 +736,30 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v19-books',
+    up: (db) => {
+      // 个人文集自动成书（F12）：文集 = 绑定若干订阅源的「书」，可手动/周期成书为 EPUB。
+      // - feed_ids_json: string[]（绑定的订阅源 id 列表，可多源）；
+      // - schedule: manual（仅手动「立即成书」）| auto（刷新完成后自动成书，≥24h 节流 + 源有新文章才成）；
+      // - last_built_at: 上次成书时间（秒；既作自动成书节流基准，也作「有新文章」比较基准）；
+      // - last_entry_count: 上次成书收录篇数（书架回显）。
+      // 自动成书产物落 userData/books/<bookId>/（应用数据区白名单内，无需 pickSavePath token）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS books (
+            id               TEXT PRIMARY KEY NOT NULL,
+            title            TEXT NOT NULL,
+            feed_ids_json    TEXT NOT NULL DEFAULT '[]',
+            schedule         TEXT NOT NULL DEFAULT 'manual' CHECK (schedule IN ('manual','auto')),
+            last_built_at    REAL,
+            last_entry_count INTEGER NOT NULL DEFAULT 0,
+            created_at       REAL NOT NULL,
+            updated_at       REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_books_updated ON books(updated_at DESC);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

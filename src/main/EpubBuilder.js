@@ -249,4 +249,171 @@ function buildEntryEpub(payload) {
   });
 }
 
-module.exports = { buildEntryEpub, buildEditionEpub, buildZip, crc32, toWellFormedXML };
+// MARK: - 成书（F12 个人文集）：无篇数上限 + 按月分章 + 元数据 + 封面
+
+const BOOK_STYLE_CSS = `${STYLE_CSS}
+h2 { font-size: 1.2em; line-height: 1.3; margin-top: 1.6em; }
+section { border-top: 1px solid #d8d2c4; margin-top: 2em; padding-top: 1em; }
+.cover-page { text-align: center; margin-top: 18%; }
+.cover-page img { max-width: 128px; max-height: 128px; }
+.cover-title { font-size: 1.9em; margin-top: 1em; line-height: 1.4; }
+.cover-author { color: #6b6558; margin-top: 0.8em; }`;
+
+/** 纯色标题封面 SVG（无源 icon 时的确定性回退；600×800，白字居中）。 */
+function titleCoverSVG(title) {
+  const raw = String(title || 'RobinRead');
+  // CJK 主场：按 12 字/行硬换行（确定性，不依赖字体度量），最多 8 行 + 省略号
+  const lines = [];
+  for (let i = 0; i < raw.length && lines.length < 8; i += 12) lines.push(raw.slice(i, i + 12));
+  if (raw.length > 96) lines[7] = `${lines[7].slice(0, 11)}…`;
+  const tspans = lines
+    .map((line, i) => `<text x="300" y="${330 + i * 62}" text-anchor="middle" font-size="44" fill="#f6f2e7" font-family="serif">${escapeXML(line)}</text>`)
+    .join('\n  ');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#37503f"/>
+  <rect x="40" y="40" width="520" height="720" fill="none" stroke="#d8d2c4" stroke-width="2"/>
+  ${tspans}
+  <text x="300" y="726" text-anchor="middle" font-size="24" fill="#b9c4b2" font-family="serif">RobinRead</text>
+</svg>`;
+}
+
+/**
+ * 构建成书 EPUB（F12 个人文集；与 buildEditionEpub 互不影响——整期导出行为保持不变）。
+ *
+ * payload: {
+ *   title:   书名（必填），
+ *   author:  作者元数据（默认 'RobinRead'），
+ *   sections: [{ title: 'YYYY年M月', articles: [{ title, feedTitle?, publishedAt?(秒), url?, html }] }]
+ *            —— 每个分章一个 XHTML（章内文章按传入顺序排；篇数无上限，分卷由调用方负责），
+ *   cover:   { mime, base64 }（源 icon 图片）| null（回退纯色标题封面 SVG），
+ * }
+ * 返回 Buffer。
+ */
+function buildBookEpub(payload) {
+  const bookTitle = String(payload?.title || 'RobinRead Book');
+  const author = String(payload?.author || 'RobinRead');
+  const sections = (Array.isArray(payload?.sections) ? payload.sections : [])
+    .map((sec) => ({
+      title: String(sec?.title || ''),
+      articles: (Array.isArray(sec?.articles) ? sec.articles : []).filter((a) => a && String(a.html || '').trim()),
+    }))
+    .filter((sec) => sec.articles.length);
+  if (!sections.length) throw new Error('epub: empty content');
+  const uuid = `robinread-book-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const modified = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
+  const dateISO = modified.slice(0, 10);
+
+  const files = [];
+  const manifestItems = [];
+  const spineItems = [];
+  const tocItems = [];
+  let articleTotal = 0;
+
+  // ── 封面：源 icon 图片（images/cover.*，properties=cover-image）或纯色标题封面 SVG ──
+  const cover = payload?.cover && payload.cover.base64 ? payload.cover : null;
+  let coverHref = null;
+  if (cover) {
+    const ext = /svg/i.test(cover.mime) ? 'svg' : (/gif/i.test(cover.mime) ? 'gif' : (/jpg|jpeg/i.test(cover.mime) ? 'jpg' : (/webp/i.test(cover.mime) ? 'webp' : 'png')));
+    coverHref = `images/cover.${ext}`;
+    files.push({ name: `OEBPS/${coverHref}`, data: Buffer.from(String(cover.base64), 'base64') });
+    manifestItems.push(`    <item id="cover-image" href="${coverHref}" media-type="${escapeXML(cover.mime)}" properties="cover-image"/>`);
+  } else {
+    coverHref = 'cover.svg';
+    files.push({ name: 'OEBPS/cover.svg', data: Buffer.from(titleCoverSVG(bookTitle), 'utf8') });
+    manifestItems.push(`    <item id="cover-image" href="cover.svg" media-type="image/svg+xml" properties="cover-image"/>`);
+  }
+  const coverXHTML = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="zh" xml:lang="zh">
+<head><meta charset="utf-8"/><title>${escapeXML(bookTitle)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body>
+<div class="cover-page" epub:type="cover">
+${cover ? `<img src="../${coverHref}" alt="cover"/>` : `<img src="cover.svg" alt="cover"/>`}
+<h1 class="cover-title">${escapeXML(bookTitle)}</h1>
+<p class="cover-author">${escapeXML(author)}</p>
+</div>
+</body></html>`;
+  files.push({ name: 'OEBPS/cover.xhtml', data: Buffer.from(coverXHTML, 'utf8') });
+  manifestItems.push('    <item id="cover-page" href="cover.xhtml" media-type="application/xhtml+xml"/>');
+  spineItems.push('    <itemref idref="cover-page" linear="yes"/>');
+
+  // ── 分章（月）文件 ──
+  sections.forEach((sec, sIndex) => {
+    const secId = `sec${sIndex + 1}`;
+    const href = `${secId}.xhtml`;
+    const articleBlocks = [];
+    const tocChildren = [];
+    sec.articles.forEach((art, aIndex) => {
+      const anchor = `a${aIndex + 1}`;
+      articleTotal += 1;
+      const artTitle = String(art.title || `#${aIndex + 1}`);
+      const metaBits = [];
+      if (art.feedTitle) metaBits.push(escapeXML(art.feedTitle));
+      if (art.publishedAt) {
+        const d = new Date(art.publishedAt * 1000);
+        if (!Number.isNaN(d.getTime())) metaBits.push(d.toISOString().slice(0, 10));
+      }
+      articleBlocks.push(`<section id="${anchor}">
+<h2>${escapeXML(artTitle)}</h2>
+${metaBits.length ? `<p class="meta">${metaBits.join(' · ')}</p>` : ''}
+${toWellFormedXML(String(art.html))}
+</section>`);
+      tocChildren.push(`        <li><a href="${href}#${anchor}">${escapeXML(artTitle)}</a></li>`);
+    });
+    const secXHTML = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="zh" xml:lang="zh">
+<head><meta charset="utf-8"/><title>${escapeXML(sec.title)}</title><link rel="stylesheet" type="text/css" href="style.css"/></head>
+<body>
+<h1>${escapeXML(sec.title)}</h1>
+${articleBlocks.join('\n')}
+</body></html>`;
+    files.push({ name: `OEBPS/${href}`, data: Buffer.from(secXHTML, 'utf8') });
+    manifestItems.push(`    <item id="${secId}" href="${href}" media-type="application/xhtml+xml"/>`);
+    spineItems.push(`    <itemref idref="${secId}"/>`);
+    tocItems.push(`      <li><span>${escapeXML(sec.title)}</span>
+<ol>
+${tocChildren.join('\n')}
+</ol></li>`);
+  });
+
+  const navXHTML = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><meta charset="utf-8"/><title>TOC</title></head>
+<body><nav epub:type="toc"><h1>${escapeXML(bookTitle)}</h1><ol>
+${tocItems.join('\n')}
+</ol></nav></body></html>`;
+
+  const opf = `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="zh">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="book-id">urn:uuid:${uuid}</dc:identifier>
+    <dc:title>${escapeXML(bookTitle)}</dc:title>
+    <dc:creator>${escapeXML(author)}</dc:creator>
+    <dc:language>zh</dc:language>
+    <dc:date>${dateISO}</dc:date>
+    <meta property="dcterms:modified">${modified}</meta>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="css" href="style.css" media-type="text/css"/>
+${manifestItems.join('\n')}
+  </manifest>
+  <spine>
+${spineItems.join('\n')}
+  </spine>
+</package>`;
+
+  return buildZip([
+    { name: 'mimetype', data: Buffer.from('application/epub+zip', 'utf8') },
+    { name: 'META-INF/container.xml', data: Buffer.from(CONTAINER_XML, 'utf8') },
+    { name: 'OEBPS/content.opf', data: Buffer.from(opf, 'utf8') },
+    { name: 'OEBPS/nav.xhtml', data: Buffer.from(navXHTML, 'utf8') },
+    { name: 'OEBPS/style.css', data: Buffer.from(BOOK_STYLE_CSS, 'utf8') },
+    ...files,
+  ]);
+}
+
+module.exports = { buildEntryEpub, buildEditionEpub, buildBookEpub, titleCoverSVG, buildZip, crc32, toWellFormedXML };

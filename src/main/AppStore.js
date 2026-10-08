@@ -40,6 +40,7 @@ const { ResearchService } = require('./ResearchService');
 const { RAGService } = require('./RAGService');
 const { SmartPicksService } = require('./SmartPicksService');
 const { ObsidianExportService } = require('./ObsidianExportService');
+const { BooksService } = require('./BooksService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -160,6 +161,7 @@ class AppStore extends EventEmitter {
     this.rag = new RAGService(this); // 全库 RAG 问答（F9）：全库检索 + 多轮会话 + 引用跳转
     this.smartPicks = new SmartPicksService(this); // 智能每日精选（F10）：本地画像重排 + 播报文稿
     this.obsidian = new ObsidianExportService(this); // Obsidian 知识库导出（F11）：Markdown 库 + 增量游标（目录授权仅内存态）
+    this.books = new BooksService(this, userDataPath); // 个人文集自动成书（F12）：文集 CRUD + EPUB 成书 + 自动节流
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -2114,6 +2116,8 @@ class AppStore extends EventEmitter {
     this.topics.aggregateDue().catch(() => { /* 聚合失败不影响刷新 */ });
     // WebDAV 多设备同步（F7）：刷新完成后异步 kick（默认开，≥10 分钟节流；绝不阻塞刷新路径）
     if (this.sync) this.sync.kick('refresh');
+    // 个人文集自动成书（F12）：auto 文集刷新落地后异步成书（≥24h 节流 + 有新文章才成；串行链、逐书容错）
+    if (this.books) this.books.kick().catch(() => { /* 成书失败不影响刷新 */ });
     this._emitState();
   }
 

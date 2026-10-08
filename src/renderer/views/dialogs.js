@@ -10,6 +10,7 @@ import { FEED_REFRESH_INTERVALS_META } from '../refresh-intervals.js';
 import { promptBox, confirmBox, alertBox } from '../ui-prompt.js';
 import { TYPOGRAPHY_PRESETS } from '../data/typography-presets.js';
 import { syncResultText } from './sync-command.js';
+import { bookMetaLine, showCreateBookDialog } from './bookshelf.js';
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -22,6 +23,7 @@ const SECTIONS = [
   { id: 'language', title: '语言', icon: 'globe' },
   { id: 'sync', title: '同步', icon: 'cloud' },
   { id: 'obsidian', title: 'Obsidian', icon: 'bookOpen' },
+  { id: 'bookshelf', title: '书架', icon: 'books' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
   { id: 'about', title: '关于', icon: 'info' },
 ];
@@ -130,6 +132,7 @@ export class SettingsView {
       case 'language': this._language(scroll, prefs); break;
       case 'sync': this._sync(scroll); break;
       case 'obsidian': this._obsidian(scroll); break;
+      case 'bookshelf': this._bookshelf(scroll); break;
       case 'feedback': this._feedback(scroll); break;
       case 'about': this._about(scroll); break;
       default: break;
@@ -1804,6 +1807,132 @@ export class SettingsView {
         ? tf('上次导出：%@', new Date(lastExportAt * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
         : t('尚未导出'))),
     ]));
+  }
+
+  // MARK: 书架（F12 个人文集自动成书）
+
+  async _bookshelf(container) {
+    const result = await window.robin.booksList?.().catch(() => null);
+    const books = (result?.ok && Array.isArray(result.data?.books)) ? result.data.books : [];
+    const refresh = () => { if (this.overlay) this.render(); };
+    const sidebarFeeds = () => (this.state?.sidebar || []).flatMap((a) => a.allFeeds || []);
+
+    container.appendChild(group(t('个人文集成书'), t('把选中的订阅源（如某公众号的全部文章）按周期自动打包成带目录的 EPUB 书：文章按发布时间升序、按月分章，每 200 篇自动分卷。「自动成书」在每次刷新完成后触发（至少间隔 24 小时且源有新文章），产物存放在应用数据目录的 books/<文集>/ 下；「立即成书」则由你选择保存位置。'), []));
+
+    // ── 新建文集 ──
+    const newBtn = document.createElement('button');
+    newBtn.className = 'btn-text primary';
+    newBtn.textContent = t('新建文集…');
+    newBtn.addEventListener('click', async () => {
+      await showCreateBookDialog({
+        feeds: sidebarFeeds(),
+        onCreate: async ({ title, feedIDs }) => {
+          const res = await window.robin.booksCreate({ title, feedIDs, schedule: 'manual' }).catch(() => null);
+          showToast(res?.ok ? t('文集已创建') : String(res?.error || t('创建失败')));
+        },
+      });
+      refresh();
+    });
+    container.appendChild(group(t('文集'), t('文集可绑定多个订阅源；也可在侧栏订阅源或文章的右键菜单里「加入文集」。'), [
+      row(t('新建文集'), t('命名并勾选要收进书里的订阅源。'), newBtn),
+    ]));
+
+    // ── 书列表 ──
+    if (!books.length) {
+      container.appendChild(group(t('书架空'), t('还没有文集。点上方「新建文集」，或在订阅源右键菜单里选择「加入文集 → 新建文集」。'), []));
+      return;
+    }
+    const listGroup = group(t('书目'), t('删除文集只移除文集本身与自动目录里的成书；你手动导出到其他位置的书不受影响。'), []);
+    container.appendChild(listGroup);
+    const host = listGroup.querySelector('.group-rows');
+
+    for (const book of books) {
+      const item = document.createElement('div');
+      item.style.cssText = 'display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--separator);';
+
+      const iconEl = document.createElement('span');
+      iconEl.className = 'setting-icon';
+      iconEl.innerHTML = icon('books');
+      iconEl.style.marginTop = '3px';
+
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1;min-width:0;';
+      const titleLine = document.createElement('div');
+      titleLine.style.cssText = 'display:flex;align-items:center;gap:8px;';
+      const titleEl = document.createElement('span');
+      titleEl.style.cssText = 'font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      titleEl.textContent = book.title;
+      titleLine.appendChild(titleEl);
+      if (book.pendingPick) {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:10.5px;font-weight:600;color:var(--accent);background:color-mix(in oklch, var(--accent) 14%, transparent);padding:1px 8px;border-radius:999px;flex-shrink:0;';
+        badge.textContent = t('待取');
+        titleLine.appendChild(badge);
+      }
+      if (book.schedule === 'auto') {
+        const autoTag = document.createElement('span');
+        autoTag.style.cssText = 'font-size:10.5px;color:var(--text-tertiary);border:1px solid var(--separator);padding:1px 8px;border-radius:999px;flex-shrink:0;';
+        autoTag.textContent = t('自动');
+        titleLine.appendChild(autoTag);
+      }
+      const metaEl = document.createElement('div');
+      metaEl.style.cssText = 'font-size:12px;color:var(--text-secondary);margin-top:3px;line-height:1.6;';
+      metaEl.textContent = bookMetaLine(book);
+      const fileEl = document.createElement('div');
+      fileEl.style.cssText = 'font-size:11.5px;color:var(--text-tertiary);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      fileEl.textContent = (book.lastFiles || []).length ? book.lastFiles.join(' · ') : t('自动目录暂无成书');
+      info.append(titleLine, metaEl, fileEl);
+
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;';
+      actions.appendChild(toggleControl(book.schedule === 'auto', async (on) => {
+        await window.robin.booksUpdate({ id: book.id, schedule: on ? 'auto' : 'manual' }).catch(() => null);
+        showToast(on ? t('已开启自动成书') : t('已关闭自动成书'));
+        refresh();
+      }));
+
+      const btnLine = document.createElement('div');
+      btnLine.style.cssText = 'display:flex;gap:6px;';
+      const mkBtn = (label, cls, onClick) => {
+        const b = document.createElement('button');
+        b.className = `btn-text ${cls}`;
+        b.textContent = label;
+        b.addEventListener('click', onClick);
+        return b;
+      };
+      btnLine.appendChild(mkBtn(t('立即成书'), 'bordered', async () => {
+        const res = await window.robin.booksBuild(book.id).catch(() => null);
+        if (res?.ok && res.data) {
+          const names = (res.data.files || []).map((f) => f.name).join('、');
+          showToast(names
+            ? tf('成书完成（%lld 篇）：%lld', res.data.entryCount ?? 0, names)
+            : tf('成书完成：%lld 卷（%lld 篇）', res.data.volumes ?? 1, res.data.entryCount ?? 0), 3200);
+        } else if (res && !res.ok) {
+          await alertBox(t('成书失败'), String(res.error || ''));
+        }
+        refresh();
+      }));
+      btnLine.appendChild(mkBtn(t('打开目录'), 'bordered', async () => {
+        const res = await window.robin.booksOpenDir(book.id).catch(() => null);
+        if (res && !res.ok) await alertBox(t('打开失败'), String(res.error || ''));
+        refresh();
+      }));
+      btnLine.appendChild(mkBtn(t('删除'), '', async () => {
+        const go = await confirmBox(t('删除文集？'), {
+          message: tf('「%@」将被删除，其自动目录里的成书文件一并清理。你手动导出到其他位置的 EPUB 不受影响。', book.title),
+          okLabel: t('删除'),
+          danger: true,
+        });
+        if (!go) return;
+        const res = await window.robin.booksDelete(book.id).catch(() => null);
+        showToast(res?.ok ? t('文集已删除') : String(res?.error || t('删除失败')));
+        refresh();
+      }));
+      actions.appendChild(btnLine);
+
+      item.append(iconEl, info, actions);
+      host.appendChild(item);
+    }
   }
 
   _feedback(container) {
