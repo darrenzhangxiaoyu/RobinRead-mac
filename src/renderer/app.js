@@ -34,6 +34,8 @@ import { AihotView } from './views/aihot-view.js';
 import { MediaView } from './views/media-view.js';
 import { MediaMiniPlayer } from './views/media-player.js';
 import { PicksTTSPlayer } from './views/picks-tts.js';
+import { RadioPlayer } from './views/radio-player.js';
+import { FocusSessionPanel } from './views/focus-session.js';
 import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 import { syncPaletteCommand } from './views/sync-command.js';
@@ -126,17 +128,20 @@ async function bootstrap() {
   });
   views.account.init();
   // 媒体中心（F3）：全局单实例迷你播放器（与 TTS 互斥在此裁决，双方经 deps 互通）
-  // F10 起「全局 TTS 态」= 阅读器朗读 + 精选播报（PicksTTSPlayer）两者取非空闲者
+  // F10 起「全局 TTS 态」= 阅读器朗读 + 精选播报（PicksTTSPlayer）取非空闲者；
+  // F19 起并入简报电台（RadioPlayer）——四方互斥（媒体/朗读/精选/电台）的 M→R 边
   views.mediaPlayer = new MediaMiniPlayer({
     tts: {
       state: () => {
         const readerState = views.reader?.ttsState || 'idle';
         if (readerState !== 'idle') return readerState;
-        return views.picksTTS?.state || 'idle';
+        if ((views.picksTTS?.state || 'idle') !== 'idle') return views.picksTTS.state;
+        return views.radio?.state || 'idle';
       },
       stop: () => {
         views.reader?.stopTTS?.();
         views.picksTTS?.stop?.();
+        views.radio?.stop?.();
       },
     },
     toast: showToast,
@@ -147,6 +152,15 @@ async function bootstrap() {
     onState: (s) => views.list?.setPicksBroadcastState?.(s),
   });
   window.__robinPicksTTS = views.picksTTS; // E2E 测试句柄（与 __robinReader 同惯例）
+  // F19 简报电台：今日简报/模板文稿 → 逐句 NeuralTTS 链播 + 位置记忆 + 合成缓存
+  views.radio = new RadioPlayer({
+    toast: showToast,
+    preferAI: radioPreferAI,
+  });
+  window.__robinRadio = views.radio; // E2E 测试句柄（含四方互斥反向缝）
+  // F20 专注会话：内存对象（不持久化），篇数经 handleEntrySelect 钩子计数
+  views.focus = new FocusSessionPanel({ toast: showToast });
+  window.__robinFocus = views.focus; // E2E 测试句柄（探针注入时间加速）
   views.list = new ListView(document.getElementById('list-scroll'), {
     onSelect: handleEntrySelect,
     onContext: showListRowContext,
@@ -371,6 +385,7 @@ function buildToolbar() {
   set('cap-read', icon('envelopeClosed'));
   set('cap-star', icon('star'));
   set('cap-zen', icon('expand'));
+  set('cap-focus-session', icon('clock'), t('专注会话：设定时长开始沉浸阅读'));
   set('cap-autoscroll', icon('chevronDown'), t('自动滚动阅读'));
   set('cap-focus', icon('eye'), t('聚焦模式：非当前段落渐暗（F）'));
   set('cap-highlight', icon('marker'), t('高亮：选中文字快速高亮（H）；无选区打开批注面板'));
@@ -453,6 +468,7 @@ function bindToolbar() {
   document.getElementById('cap-star').addEventListener('click', () => toggleStarWithGuide());
   document.getElementById('cap-popout').addEventListener('click', () => openReaderWindow(state.selectedEntryID));
   document.getElementById('cap-zen').addEventListener('click', toggleZenMode);
+  document.getElementById('cap-focus-session').addEventListener('click', () => views.focus?.open());
   document.getElementById('cap-autoscroll').addEventListener('click', () => views.reader?.toggleAutoScroll?.());
   document.getElementById('cap-focus').addEventListener('click', toggleFocusMode);
 
@@ -667,6 +683,8 @@ function buildPaletteCommands() {
     { label: t('切换聚焦模式'), keywords: 'focus 聚焦 渐暗', icon: 'eye', hint: 'F', action: toggleFocusMode },
     { label: t('切换禅模式'), keywords: 'zen 禅 全屏', icon: 'expand', action: toggleZenMode },
     { label: t('今日简报'), keywords: 'digest 简报 日报 ai open', icon: 'spark', action: () => showTodayDigest() },
+    { label: t('播放今日电台'), keywords: 'radio 电台 播报 简报 听 audio play', icon: 'radioDot', action: () => playTodayRadio() },
+    { label: t('专注会话'), keywords: 'focus session 专注 番茄 计时', icon: 'clock', action: () => views.focus?.open() },
     { label: t('智能精选'), keywords: 'smart picks 精选 推荐 画像 兴趣 interest', icon: 'wand', action: () => toggleSmartPicks() },
     { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
@@ -851,6 +869,28 @@ async function broadcastSmartPicks() {
     return;
   }
   await views.picksTTS.play(result.script);
+}
+
+// MARK: - 简报电台（F19：简报浮层入口 / 命令面板 / 播放中再点 = 停止）
+
+/** AI 改写门：有 Key 且会员/额度门通过才请求 AI 文稿，否则主进程自动降级模板。 */
+async function radioPreferAI() {
+  if (window.__robinLLM?.__hasKey === false) return false;
+  try {
+    return await views.account?.gateAI?.() === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** 「播放今日电台」：idle → 开播；播放中/暂停 → 停止（再点语义与精选播报一致）。 */
+async function playTodayRadio() {
+  if (!views.radio) return;
+  if (views.radio.state !== 'idle') {
+    views.radio.stop();
+    return;
+  }
+  await views.radio.play();
 }
 
 /** 「不感兴趣」：主进程记入 24h 排除名单，前端即时重排。 */
@@ -1056,6 +1096,7 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
         <button id="digest-mode-deep" class="${mode === 'deep' ? 'on' : ''}">${escapeHTMLInline(t('精读版'))}</button>
       </div>
       <button class="btn icon-only" id="digest-full" title="${escapeHTMLInline(t('全屏'))}" style="margin-right:8px;">${icon('expand')}</button>
+      <button class="btn-text" id="digest-radio" style="display:none;margin-right:8px;"></button>
       <button class="btn-text" id="digest-copy" style="display:none;margin-right:8px;"></button>
       <button class="btn-text" id="digest-regen" style="display:none;margin-right:8px;"></button>
       <button class="btn icon-only" id="digest-close">${''}</button></div>
@@ -1080,8 +1121,11 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
   const body = modal.querySelector('.digest-body');
   const regenBtn = modal.querySelector('#digest-regen');
   const copyBtn = modal.querySelector('#digest-copy');
+  const radioBtn = modal.querySelector('#digest-radio');
   regenBtn.textContent = t('重新生成');
   copyBtn.textContent = t('复制全文');
+  radioBtn.textContent = t('电台播放');
+  radioBtn.addEventListener('click', () => playTodayRadio());
   let lastContent = '';
   let lastRefs = [];
   copyBtn.addEventListener('click', async () => {
@@ -1124,10 +1168,13 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
       renderInto(cached.data.content, cached.data.entryRefs, cached.data, false);
       regenBtn.style.display = '';
       copyBtn.style.display = '';
+      radioBtn.style.display = '';
+      mountDigestGoal(body);
       return;
     }
   }
   regenBtn.style.display = 'none';
+  radioBtn.style.display = 'none';
 
   // 生成属 AI 功能：过会员/每日额度门（缓存命中不消耗额度）
   if (!(await views.account?.gateAI())) {
@@ -1158,6 +1205,51 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
   renderInto(result.data?.content || streamed, result.data?.entryRefs, result.data, false);
   regenBtn.style.display = '';
   copyBtn.style.display = '';
+  radioBtn.style.display = '';
+  mountDigestGoal(body);
+}
+
+/**
+ * 今日简报浮层的阅读目标进度卡（F20）：SVG 进度环（今日 N/目标 M）+ 周进度条。
+ * 双目标都关闭（0）时不渲染；数据走 goal:progress 聚合通道（reading_stats 按日）。
+ */
+function mountDigestGoal(body) {
+  // renderInto 内部经 rAF 合帧重绘——双 rAF 等首帧绘制完成后再插入，避免被整表重建清掉
+  requestAnimationFrame(() => requestAnimationFrame(async () => {
+    if (!document.body.contains(body) || body.querySelector('.dg-goal')) return;
+    let progress = null;
+    try {
+      progress = await window.robin.goalProgress?.();
+    } catch (_) {
+      progress = null;
+    }
+    if (!progress || !document.body.contains(body) || body.querySelector('.dg-goal')) return;
+    if (!progress.daily?.enabled && !progress.weekly?.enabled) return; // 目标全关：隐藏
+    const wrap = document.createElement('div');
+    wrap.className = 'dg-goal';
+    wrap.dataset.role = 'digest-goal';
+    const R = 20;
+    const C = 2 * Math.PI * R;
+    const d = progress.daily;
+    const w = progress.weekly;
+    const dailyPart = d.enabled ? `
+      <div class="dg-goal-ring ${d.done ? 'done' : ''}" title="${escapeHTMLInline(t('今日阅读目标'))}">
+        <svg viewBox="0 0 48 48" role="img">
+          <circle class="dg-goal-track" cx="24" cy="24" r="${R}"/>
+          <circle class="dg-goal-fill" cx="24" cy="24" r="${R}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - d.pct)).toFixed(1)}"/>
+        </svg>
+        <span class="dg-goal-num"><b>${d.read}</b>/${d.goal}</span>
+      </div>
+      <span class="dg-goal-label">${escapeHTMLInline(t('今日阅读目标'))}${d.done ? ` · ${escapeHTMLInline(t('已达成'))}` : ''}</span>` : '';
+    const weeklyPart = w.enabled ? `
+      <div class="dg-goal-week">
+        <span class="dg-goal-label">${escapeHTMLInline(t('本周'))}</span>
+        <span class="dg-goal-bar"><i style="width:${Math.round(w.pct * 100)}%"></i></span>
+        <span class="dg-goal-weeknum">${w.read}/${w.goal}</span>
+      </div>` : '';
+    wrap.innerHTML = `${dailyPart}${weeklyPart}`;
+    body.insertBefore(wrap, body.firstChild);
+  }));
 }
 
 function escapeHTMLInline(value) {
@@ -1334,6 +1426,7 @@ let pendingPageTurn = null;
 
 async function handleEntrySelect(entryID, item) {
   state.selectedEntryID = entryID;
+  views.focus?.countRead?.(); // F20 专注会话：会话期间打开文章计数（内存对象）
   if (state.scope.kind === 'unread') {
     state.retainedIDs.add(entryID);
     // 保留集无界增长会让 unread 过滤 SQL 恶化（IN 参数膨胀），封顶 500
@@ -1353,7 +1446,25 @@ async function handleEntrySelect(entryID, item) {
   await views.reader.open(entryID, { turn });
   // 自动精读可能在 open 内改变翻译模式：确定性刷新胶囊状态
   updateToolbarState();
-  if (item && !item.isRead) window.robin.markRead(entryID, true);
+  if (item && !item.isRead) {
+    window.robin.markRead(entryID, true);
+    maybeCelebrateGoal(); // F20：今日目标达成时一次性恭喜（主进程记 lastCelebrateDate）
+  }
+}
+
+// MARK: - 阅读目标（F20）：达标恭喜一次性（当日不重复，判定在主进程）
+
+let celebrateInFlight = false;
+function maybeCelebrateGoal() {
+  if (celebrateInFlight) return;
+  celebrateInFlight = true;
+  window.robin.goalCelebrate?.().then((result) => {
+    if (result?.celebrated) {
+      showToast(tf('今日阅读目标达成（%lld/%lld），读得漂亮！', result.progress.daily.read, result.progress.daily.goal), 4200);
+    }
+  }).catch(() => { /* 静默：庆祝失败不影响阅读 */ }).finally(() => {
+    celebrateInFlight = false;
+  });
 }
 
 // MARK: - 相邻导航（B/N/空格，双击确认 + toast）

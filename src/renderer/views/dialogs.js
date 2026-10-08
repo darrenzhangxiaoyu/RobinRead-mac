@@ -19,6 +19,7 @@ const SECTIONS = [
   { id: 'mail', title: '邮件订阅', icon: 'envelopeClosed' },
   { id: 'ai', title: 'AI 功能', icon: 'ai' },
   { id: 'knowledge', title: '知识', icon: 'bookOpen' },
+  { id: 'goals', title: '目标', icon: 'clock' },
   { id: 'refresh', title: '刷新', icon: 'refresh' },
   { id: 'rules', title: '过滤规则', icon: 'funnel' },
   { id: 'language', title: '语言', icon: 'globe' },
@@ -129,6 +130,7 @@ export class SettingsView {
       case 'mail': this._mail(scroll); break;
       case 'ai': this._ai(scroll, llm); break;
       case 'knowledge': this._knowledge(scroll); break;
+      case 'goals': this._goals(scroll); break;
       case 'refresh': this._refresh(scroll, prefs); break;
       case 'rules': this._rules(scroll); break;
       case 'language': this._language(scroll, prefs); break;
@@ -163,13 +165,7 @@ export class SettingsView {
       )),
     ]));
 
-    container.appendChild(group(t('阅读目标'), t('每日读完目标篇数后，知识看板的进度环即点亮。'), [
-      row(t('每日篇数'), null, segmented(
-        [[3, '3'], [5, '5'], [8, '8'], [12, '12'], [20, '20']],
-        Number(prefs.dailyGoal) || 5,
-        (value) => window.robin.statsSetGoal(Number(value)),
-      )),
-    ]));
+    // F20：阅读目标迁入独立「目标」分区（每日 + 每周 + 当前进度），外观分区不再重复放置。
 
     // ── 主题（提案 + 设计器入口，独立分组）──
     const themeGroup = group(t('主题'), t('OKLCH 三通道调色 · 中国传统色 · 配色关系 · 对比度检测'), []);
@@ -1020,6 +1016,72 @@ export class SettingsView {
         })()),
       ],
     ));
+  }
+
+  // MARK: 目标（F20：每日/每周篇数 + 当前进度）
+
+  async _goals(container) {
+    const prefs = this.state.snapshot?.preferences || {};
+    const numOf = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+    const notePrefs = (key, value) => {
+      if (this.state.snapshot?.preferences) this.state.snapshot.preferences[key] = value;
+      this.handlers.onRefreshState?.();
+    };
+    container.appendChild(group(
+      t('阅读目标'),
+      t('达到每日目标时恭喜一次（每天最多一次）；设为「关」时进度环随之隐藏。'),
+      [
+        row(t('每日篇数'), t('今天想读完的文章数（关 = 不设目标）'), segmented(
+          [[0, t('关')], [3, '3'], [5, '5'], [8, '8'], [12, '12'], [20, '20']],
+          numOf(prefs.dailyGoal, 5),
+          async (value) => {
+            await window.robin.statsSetGoal(Number(value));
+            notePrefs('dailyGoal', Number(value));
+            await refreshProgress();
+          },
+        )),
+        row(t('每周篇数'), t('本周（含今天共 7 天）想读完的文章数（关 = 不设目标）'), segmented(
+          [[0, t('关')], [7, '7'], [15, '15'], [25, '25'], [35, '35']],
+          numOf(prefs.weeklyGoal, 0),
+          async (value) => {
+            await window.robin.setWeeklyGoal(Number(value));
+            notePrefs('weeklyGoal', Number(value));
+            await refreshProgress();
+          },
+        )),
+      ],
+    ));
+
+    // 当前进度（goal:progress 聚合：reading_stats 按日，周 = 近 7 天求和）
+    const progressCard = document.createElement('div');
+    progressCard.className = 'settings-group';
+    progressCard.innerHTML = '<div class="settings-group-header"></div><div class="group-rows"></div>';
+    progressCard.querySelector('.settings-group-header').textContent = t('当前进度');
+    container.appendChild(progressCard);
+    const refreshProgress = async () => {
+      const host = progressCard.querySelector('.group-rows');
+      let p = null;
+      try { p = await window.robin.goalProgress(); } catch (_) { p = null; }
+      host.innerHTML = '';
+      if (!p) return;
+      const line = (label, s) => {
+        const r = document.createElement('div');
+        r.className = 'setting-row nj-goal-line';
+        r.dataset.role = 'goal-line';
+        r.dataset.kind = label === t('今日') ? 'daily' : 'weekly';
+        r.innerHTML = `<div class="setting-label"><div class="title"></div></div>`
+          + `<div class="setting-control nj-goal-meter"><span class="nj-goal-bar"><i></i></span><span class="nj-goal-num"></span></div>`;
+        r.querySelector('.title').textContent = label;
+        r.querySelector('.nj-goal-bar i').style.width = `${Math.round((s.pct || 0) * 100)}%`;
+        const num = r.querySelector('.nj-goal-num');
+        num.textContent = s.enabled ? `${s.read}/${s.goal}` : t('关');
+        num.classList.toggle('done', s.done === true);
+        return r;
+      };
+      host.appendChild(line(t('今日'), p.daily || {}));
+      host.appendChild(line(t('本周'), p.weekly || {}));
+    };
+    await refreshProgress();
   }
 
   // MARK: AI 功能

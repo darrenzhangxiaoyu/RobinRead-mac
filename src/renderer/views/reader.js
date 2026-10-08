@@ -2628,6 +2628,8 @@ export class ReaderView {
       return;
     }
     this.highlights.push(hl);
+    // F20 专注会话批注计数：高亮保存成功 → 广播（FocusSessionPanel 监听）
+    try { document.dispatchEvent(new CustomEvent('robinread:annotation-created', { detail: { kind: 'highlight', itemID: this.entryID } })); } catch (_) { /* 忽略 */ }
     // 就地包裹（优先 live range；失败退回文本匹配）
     let marks = [];
     try { marks = this._wrapRange(payload.range, (mark) => this._decorateMark(mark, hl)); } catch (_) { marks = []; }
@@ -2913,6 +2915,8 @@ export class ReaderView {
       const note = result?.ok ? result.data : null;
       if (note) {
         this.notes.unshift(note);
+        // F20 专注会话批注计数：笔记保存成功 → 广播（FocusSessionPanel 监听）
+        try { document.dispatchEvent(new CustomEvent('robinread:annotation-created', { detail: { kind: 'note', itemID: this.entryID } })); } catch (_) { /* 忽略 */ }
         this._renderNoteMarkers();
         this._refreshAnnotationsPanel();
       }
@@ -3036,6 +3040,8 @@ export class ReaderView {
         const created = result?.ok ? result.data : null;
         if (created) {
           this.notes.unshift(created);
+          // F20 专注会话批注计数：批注面板新建笔记 → 广播
+          try { document.dispatchEvent(new CustomEvent('robinread:annotation-created', { detail: { kind: 'note', itemID: this.entryID } })); } catch (_) { /* 忽略 */ }
           this._renderNoteMarkers();
         }
       } else {
@@ -4017,6 +4023,8 @@ export class ReaderView {
     // 智能精选播报（F10）互斥：朗读启播同样停掉精选播报（否则双声源——
     // 场景：列表播报精选 → 点开文章按「听」。P→R 边已有，此处补 R→P 边）
     window.__robinPicksTTS?.stop?.();
+    // 简报电台（F19）互斥：朗读启播停掉电台（四方互斥 R→Radio 边）
+    window.__robinRadio?.stop?.();
     this._ttsStarting = true;
     Promise.resolve(this._ttsStart()).finally(() => { this._ttsStarting = false; });
   }

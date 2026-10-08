@@ -193,6 +193,17 @@ contextBridge.exposeInMainWorld('robin', {
   picksBroadcast: (opts) => data('picks:broadcast', opts),
   picksSetLimit: (n) => data('picks:setLimit', n),
 
+  // 简报电台（F19：电台文稿 / 播放位置记忆 / 诊断快照）
+  radioScript: (opts) => data('radio:script', opts),
+  radioSavePosition: (sessionKey, index, meta) => data('radio:savePosition', sessionKey, index, meta),
+  radioGetPosition: (sessionKey, hash) => data('radio:getPosition', sessionKey, hash),
+  radioSnapshot: () => data('radio:snapshot'),
+
+  // 阅读目标（F20：进度聚合 / 周目标 / 达标恭喜一次性）
+  goalProgress: () => data('goal:progress'),
+  setWeeklyGoal: (n) => data('goal:setWeekly', n),
+  goalCelebrate: () => data('goal:celebrate'),
+
   // 图片字节抓取（深色插图反相分析）
   fetchImageBytes: (url) => invoke('net:fetchImage', url),
 

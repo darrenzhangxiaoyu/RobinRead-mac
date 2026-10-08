@@ -825,6 +825,18 @@ function registerIPCHandlers(store, window) {
   handle('picks:broadcast', (opts) => SP().broadcastScript(opts || {}));
   handle('picks:setLimit', (n) => SP().setLimit(n));
 
+  // MARK: 简报电台（F19：电台文稿 / 播放位置记忆 / 诊断快照）
+  const DR = () => store.digestRadio;
+  handle('radio:script', (opts) => DR().radioScript(opts || {}));
+  handle('radio:savePosition', (sessionKey, index, meta) => DR().savePosition(sessionKey, index, meta || {}));
+  handle('radio:getPosition', (sessionKey, hash) => DR().getPosition(sessionKey, { hash }));
+  handle('radio:snapshot', () => DR().snapshot());
+
+  // MARK: 阅读目标与专注会话（F20：进度聚合 / 周目标 / 达标恭喜一次性）
+  handle('goal:progress', () => store.readingGoalsProgress());
+  handle('goal:setWeekly', (n) => store.setWeeklyGoal(n));
+  handle('goal:celebrate', () => store.celebrateDailyGoalIfDue());
+
   handle('titles:translateBulk', (items) => store.translateTitlesBulk(items));
   handle('prefs:setTitleZh', (on) => {
     store.preferences.set('RobinRead.list.titleZh', on === true);

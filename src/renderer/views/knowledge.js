@@ -95,13 +95,14 @@ export class KnowledgeCenter {
   async _load() {
     const loads = {
       dashboard: async () => {
-        const [dash, heat, tags, goal] = await Promise.all([
+        const [dash, heat, tags, goal, goals] = await Promise.all([
           window.robin.kbDashboard(),
           window.robin.kbHeatmap(30),
           window.robin.kbTags(),
           window.robin.statsGetGoal?.() ?? 5,
+          window.robin.goalProgress?.().catch(() => null), // F20：目标进度聚合（日/周）
         ]);
-        return { ...dash, heat: heat?.map || {}, tags, goal };
+        return { ...dash, heat: heat?.map || {}, tags, goal, goals };
       },
       highlights: async () => (await window.robin.kbAllHighlights()).slice(0, 100),
       notes: async () => (await window.robin.kbNotes()).slice(0, 80),
@@ -227,38 +228,43 @@ export class KnowledgeCenter {
         <div class="kb-stat-card"><span class="kb-stat-num">${Array.isArray(d.tags) ? d.tags.length : (d.tags || 0)}</span><span class="kb-stat-label">标签</span></div>
         <div class="kb-stat-card"><span class="kb-stat-num">${d.streak || 0}</span><span class="kb-stat-label">连续天数</span></div>
       </div>`;
-    // ── 每日目标进度环（R13）：今日已读 / 目标篇数，达成后环体点亮 ──
+    // ── 每日目标进度环（R13；F20 扩展：0 = 关闭时隐藏 + 周进度条）──
     {
-      const goal = Number(d.goal) || 5;
+      const goals = d.goals || null;
+      const goal = goals ? Number(goals.daily?.goal) : (Number(d.goal) || 5);
       const streak = Number(d.streak) || 0;
-      const tk = new Date();
-      const todayKey = new Date(tk.getTime() - tk.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-      const todayRead = Number(d.heat?.[todayKey]?.read) || 0;
-      const pct = Math.max(0, Math.min(1, todayRead / goal));
-      const done = todayRead >= goal;
-      const R = 34;
-      const C = 2 * Math.PI * R;
-      const ringWrap = document.createElement('div');
-      ringWrap.className = 'kb-goal-ring' + (done ? ' done' : '');
-      ringWrap.innerHTML = `
-        <div class="kb-goal-figure">
-          <svg class="kb-goal-svg" viewBox="0 0 88 88" role="img">
-            <defs>
-              <linearGradient id="kbGoalGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0" style="stop-color: var(--accent, #617357)"/><stop offset="1" style="stop-color: var(--warm-accent, #a3573d)"/>
-              </linearGradient>
-            </defs>
-            <circle class="kb-goal-track" cx="44" cy="44" r="${R}"/>
-            <circle class="kb-goal-fill" cx="44" cy="44" r="${R}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - pct)).toFixed(1)}"/>
-          </svg>
-          <div class="kb-goal-center"><b>${todayRead}</b><span>/ ${goal}</span></div>
-        </div>
-        <div class="kb-goal-text">
-          <div class="kb-goal-title">${escapeHTML(t('今日阅读目标'))}</div>
-          <div class="kb-goal-sub">${done ? `${icon('check', 13)} ${escapeHTML(t('已达成，读得漂亮'))}` : escapeHTML(t('再读') + ' ' + (goal - todayRead) + ' ' + t('篇即达成'))}</div>
-          ${streak >= 2 ? `<div class="kb-goal-streak">${icon('flame', 12)} ${escapeHTML(tf('%lld 天连击', streak))}</div>` : ''}
-        </div>`;
-      el.insertBefore(ringWrap, el.firstChild);
+      if (goal > 0) {
+        const tk = new Date();
+        const todayKey = new Date(tk.getTime() - tk.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+        const todayRead = goals ? Number(goals.daily?.read) || 0 : Number(d.heat?.[todayKey]?.read) || 0;
+        const pct = goals ? Number(goals.daily?.pct) || 0 : Math.max(0, Math.min(1, todayRead / goal));
+        const done = goals ? goals.daily?.done === true : todayRead >= goal;
+        const R = 34;
+        const C = 2 * Math.PI * R;
+        const week = goals?.weekly?.enabled === true ? goals.weekly : null;
+        const ringWrap = document.createElement('div');
+        ringWrap.className = 'kb-goal-ring' + (done ? ' done' : '');
+        ringWrap.innerHTML = `
+          <div class="kb-goal-figure">
+            <svg class="kb-goal-svg" viewBox="0 0 88 88" role="img">
+              <defs>
+                <linearGradient id="kbGoalGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" style="stop-color: var(--accent, #617357)"/><stop offset="1" style="stop-color: var(--warm-accent, #a3573d)"/>
+                </linearGradient>
+              </defs>
+              <circle class="kb-goal-track" cx="44" cy="44" r="${R}"/>
+              <circle class="kb-goal-fill" cx="44" cy="44" r="${R}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${(C * (1 - pct)).toFixed(1)}"/>
+            </svg>
+            <div class="kb-goal-center"><b>${todayRead}</b><span>/ ${goal}</span></div>
+          </div>
+          <div class="kb-goal-text">
+            <div class="kb-goal-title">${escapeHTML(t('今日阅读目标'))}</div>
+            <div class="kb-goal-sub">${done ? `${icon('check', 13)} ${escapeHTML(t('已达成，读得漂亮'))}` : escapeHTML(t('再读') + ' ' + (goal - todayRead) + ' ' + t('篇即达成'))}</div>
+            ${streak >= 2 ? `<div class="kb-goal-streak">${icon('flame', 12)} ${escapeHTML(tf('%lld 天连击', streak))}</div>` : ''}
+            ${week ? `<div class="kb-goal-week" data-role="weekly-bar"><span class="kb-goal-week-label">${escapeHTML(t('本周'))}</span><span class="kb-goal-week-bar"><i style="width:${Math.round((Number(week.pct) || 0) * 100)}%"></i></span><span class="kb-goal-week-num">${Number(week.read) || 0}/${Number(week.goal) || 0}</span></div>` : ''}
+          </div>`;
+        el.insertBefore(ringWrap, el.firstChild);
+      }
     }
     if (d.due > 0) {
       const cta = document.createElement('button');

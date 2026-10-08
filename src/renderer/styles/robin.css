@@ -4374,6 +4374,160 @@ body.dark .nj-picks-broadcast.is-playing { color: oklch(0.78 0.13 55); border-co
 }
 .nj-picks-player.is-live .nj-pp-label { color: var(--accent); }
 
+/* ── F19 简报电台迷你胶囊（复用精选播报胶囊交互语言；媒体播放器之下）── */
+.nj-radio-player {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 40;
+  display: none;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 5px 11px;
+  background: var(--note-background);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-2);
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.nj-radio-player.visible { display: inline-flex; opacity: 1; transform: translateX(-50%) translateY(0); }
+.nj-rp-label {
+  font-size: 0.72em;
+  color: var(--text-secondary);
+  margin-right: 2px;
+  white-space: nowrap;
+}
+.nj-radio-player.is-live .nj-rp-label { color: var(--accent); }
+.nj-rp-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  width: 22px; height: 22px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font: inherit; font-size: 11px;
+  flex: 0 0 auto;
+}
+.nj-rp-btn:hover { color: var(--accent); background: var(--row-hover); }
+.nj-rp-progress {
+  font-size: 0.7em;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 46px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* ── F20 专注会话面板（浮层卡片：倒计时环 + 计数 + 小结）── */
+.nj-focus-overlay {
+  position: fixed; inset: 0; z-index: 60;
+  background: transparent; /* 非模态暗幕：专注不打断阅读 */
+  display: flex; align-items: flex-end; justify-content: flex-end;
+  padding: 0 var(--space-5) 84px 0;
+  pointer-events: none;
+}
+.nj-focus-panel {
+  pointer-events: auto;
+  width: 264px;
+  padding: var(--space-4);
+  background: var(--note-background);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-3);
+  display: flex; flex-direction: column; gap: var(--space-3);
+  animation: njFocusIn var(--dur-mid) var(--ease-out);
+}
+@keyframes njFocusIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.nj-fp-head { display: flex; align-items: center; justify-content: space-between; }
+.nj-fp-title { font-weight: 600; font-size: 0.9em; color: var(--text-primary); }
+.nj-fp-desc { font-size: 0.76em; color: var(--text-tertiary); line-height: 1.5; }
+.nj-fp-seg { display: flex; gap: var(--space-1); }
+.nj-fp-seg-btn {
+  appearance: none; flex: 1;
+  border: 1px solid var(--separator); border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  font: inherit; font-size: 0.76em; padding: 4px 0; cursor: pointer;
+}
+.nj-fp-seg-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nj-fp-seg-btn.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #f6f2e7); font-weight: 600; }
+.nj-fp-ringwrap { position: relative; align-self: center; width: 108px; height: 108px; }
+.nj-fp-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.nj-fp-track { fill: none; stroke: var(--separator); stroke-width: 6; }
+.nj-fp-fill {
+  fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s linear;
+}
+.nj-fp-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+}
+.nj-fp-center b { font-size: 1.25em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.nj-fp-center span { font-size: 0.66em; color: var(--text-tertiary); }
+.nj-fp-stats { display: flex; justify-content: space-around; }
+.nj-fp-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.nj-fp-stat b { font-size: 1em; color: var(--accent); font-variant-numeric: tabular-nums; }
+.nj-fp-stat i { font-style: normal; font-size: 0.68em; color: var(--text-tertiary); }
+.nj-fp-summary { display: flex; flex-direction: column; gap: var(--space-1); }
+.nj-fp-summary-line { font-size: 0.8em; color: var(--text-primary); }
+.nj-fp-early { font-size: 0.72em; color: var(--warm-accent); }
+.nj-fp-actions { display: flex; gap: var(--space-2); }
+.nj-fp-actions .btn-text { flex: 1; }
+
+/* ── F20 今日简报浮层：阅读目标进度卡（进度环 + 周条，全 OKLCH 令牌）── */
+.dg-goal {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-3);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-lg);
+}
+.dg-goal-ring { position: relative; width: 48px; height: 48px; flex: 0 0 auto; }
+.dg-goal-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.dg-goal-track { fill: none; stroke: var(--separator); stroke-width: 4; }
+.dg-goal-fill { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+.dg-goal-ring.done .dg-goal-fill { stroke: var(--warm-accent); }
+.dg-goal-num {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.62em; color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.dg-goal-num b { color: var(--text-primary); }
+.dg-goal-label { font-size: 0.76em; color: var(--text-secondary); }
+.dg-goal-week { display: flex; align-items: center; gap: var(--space-2); margin-left: auto; }
+.dg-goal-weeknum { font-size: 0.7em; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.dg-goal-bar {
+  width: 72px; height: 5px; border-radius: var(--radius-full);
+  background: var(--separator); overflow: hidden;
+}
+.dg-goal-bar i { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); }
+
+/* ── F20 设置「目标」分区进度行 + 知识看板周进度条 ── */
+.nj-goal-meter { display: flex; align-items: center; gap: var(--space-2); }
+.nj-goal-bar {
+  width: 96px; height: 5px; border-radius: var(--radius-full);
+  background: var(--separator); overflow: hidden;
+}
+.nj-goal-bar i { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); transition: width var(--dur-mid) var(--ease-out); }
+.nj-goal-num { font-size: 0.78em; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.nj-goal-num.done { color: var(--warm-accent); font-weight: 600; }
+.kb-goal-week { display: flex; align-items: center; gap: var(--space-2); margin-top: 4px; }
+.kb-goal-week-label { font-size: 0.72em; color: var(--text-tertiary); }
+.kb-goal-week-bar {
+  width: 90px; height: 5px; border-radius: var(--radius-full);
+  background: var(--separator); overflow: hidden;
+}
+.kb-goal-week-bar i { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); }
+.kb-goal-week-num { font-size: 0.7em; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+
 /* ── R22 杂志纸张质感三选（借鉴上游 v1.4.5）+ 图片重试态 ── */
 .nj-edition-paper {
   appearance: none; border: 1px solid var(--separator); border-radius: var(--radius-full);

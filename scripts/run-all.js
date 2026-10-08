@@ -98,6 +98,8 @@ const OFFLINE = [
   { file: 'scripts/diag-f12-books.js', runner: 'electron', desc: 'F12 文集成书：v19迁移与幂等与老库无损/文集CRUD与右键加入文集菜单/60篇成书EPUB结构(mimetype/nav/3月分章/60篇/源icon封面与纯色回退)/1000篇5卷每卷200确定性/自动成书24h节流与有新文章才成与manual不自动/书架UI列表待取徽标按钮/打开目录showItemInFolder与待取清除/200篇<2s/feed_ids持久化独立连接回读/删除清理自动目录且用户pickSavePath书保留（离线）' },
   { file: 'scripts/diag-f17-windows.js', runner: 'electron', desc: 'F17 多窗并读：弹出窗创建与标题/同 entryID 聚焦去重/上限4窗第5拒/主窗关闭级联/弹出窗 reader 渲染+已读批注写回同库/右键与工具栏入口/TTS媒体构造选项禁用（离线）' },
   { file: 'scripts/diag-f18-monitor.js', runner: 'electron', desc: 'F18 网页追更：v21迁移与级联与幂等/首抓只存基线零文章/变化合成文章含ins高亮与缓存通路/段落删除折叠N段已移除/无变化零文章/追更源列表侧栏正常/更改选择器重建hash与重抓基线/停止追更不再抓取/30min节流注入时间与force跳过/500KB提取diff<1s（离线）' },
+  { file: 'scripts/diag-f19-radio.js', runner: 'electron', desc: 'F19 简报电台：模板文稿降级(无AI Top10含日期开场)/AI改写mock与失败静默降级/分句合成链mock逐句预取/上一句下一句暂停停止/位置记忆跨重启续听hash失效/四方互斥(开电台停媒体朗读精选反向亦然)/合成缓存同hash零重合成/简报浮层+命令面板入口/胶囊句序第X/Y句（离线）' },
+  { file: 'scripts/diag-f20-goals.js', runner: 'electron', desc: 'F20 阅读目标与专注会话：目标持久化(日/周/0=关/越界钳制)/进度环3篇5目标60%/达标恭喜一次性同日跨重启不重复/周进度条聚合/专注面板倒计时注入时间加速/会话小结计数与剪贴板/中途退出确认/目标关闭进度环隐藏（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

@@ -86,9 +86,10 @@ export class PicksTTSPlayer {
       return;
     }
     this.stop(); // 幂等清场（gen++ 使旧回调全部失效）
-    // 全局互斥（F3 语义）：媒体先暂停、阅读器朗读先停
+    // 全局互斥（F3 语义）：媒体先暂停、阅读器朗读先停、电台先停（F19 四方互斥 P→R 边）
     try { window.__robinMedia?.pauseForTTS?.(); } catch (_) { /* 媒体未挂载 */ }
     try { window.__robinReader?.stopTTS?.(); } catch (_) { /* 阅读器未挂载 */ }
+    try { window.__robinRadio?.stop?.(); } catch (_) { /* 电台未挂载 */ }
     this._chunks = chunks;
     this._index = 0;
     this._pending.clear();

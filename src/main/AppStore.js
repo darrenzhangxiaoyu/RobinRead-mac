@@ -45,6 +45,7 @@ const { SimilarService } = require('./SimilarService');
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
+const { DigestRadioService } = require('./DigestRadioService'); // 简报电台（F19）：简报→电台文稿 + 播放位置记忆
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -173,6 +174,7 @@ class AppStore extends EventEmitter {
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
     this.monitor = new PageMonitorService(this); // 网页追更（F18）：URL+选择器 → diff 合成源（≥30min 节流）
+    this.digestRadio = new DigestRadioService(this); // 简报电台（F19）：简报→电台文稿 + 播放位置记忆
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -457,6 +459,7 @@ class AppStore extends EventEmitter {
       refreshOnLaunch: this.preferences.get(PreferenceKey.refreshOnLaunch, true),
       titleZh: this.preferences.get('RobinRead.list.titleZh', false),
       dailyGoal: this.preferences.get('RobinRead.stats.dailyGoal', 5),
+      weeklyGoal: this.preferences.get('RobinRead.stats.weeklyGoal', 0),
       appLanguage: this.preferences.get(PreferenceKey.appLanguage, 'zh'),
       aiOutputLanguage: this.preferences.get(PreferenceKey.aiOutputLanguage, null),
       automaticallyGenerateSummary: this.llmConfiguration.automaticallyGenerateSummary,
@@ -3493,16 +3496,71 @@ class AppStore extends EventEmitter {
     };
   }
 
-  /** 每日阅读目标（篇数）。 */
+  /** 每日阅读目标（篇数）。0 = 关闭（F20：进度环随之隐藏）。 */
   dailyGoal() {
     return this.preferences.get('RobinRead.stats.dailyGoal', 5);
   }
 
   setDailyGoal(n) {
-    const v = Math.min(99, Math.max(1, Number(n) || 5));
+    // F20：0 = 关闭合法；非法输入回退默认 5
+    const raw = Number(n);
+    const v = Number.isFinite(raw) ? Math.min(99, Math.max(0, Math.round(raw))) : 5;
     this.preferences.set('RobinRead.stats.dailyGoal', v);
     this.sync?.notePrefsChanged(); // F7：白名单偏好变更
     return this.dailyGoal();
+  }
+
+  /** 每周阅读目标（篇/周）。默认 0 = 关闭（F20）。 */
+  weeklyGoal() {
+    return this.preferences.get('RobinRead.stats.weeklyGoal', 0);
+  }
+
+  setWeeklyGoal(n) {
+    const raw = Number(n);
+    const v = Number.isFinite(raw) ? Math.min(99, Math.max(0, Math.round(raw))) : 0;
+    this.preferences.set('RobinRead.stats.weeklyGoal', v);
+    this.sync?.notePrefsChanged();
+    return this.weeklyGoal();
+  }
+
+  /**
+   * 阅读目标进度聚合（F20）：数据源 = reading_stats.articles_read 按日（既有
+   * knowledge.getStats 通路，不新建表/不重拉全库）。周 = 含今天在内的近 7 天求和。
+   */
+  readingGoalsProgress() {
+    const todayKey = this._digestDateKey();
+    const daily = this.knowledge.getStats(14).daily || [];
+    const todayRead = Number(daily.find((r) => r.date === todayKey)?.articles_read) || 0;
+    const weekStart = new Date(Date.now() - 6 * 86400000);
+    const weekStartKey = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+    const weekRead = daily
+      .filter((r) => r.date >= weekStartKey)
+      .reduce((sum, r) => sum + (Number(r.articles_read) || 0), 0);
+    const shape = (goal, read) => ({
+      goal,
+      read,
+      enabled: goal > 0,
+      pct: goal > 0 ? Math.min(1, read / goal) : 0,
+      done: goal > 0 && read >= goal,
+    });
+    return {
+      todayKey,
+      daily: shape(this.dailyGoal(), todayRead),
+      weekly: shape(this.weeklyGoal(), weekRead),
+    };
+  }
+
+  /**
+   * 达标庆祝（一次性）：今日目标达成且今天还没庆祝过 → 标记并返回 true。
+   * 偏好记 lastCelebrateDate，同日不重复；跨天自动可再庆祝。
+   */
+  celebrateDailyGoalIfDue() {
+    const progress = this.readingGoalsProgress();
+    if (!progress.daily.done) return { celebrated: false, progress };
+    const last = this.preferences.get('RobinRead.stats.lastCelebrateDate', null);
+    if (last === progress.todayKey) return { celebrated: false, progress };
+    this.preferences.set('RobinRead.stats.lastCelebrateDate', progress.todayKey);
+    return { celebrated: true, progress };
   }
 
   setReaderLayout(patch) {
