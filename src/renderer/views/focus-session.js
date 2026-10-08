@@ -125,12 +125,14 @@ export class FocusSessionPanel {
   finish({ early = false } = {}) {
     this._stopTimer();
     this._early = early;
+    this.endedAt = this._nowImpl(); // 实际结束时刻（提前退出时长按此计算，非计划终点）
     this.state = 'ended';
     this._renderEnded();
   }
 
   summaryText() {
-    const minutes = Math.max(0, Math.round(((this.state === 'running' ? this._nowImpl() : this.endsAt) - this.startedAt) / 60000));
+    const end = this.state === 'running' ? this._nowImpl() : (this.endedAt != null ? Math.min(this.endedAt, this.endsAt) : this.endsAt);
+    const minutes = Math.max(0, Math.round((end - this.startedAt) / 60000));
     return tf('专注小结：阅读 %lld 篇 · 专注 %lld 分钟 · 批注 %lld 条', this.readCount, minutes, this.annotationCount);
   }
 

@@ -1790,6 +1790,7 @@ const STRINGS = {
   "操作失败": { zh: "操作失败", en: "Action failed" },
   "知更智能精选，%lld 篇。": { zh: "知更智能精选，%lld 篇。", en: "RobinRead Smart Picks, %lld articles." },
   "第 %lld 篇，《%@》": { zh: "第 %lld 篇，《%@》", en: "Number %lld, \"%@\"" },
+  "%@，%@。欢迎收听知更电台，为你播报今日阅读简报，共 %lld 条。": { zh: "%@，%@。欢迎收听知更电台，为你播报今日阅读简报，共 %lld 条。", en: "%1$@, %2$@. Welcome to the Robin Read radio — your daily reading briefing, %3$@ articles." },
   "，来自%@。": { zh: "，来自%@。", en: ", from %@." },
   "以上就是本期的智能精选。": { zh: "以上就是本期的智能精选。", en: "That's all for this edition of Smart Picks." },
 

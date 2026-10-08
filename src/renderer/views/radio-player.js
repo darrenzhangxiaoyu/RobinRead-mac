@@ -135,7 +135,7 @@ export class RadioPlayer {
       // 断点续听：位置记忆 hash 匹配且未播完 → 从上次句序继续
       let startIndex = 0;
       try {
-        const saved = await this._bridge().getPosition?.(this._sessionKey, this._hash);
+        const saved = await (this._bridge().radioGetPosition || this._bridge().getPosition)?.(this._sessionKey, this._hash);
         if (gen !== this._gen) return; // 期间已清场
         const idx = Number(saved?.index) || 0;
         if (idx > 0 && idx < sentences.length) {
@@ -209,7 +209,7 @@ export class RadioPlayer {
       const finished = this._index >= this._chunks.length;
       const at = finished ? 0 : this._index;
       try {
-        this._bridge().savePosition?.(this._sessionKey, at, { total: this._chunks.length, hash: this._hash });
+        (this._bridge().radioSavePosition || this._bridge().savePosition)?.(this._sessionKey, at, { total: this._chunks.length, hash: this._hash });
       } catch (_) { /* 位置保存失败不阻塞停止 */ }
     }
     this._chunks = [];
@@ -261,7 +261,7 @@ export class RadioPlayer {
     this._sync();
     // 位置记忆：每句开播前落一次（偏好 JSON 防抖落盘，IPC 量 = 句频，量小）
     try {
-      this._bridge().savePosition?.(this._sessionKey, index, { total: this._chunks.length, hash: this._hash });
+      (this._bridge().radioSavePosition || this._bridge().savePosition)?.(this._sessionKey, index, { total: this._chunks.length, hash: this._hash });
     } catch (_) { /* 位置保存失败不阻塞播放 */ }
     const cfg = await this._engineConfig();
     if (gen !== this._gen) return; // 期间已停止/跳句

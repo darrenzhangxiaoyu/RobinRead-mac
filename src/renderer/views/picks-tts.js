@@ -107,7 +107,13 @@ export class PicksTTSPlayer {
       this._setState('paused');
       return;
     }
-    if (this._audio) { try { this._audio.play(); } catch (_) { /* 忽略 */ } }
+    if (this._audio) {
+      try {
+        // 恢复失败（源失效/自动播放被拦）须吞 rejection：否则 unhandledrejection + UI 置 playing 实际无声
+        const playing = this._audio.play();
+        if (playing && playing.catch) playing.catch(() => this._setState('paused'));
+      } catch (_) { /* 忽略 */ }
+    }
     if (this._synth) { try { this._synth.resume(); } catch (_) { /* 忽略 */ } }
     this._setState('playing');
   }
