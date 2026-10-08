@@ -16,6 +16,9 @@
  */
 const { i18n } = require('./I18N');
 const { randomUUID } = require('node:crypto');
+// F13 抽取：显著词提取移入 lib/keywords 共享模块（SimilarService/线索聚类同源复用）。
+// 此处原样再导出（module.exports 末尾），既有导入面（diag-f9-rag 等）零变化。
+const { STOPWORDS, isCJK, normalizeTitle, extractKeywords } = require('./lib/keywords');
 
 const ARTICLE_LIMIT = 12;      // FTS 相关度前 12（entryID 限集来源）
 const KB_LIMIT = 8;            // 知识库高亮/笔记命中前 8
@@ -33,47 +36,8 @@ const SESSION_LIST_LIMIT = 100;
 const FLUSH_INTERVAL_MS = 900; // 流式期间消息落库节流
 
 /** 中英停用词/口语词（关键词提取时剔除——它们在正文里高频出现，LIKE 命中无意义）。 */
-const STOPWORDS = new Set([
-  '什么', '怎么', '怎样', '如何', '为什么', '为何', '请问', '哪些', '多少', '是不是',
-  '关于', '还是', '以及', '而且', '但是', '这个', '那个', '一下', '一些', '可以',
-  '应该', '需要', '有没有', '告诉我', '介绍', '总结', '帮我', '我想', '知道', '看看',
-  'the', 'and', 'for', 'with', 'what', 'how', 'why', 'that', 'this', 'are', 'was',
-]);
-
-/** 标题归一（无 entryID 素材的去重口径）：小写 + 去全部空白。 */
-function normalizeTitle(title) {
-  return String(title || '').toLowerCase().replace(/\s+/g, '');
-}
-
-function isCJK(text) {
-  return /[\u4e00-\u9fff]/.test(text);
-}
-
-/**
- * 问题 → 2-3 个显著检索词：按分隔符切词、剔停用词与单字符、按长度降序取显著词。
- * 中文长段截前 8 字（LIKE 键过长会零命中）；西文词截前 24 字。
- */
-function extractKeywords(question, max = 3) {
-  const segments = String(question || '')
-    .split(/[\s，。！？、；：,.!?;:()（）\[\]【】{}"'“”《》<>\-—–\/\\|@#$%^&*+=~`…·]+/u)
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const out = [];
-  const seen = new Set();
-  const scored = segments
-    .filter((s) => s.length >= 2 && !STOPWORDS.has(s.toLowerCase()))
-    .sort((a, b) => b.length - a.length);
-  for (let seg of scored) {
-    if (isCJK(seg) && seg.length > 8) seg = seg.slice(0, 8);
-    else if (!isCJK(seg) && seg.length > 24) seg = seg.slice(0, 24);
-    const key = seg.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(seg);
-    if (out.length >= max) break;
-  }
-  return out;
-}
+// F13 抽取：STOPWORDS / isCJK / normalizeTitle / extractKeywords 实现移至 lib/keywords.js，
+// 本文件经顶部 require 引用同名绑定（dedupeMaterials/搜索路等调用点零改动）。
 
 /** 素材条目归一：kind 白名单、snippet 截断（正文截窗素材上限 ±300×2，其余 300）、字段白名单。 */
 function normalizeMaterial(m) {
@@ -529,4 +493,7 @@ module.exports = {
   ARTICLE_LIMIT,
   KB_LIMIT,
   HISTORY_ROUNDS,
+  // F13 起实现驻 lib/keywords：再导出保持既有导入面（extractKeywords/normalizeTitle 等）稳定
+  STOPWORDS,
+  isCJK,
 };

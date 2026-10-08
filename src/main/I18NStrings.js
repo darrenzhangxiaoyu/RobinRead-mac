@@ -1884,6 +1884,20 @@ const STRINGS = {
   "文集名称不能为空": { zh: "文集名称不能为空", en: "Book title cannot be empty" },
   "文集名称过长（最多 120 字）": { zh: "文集名称过长（最多 120 字）", en: "Book title too long (max 120 chars)" },
 
+  "继续读": { zh: "继续读", en: "Keep Reading" },
+  "同主题": { zh: "同主题", en: "Same topic" },
+  "同标签": { zh: "同标签", en: "Same tags" },
+  "同源": { zh: "同源", en: "Same source" },
+  "线索": { zh: "线索", en: "Threads" },
+  "近 90 天文章按话题自动聚类，点开看时间线，可一键转为盯梢话题。": { zh: "近 90 天文章按话题自动聚类，点开看时间线，可一键转为盯梢话题。", en: "Articles from the last 90 days clustered by topic — open a thread for its timeline, or track it as a Topic." },
+  "近期文章还聚不出线索——多读几天、或订阅更多同主题源后再来看看。": { zh: "近期文章还聚不出线索——多读几天、或订阅更多同主题源后再来看看。", en: "Not enough recent articles to form threads yet — read more or subscribe to more sources on the same topics." },
+  "返回线索": { zh: "返回线索", en: "Back to Threads" },
+  "追踪为话题": { zh: "追踪为话题", en: "Track as Topic" },
+  "已创建盯梢话题": { zh: "已创建盯梢话题", en: "Topic created" },
+  "在侧栏「话题」或知识中心可查看其聚合信息流。": { zh: "在侧栏「话题」或知识中心可查看其聚合信息流。", en: "See its stream under Topics in the sidebar or Knowledge Center." },
+  "这个线索下暂无文章。": { zh: "这个线索下暂无文章。", en: "No articles under this thread yet." },
+  "智能": { zh: "智能", en: "Smart" },
+  "智能排序：按你的阅读画像排列（空画像时按时间序）": { zh: "智能排序：按你的阅读画像排列（空画像时按时间序）", en: "Smart sort: ordered by your reading profile (falls back to time when the profile is empty)" },
 };
 
 module.exports = { STRINGS };

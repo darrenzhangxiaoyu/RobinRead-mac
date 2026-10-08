@@ -63,7 +63,7 @@ app.whenReady().then(async () => {
       const paperBtnBg = getComputedStyle(viewBtn).backgroundColor;
       host.classList.remove('nj-mag-paper');
       // ④ 封面图策略
-      const card = document.querySelector('.nj-mag-card') || (lv.setViewMode('magazine'), lv.render([mk(0)], { kind: 'all' }, null, true), await new Promise(r => setTimeout(r, 200)), document.querySelector('.nj-mag-card'));
+      const card = document.querySelector('.nj-mag-card') || (lv.setViewMode('magazine'), lv.render([mk(0)], { kind: 'all' }, null, true), await (async () => { for (let i = 0; i < 40; i++) { if (document.querySelector('.nj-mag-card .mag-cover img')) break; await new Promise(r => setTimeout(r, 150)); } })(), document.querySelector('.nj-mag-card'));
       if (!card) return { __err: 'no mag-card; cards=' + document.querySelectorAll('.nj-mag-card').length };
       const cimg = card.querySelector('.mag-cover img');
       if (!cimg) return { __err: 'no cover img; html=' + card.outerHTML.slice(0, 150) };

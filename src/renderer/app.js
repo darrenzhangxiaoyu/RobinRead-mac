@@ -170,8 +170,9 @@ async function bootstrap() {
       handleScopeSelect({ kind: 'tag', tag });
     },
     onToggleSort: () => {
-      // 三态循环：时间序 → 未读优先 → 短文优先（短文 = 估算阅读时长最短在前）
-      const cycle = { time: 'unreadFirst', unreadFirst: 'shortFirst', shortFirst: 'time' };
+      // 四态循环（F14 加「智能」）：时间序 → 未读优先 → 短文优先 → 智能（画像排序）；
+      // 空画像时服务端自动降级时间序（listItems 内部处理），循环项保持可选。
+      const cycle = { time: 'unreadFirst', unreadFirst: 'shortFirst', shortFirst: 'smart', smart: 'time' };
       const next = cycle[currentListSort()] || 'time';
       window.robin.setReaderLayout({ listSort: next });
     },
@@ -211,6 +212,7 @@ async function bootstrap() {
   );
   window.__robinReader = views.reader; // E2E 测试句柄
   window.__robinList = views.list; // E2E 测试句柄（F10 探针观测精选视图态）
+  window.__robinReaderOpen = (entryID) => handleEntrySelect(entryID, { isRead: true }); // F13：文末继续读打开相关文章
 
   buildToolbar();
   bindToolbar();
@@ -295,8 +297,10 @@ function applyReaderLayout(layout) {
     if (microChanged) document.dispatchEvent(new CustomEvent('robinread:reader-layout-changed'));
   }
   document.body.dataset.listDensity = layout?.listDensity || 'comfortable';
-  // 列表排序：状态变化时更新按钮并重拉列表（排序影响行序）
-  const listSort = layout?.listSort === 'unreadFirst' ? 'unreadFirst' : 'time';
+  // 列表排序：状态变化时更新按钮并重拉列表（排序影响行序）。
+  // 四态透传（F14）：既有实现把 shortFirst/smart 压缩回 time，导致这两态选不中（验证轮顺带修复）。
+  const listSort = ['time', 'unreadFirst', 'shortFirst', 'smart'].includes(layout?.listSort)
+    ? layout.listSort : 'time';
   if (views.list?.setSortButton) views.list.setSortButton(listSort);
   if (listSort !== applyReaderLayout._lastSort) {
     const changed = applyReaderLayout._lastSort !== undefined;

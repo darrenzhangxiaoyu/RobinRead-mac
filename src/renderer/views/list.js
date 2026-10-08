@@ -176,10 +176,11 @@ export class ListView {
     this.scrollEl.addEventListener('scroll', () => this._onScroll(), { passive: true });
   }
 
-  /** 排序切换按钮文案（时间序 ↔ 未读优先）。 */
+  /** 排序切换按钮文案（时间序 / 未读优先 / 短文优先 / 智能四态）。 */
   setSortButton(listSort) {
-    const labels = { time: t('时间序'), unreadFirst: t('未读优先'), shortFirst: t('短文优先') };
+    const labels = { time: t('时间序'), unreadFirst: t('未读优先'), shortFirst: t('短文优先'), smart: t('智能') };
     this.sortBtn.innerHTML = `<span>${escapeHTML(labels[listSort] || labels.time)}</span>`;
+    this.sortBtn.title = listSort === 'smart' ? t('智能排序：按你的阅读画像排列（空画像时按时间序）') : t('切换排序方式');
     this.sortBtn.classList.toggle('active', listSort !== 'time');
   }
 

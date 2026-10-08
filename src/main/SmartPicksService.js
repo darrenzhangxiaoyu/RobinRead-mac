@@ -108,8 +108,9 @@ function freshnessOf(publishedAt, now) {
  * wordWeights 为 Map（画像词 → 权重）；命中 = 词是 标题+摘要 的子串。
  * 长摘要偏置防护（验证轮 P1）：标题命中全额计权；摘要命中每词 0.3 折算且最多计 5 词——
  * 长摘要「蹭满」画像词无法再压过精准命中短标题（实测 9 倍偏差根因）。
+ * weights 可选覆盖（F14 智能列表排序同引擎不同配比 0.5/0.2/0.3，缺省 F10 精选配比）。
  */
-function scoreArticle(item, wordWeights, feedOpenRate, now) {
+function scoreArticle(item, wordWeights, feedOpenRate, now, weights = null) {
   const title = item.title || '';
   const summary = item.summary || item.summaryPreview || '';
   let interest = 0;
@@ -123,9 +124,15 @@ function scoreArticle(item, wordWeights, feedOpenRate, now) {
     }
   }
   const freshness = freshnessOf(item.publishedAt, now);
-  const score = interest * SCORE_W_INTEREST + (Number(feedOpenRate) || 0) * SCORE_W_FEED + freshness * SCORE_W_FRESH;
+  const wInterest = weights?.interest ?? SCORE_W_INTEREST;
+  const wFeed = weights?.feed ?? SCORE_W_FEED;
+  const wFresh = weights?.fresh ?? SCORE_W_FRESH;
+  const score = interest * wInterest + (Number(feedOpenRate) || 0) * wFeed + freshness * wFresh;
   return { score: Math.round(score * 10000) / 10000, interest: Math.round(interest * 1000) / 1000 };
 }
+
+/** F14 智能列表排序配比：画像命中 × 0.5 + 源打开率 × 0.2 + 新鲜度 × 0.3。 */
+const SORT_WEIGHTS = { interest: 0.5, feed: 0.2, fresh: 0.3 };
 
 /**
  * 候选排序。
@@ -405,4 +412,5 @@ module.exports = {
   PICK_LIMIT_DEFAULT,
   PREF_EXCLUDED_KEY,
   PREF_LIMIT_KEY,
+  SORT_WEIGHTS,
 };

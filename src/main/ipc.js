@@ -755,6 +755,12 @@ function registerIPCHandlers(store, window) {
     return { dir, file: files[0] || null };
   });
 
+  // MARK: 相关文章 + 线索视图（F13：文末继续读 / 知识中心线索 tab）
+  const SIM = () => store.similar;
+  handle('similar:for', (entryID, limit) => SIM().similar(String(entryID || ''), { limit: Number(limit) || 6 }));
+  handle('threads:list', () => SIM().threadsList());
+  handle('threads:detail', (keyword) => SIM().threadsDetail(String(keyword || '')));
+
   // MARK: AI 深度研究（F8：素材聚合 / 流式生成 / 追问 / 历史 / 取消）
   // 流式分片与阶段经推送通道下行（research:delta / research:status），最终结果走信封返回。
   const RS = () => store.research;

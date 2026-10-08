@@ -619,6 +619,7 @@ export class ReaderView {
     }
     this.scrollEl.appendChild(article);
     this._articleEl = article; // 翻页动效挂载点
+    this._loadContinueReading(article); // F13：文末「继续读」相关文章（异步，不阻塞首屏）
     // 每源排版偏好（重量级）：article 级 CSS 变量覆盖（比根变量更近作用域，仅影响本篇）
     const typo = (window.__robinFeedTypography || {})[this.feed?.id];
     if (typo) {
@@ -3738,6 +3739,48 @@ export class ReaderView {
    * - audio → 播放卡片（唤起全局迷你播放器，支持倍速/队列/离线）。
    * 播放源经 media:source 实时解析（本地优先），不信任 reader 载荷缓存的陈旧 URL。
    */
+  /**
+   * F13 文末「继续读」：相关文章卡片区（异步拉取，不阻塞首屏）。
+   * - 竞态守卫：entryID 变化后丢弃过期响应（仿 _openBody 六处守卫惯例）；
+   * - 素材 <limit 条时整个隐藏（优雅降级）；点击行经 handleEntrySelect 同源打开。
+   */
+  _loadContinueReading(article) {
+    const entryID = this.entryID;
+    window.robin.similarFor(entryID, 3).then((res) => {
+      if (!res) return;
+      // similar:for 返回 {items} 包装（preload data() 已解信封）
+      const items = Array.isArray(res.items) ? res.items : [];
+      // 竞态/卸载守卫：文章已切换或卡片宿主已脱离 DOM 时丢弃
+      if (this.entryID !== entryID || !article.isConnected || items.length < 1) return;
+      const host = document.createElement('div');
+      host.className = 'nj-continue-reading';
+      const head = document.createElement('div');
+      head.className = 'nj-cr-head';
+      head.textContent = t('继续读');
+      host.appendChild(head);
+      for (const it of items.slice(0, 3)) {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'nj-cr-row';
+        const title = document.createElement('span');
+        title.className = 'nj-cr-title';
+        title.textContent = it.title || '';
+        const meta = document.createElement('span');
+        meta.className = 'nj-cr-meta';
+        const reasonText = { topic: t('同主题'), tag: t('同标签'), source: t('同源') }[it.reason] || '';
+        meta.textContent = [it.sourceTitle, it.pct != null ? `${it.pct}%` : '', reasonText].filter(Boolean).join(' · ');
+        row.append(title, meta);
+        row.addEventListener('click', () => {
+          // 相关条目同为库内文章（SimilarService 保证 id 为 entryID 形态），经阅读器句柄打开
+          if (it.id) window.__robinReaderOpen?.(it.id);
+          else if (it.url) window.robin.openLink(it.url);
+        });
+        host.appendChild(row);
+      }
+      article.appendChild(host);
+    }).catch(() => { /* 相关性服务失败：静默无卡片 */ });
+  }
+
   _buildMediaCard() {
     const card = document.createElement('div');
     card.className = 'nj-media-card';

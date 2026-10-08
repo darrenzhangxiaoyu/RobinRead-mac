@@ -23,6 +23,7 @@ const TABS = [
   { id: 'graph', label: '图谱', icon: 'ai' },
   { id: 'ask', label: '全库问答', icon: 'spark' },
   { id: 'research', label: 'AI 研究', icon: 'spark' },
+  { id: 'threads', label: '线索', icon: 'search' },
 ];
 
 function timeAgo(seconds) {
@@ -102,6 +103,7 @@ export class KnowledgeCenter {
       graph: async () => window.robin.kbGraph(240),
       ask: async () => ({ sessions: (await window.robin.ragSessions()) || [] }),
       research: async () => window.robin.researchList(),
+      threads: async () => window.robin.threadsList(), // F13：线索聚类（_renderThreads 自取详情）
     };
     const loader = loads[this.tab];
     if (!loader) return;
@@ -192,6 +194,7 @@ export class KnowledgeCenter {
       case 'graph': this._renderGraph(data || {}); break;
       case 'ask': this._renderAsk(data || {}); break;
       case 'research': this._renderResearch(Array.isArray(data) ? data : []); break;
+      case 'threads': this._renderThreads(); break;
     }
   }
 
@@ -1559,6 +1562,129 @@ export class KnowledgeCenter {
     if (this._research.unsubscribe === unsubscribe) this._research.unsubscribe = null;
     this._research.running = false;
     this._research.mode = null;
+  }
+
+  /**
+   * F13 线索视图：自动聚类近 90 天文章为「线索」（关键词 + 时间线）。
+   * 两次渲染：先列表（Top 12 线索）→ 点开线索拉时间线详情；可一键追踪为话题。
+   */
+  async _renderThreads() {
+    const host = this.contentHost;
+    if (!host) return;
+    host.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'kb-threads';
+    const head = document.createElement('div');
+    head.className = 'kb-graph-head';
+    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('线索'))}</span><span class="kb-graph-legend">${escapeHTML(t('近 90 天文章按话题自动聚类，点开看时间线，可一键转为盯梢话题。'))}</span>`;
+    wrap.appendChild(head);
+    const listEl = document.createElement('div');
+    listEl.className = 'kb-threads-list';
+    wrap.appendChild(listEl);
+    host.appendChild(wrap);
+
+    let threads = [];
+    try {
+      const res = await window.robin.threadsList();
+      threads = Array.isArray(res?.threads) ? res.threads : [];
+    } catch (_) { /* 读失败给空态 */ }
+    if (this.contentHost !== host) return; // 时序守卫：已切走丢弃
+
+    if (!threads.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:32px 16px;text-align:center;color:var(--text-tertiary);font-size:12.5px;';
+      empty.textContent = t('近期文章还聚不出线索——多读几天、或订阅更多同主题源后再来看看。');
+      listEl.appendChild(empty);
+      return;
+    }
+    for (const th of threads) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'kb-thread-row';
+      const kw = document.createElement('span');
+      kw.className = 'kb-thread-kw';
+      kw.textContent = th.keyword || '';
+      const count = document.createElement('span');
+      count.className = 'kb-thread-count';
+      count.textContent = tf('%lld 篇', Number(th.count) || 0);
+      row.append(kw, count);
+      row.addEventListener('click', () => this._openThreadDetail(th.keyword));
+      listEl.appendChild(row);
+    }
+  }
+
+  /** 线索时间线详情：该关键词下文章按时间降序；「追踪为话题」走 TopicService 预填。 */
+  async _openThreadDetail(keyword) {
+    const host = this.contentHost;
+    if (!host) return;
+    const prev = host.firstChild; // 返回入口：记住列表视图
+    host.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'kb-thread-detail';
+    const head = document.createElement('div');
+    head.className = 'kb-graph-head';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'btn-text';
+    back.textContent = t('返回线索');
+    back.addEventListener('click', () => { host.innerHTML = ''; if (prev) host.appendChild(prev); });
+    const title = document.createElement('span');
+    title.className = 'kb-daily-title';
+    title.style.marginLeft = '8px';
+    title.textContent = `# ${keyword}`;
+    const track = document.createElement('button');
+    track.type = 'button';
+    track.className = 'btn-text primary';
+    track.style.marginLeft = 'auto';
+    track.textContent = t('追踪为话题');
+    track.addEventListener('click', async () => {
+      try {
+        await window.robin.topicsSave({ keywords: [keyword], lanes: { local: true, aihot: true, pool: false } });
+        const { alertBox } = await import('../ui-prompt.js');
+        await alertBox(t('已创建盯梢话题'), t('在侧栏「话题」或知识中心可查看其聚合信息流。'));
+      } catch (e) {
+        const { alertBox } = await import('../ui-prompt.js');
+        await alertBox(t('创建失败'), String(e && e.message || e));
+      }
+    });
+    head.append(back, title, track);
+    wrap.appendChild(head);
+    const listEl = document.createElement('div');
+    wrap.appendChild(listEl);
+    host.innerHTML = '';
+    host.appendChild(wrap);
+
+    let items = [];
+    try {
+      const res = await window.robin.threadsDetail(keyword);
+      items = Array.isArray(res?.entries) ? res.entries : [];
+    } catch (_) { /* 读失败给空态 */ }
+    if (this.contentHost !== host) return;
+
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:24px 16px;color:var(--text-tertiary);font-size:12.5px;';
+      empty.textContent = t('这个线索下暂无文章。');
+      listEl.appendChild(empty);
+      return;
+    }
+    for (const it of items) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'kb-thread-item';
+      const title = document.createElement('div');
+      title.className = 'kb-thread-item-title';
+      title.textContent = it.title || '';
+      const meta = document.createElement('div');
+      meta.className = 'kb-thread-item-meta';
+      meta.textContent = [it.feedTitle, timeAgo(it.publishedAt)].filter(Boolean).join(' · ');
+      row.append(title, meta);
+      row.addEventListener('click', () => {
+        if (it.id && window.__robinReaderOpen) { window.__robinReaderOpen(it.id); }
+        else if (it.url) window.robin.openLink(it.url);
+      });
+      listEl.appendChild(row);
+    }
   }
 
   _renderResearch(list) {

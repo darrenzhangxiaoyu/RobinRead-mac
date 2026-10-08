@@ -38,9 +38,10 @@ const { MailService } = require('./MailService');
 const { SyncService } = require('./SyncService');
 const { ResearchService } = require('./ResearchService');
 const { RAGService } = require('./RAGService');
-const { SmartPicksService } = require('./SmartPicksService');
+const { SmartPicksService, scoreArticle, SORT_WEIGHTS } = require('./SmartPicksService');
 const { ObsidianExportService } = require('./ObsidianExportService');
 const { BooksService } = require('./BooksService');
+const { SimilarService } = require('./SimilarService');
 const FeedDiscovery = require('./FeedDiscovery');
 const { ReaderAPIError } = require('./FreshRSS/ReaderAPIError');
 const {
@@ -54,6 +55,8 @@ const DEFAULT_TIMELINE_LIMIT = 100;
 const TRANSLATION_PROMPT_VERSION = 2;
 const MAX_PARAGRAPHS_PER_TRANSLATION_BATCH = 8; // 逐句双语：句级单元更短，批次适当加大
 const MAX_CHARACTERS_PER_TRANSLATION_BATCH = 1600;
+// F14 智能排序：候选取样上限（时间序粗取 N，内存精排后分页；200 篇 <200ms 红线内）
+const SMART_SORT_FETCH_CAP = 800;
 
 // PreparedArticle LRU：组装好的 reader 载荷缓存（j/k、空格连续翻篇秒开，不再闪「正在准备正文…」遮罩）
 const PREPARED_LRU_CAPACITY = 12;
@@ -162,6 +165,7 @@ class AppStore extends EventEmitter {
     this.smartPicks = new SmartPicksService(this); // 智能每日精选（F10）：本地画像重排 + 播报文稿
     this.obsidian = new ObsidianExportService(this); // Obsidian 知识库导出（F11）：Markdown 库 + 增量游标（目录授权仅内存态）
     this.books = new BooksService(this, userDataPath); // 个人文集自动成书（F12）：文集 CRUD + EPUB 成书 + 自动节流
+    this.similar = new SimilarService(this); // 相关文章 + 线索视图（F13）：文末继续读 + 知识中心线索 tab
     this.apiClients = new Map(); // accountID -> ReaderAPIClient
     this.refreshStatus = { state: 'idle' };
     this.syncStatus = new Map(); // accountID -> {state, message}
@@ -609,6 +613,7 @@ class AppStore extends EventEmitter {
 
   listItems(scope, { limit = DEFAULT_TIMELINE_LIMIT, offset = 0, retainingIDs = [], sort = 'time' } = {}) {
     scope = this._normalizedScope(scope);
+    if (sort === 'smart') return this._smartSortedItems(scope, { limit, offset, retainingIDs });
     const enabledAccounts = this.accounts.enabledAccounts();
     if (enabledAccounts.length === 0) return [];
     if (enabledAccounts.length === 1) {
@@ -627,6 +632,44 @@ class AppStore extends EventEmitter {
       return (b.publishedAt ?? 0) - (a.publishedAt ?? 0);
     });
     return this._applyScoring(merged.slice(offset, offset + limit));
+  }
+
+  /**
+   * F14 智能排序（服务端后处理）：得分 = 画像命中 × 0.5 + 新鲜度 × 0.3 + 源打开率 × 0.2
+   * （复用 F10 SmartPicksService 画像词表与 scoreArticle 引擎，仅配比不同）。
+   * 空画像降级为纯时间序（渲染层同时禁用「智能」循环项 + tooltip）。
+   * 性能：时间序粗取 min(800, max(limit×3, 200)) 行（SQL 索引路径，非整表），
+   * 内存打分 O(N×词表) 与 F10 精选同量级（200 篇 << 200ms）。
+   */
+  _smartSortedItems(scope, { limit, offset, retainingIDs }) {
+    const enabledAccounts = this.accounts.enabledAccounts();
+    if (enabledAccounts.length === 0) return [];
+    const profile = this.smartPicks.buildProfile();
+    if (profile.isEmpty) {
+      // 降级：画像为空时与时间序完全同序（调用方语义不变）
+      return this.listItems(scope, { limit, offset, retainingIDs, sort: 'time' });
+    }
+    const fetchCap = Math.min(SMART_SORT_FETCH_CAP, Math.max(Number(limit) * 3, 200));
+    const now = this.smartPicks.now();
+    const rates = this.smartPicks.feedOpenRates(now);
+    const wordMap = new Map(profile.words.map((w) => [w.word, w.weight]));
+    const rows = [];
+    for (const account of enabledAccounts) {
+      rows.push(...this.timeline.fetchListItems({
+        accountID: account.id, scope, limit: fetchCap, offset: 0, retainingIDs, sort: 'time',
+      }));
+    }
+    const scored = rows.map((item) => ({
+      item,
+      score: scoreArticle(
+        { title: item.title, summary: item.summaryPreview, publishedAt: item.publishedAt },
+        wordMap, rates[item.feedID] || 0, now, SORT_WEIGHTS,
+      ).score,
+    }));
+    scored.sort((a, b) => b.score - a.score
+      || (b.item.publishedAt ?? 0) - (a.item.publishedAt ?? 0)
+      || String(a.item.id).localeCompare(String(b.item.id)));
+    return this._applyScoring(scored.slice(offset, offset + limit).map((x) => x.item));
   }
 
   entry(entryID) {
@@ -3376,8 +3419,8 @@ class AppStore extends EventEmitter {
       dropCap: ['on', 'off'],
       titleFont: ['inherit', 'smiley'],
       bilingualStyle: ['inline', 'card'],
-      listDensity: ['compact', 'comfortable'],
-      listSort: ['time', 'unreadFirst', 'shortFirst'],
+      listDensity: ['compact', 'comfortable', 'relaxed'],
+      listSort: ['time', 'unreadFirst', 'shortFirst', 'smart'], // F14：第四态「智能」（空画像服务端降级时间序）
       listViewMode: ['list', 'magazine'],
       translateMode: ['off', 'bilingual', 'zh'],
       autoTranslateEnglish: [true, false],

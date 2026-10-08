@@ -5960,3 +5960,44 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
   color: var(--text-tertiary); line-height: 1.5;
   overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
+
+/* ── F14 信息密度三档：body[data-list-density] 挂在 body，行高与内边距三档 ── */
+body[data-list-density="compact"] .entry-row { padding-top: 4px; padding-bottom: 4px; }
+body[data-list-density="compact"] .entry-row .entry-title { line-height: 1.4; }
+body[data-list-density="compact"] .entry-row .entry-summary { display: none; }
+body[data-list-density="relaxed"] .entry-row { padding-top: 14px; padding-bottom: 14px; }
+body[data-list-density="relaxed"] .entry-row .entry-title { line-height: 1.75; }
+
+/* ── F13 文末继续读 + 知识中心线索视图（全令牌） ── */
+.nj-continue-reading { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+.nj-cr-head { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 10px; }
+.nj-cr-row {
+  display: flex; align-items: baseline; gap: 10px; width: 100%;
+  appearance: none; background: transparent; border: none; cursor: pointer;
+  font: inherit; text-align: left; padding: 7px 8px; border-radius: var(--radius-sm);
+}
+.nj-cr-row:hover { background: var(--row-hover); }
+.nj-cr-title { flex: 1; min-width: 0; font-size: 13.5px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nj-cr-row:hover .nj-cr-title { color: var(--accent); }
+.nj-cr-meta { flex: 0 0 auto; font-size: 11.5px; color: var(--text-tertiary); }
+.kb-threads-list { display: flex; flex-direction: column; gap: 6px; }
+.kb-thread-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  appearance: none; border: 1px solid var(--hairline); background: var(--row-hover);
+  border-radius: var(--radius-md); padding: 12px 14px; cursor: pointer; font: inherit; text-align: left;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.kb-thread-row:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.kb-thread-kw { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.kb-thread-row:hover .kb-thread-kw { color: var(--accent); }
+.kb-thread-count { font-size: 11.5px; color: var(--text-tertiary); }
+.kb-thread-detail { display: flex; flex-direction: column; gap: 10px; }
+.kb-thread-item {
+  display: flex; flex-direction: column; gap: 3px; width: 100%;
+  appearance: none; background: transparent; border: none; border-top: 1px solid var(--hairline);
+  cursor: pointer; font: inherit; text-align: left; padding: 10px 8px; border-radius: var(--radius-sm);
+}
+.kb-thread-item:hover { background: var(--row-hover); }
+.kb-thread-item-title { font-size: 13px; color: var(--text-primary); line-height: 1.5; }
+.kb-thread-item:hover .kb-thread-item-title { color: var(--accent); }
+.kb-thread-item-meta { font-size: 11.5px; color: var(--text-tertiary); }

@@ -150,6 +150,11 @@ contextBridge.exposeInMainWorld('robin', {
   booksBuild: (id) => invoke('books:build', id),
   booksOpenDir: (id) => invoke('books:openDir', id),
 
+  // 相关文章 + 线索视图（F13：文末继续读 / 知识中心线索 tab）
+  similarFor: (entryID, limit) => data('similar:for', entryID, limit),
+  threadsList: () => data('threads:list'),
+  threadsDetail: (keyword) => data('threads:detail', keyword),
+
   // AI 深度研究（F8：列表 / 详情 / 删除 / 流式生成 / 追问 / 取消；onResearchDelta 收流式分片）
   researchList: () => data('research:list'),
   researchGet: (id) => data('research:get', id),

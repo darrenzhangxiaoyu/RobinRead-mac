@@ -322,8 +322,8 @@ export class SettingsView {
         await window.robin.setReaderLayout({ dropCap: v ? 'on' : 'off' });
         this.handlers.onRefreshState?.();
       }),
-      row(t('列表密度'), t('紧凑模式隐藏摘要，仅显示标题行。'), selectControl(
-        [['comfortable', t('舒适')], ['compact', t('紧凑')]],
+      row(t('列表密度'), t('紧凑模式隐藏摘要，仅显示标题行；宽松模式加大行距与留白。'), selectControl(
+        [['compact', t('紧凑')], ['comfortable', t('舒适')], ['relaxed', t('宽松')]],
         layout.listDensity || 'comfortable',
         async (value) => { await window.robin.setReaderLayout({ listDensity: value }); this.handlers.onRefreshState?.(); },
       )),
