@@ -33,7 +33,7 @@ const QUEUE_MAX = 100;                         // 队列上限
 const FINISHED_RATIO = 0.95;                   // >95% 视为播完（归零）
 const APP_UA = 'RobinRead/2.0 (+personal RSS reader)';
 // ── 转写（F22）──
-const TRANSCRIBE_PREF_KEY = 'RobinRead.media.transcribe'; // 配置（JSON：enabled/url/apiKey/model）
+const TRANSCRIBE_PREF_KEY = 'RobinRead.media.transcribe'; // 配置（JSON：enabled/url/model；apiKey 走 CredentialStore DPAPI，批 A 审查 P1-2）
 const TRANSCRIBE_TIMEOUT_MS = 30 * 60 * 1000;  // 单次转写总看门狗（本地 whisper 长音频可到数十分钟）
 const TRANSCRIBE_HEADERS_MS = 30000;           // 建连/出响应头超时（照下载看门狗 30s 口径）
 const TRANSCRIBE_TEXT_CAP = 2 * 1024 * 1024;   // 文字稿落库上限（2MB，超出截断）
@@ -113,6 +113,14 @@ class MediaService {
     this._transcribeRunning = null;   // 在途 itemID
     this._ftsReady = null;            // null = 未探测；boolean 缓存
     this._llmComplete = null;         // 注入缝：AI 摘要 LLM 调用（探针 mock；缺省走 store.llm）
+    // 崩溃恢复（批 A 审查 P1-1）：上次进程在 queued/running 中途退出→标 error 可重试，
+    // 否则重启后该行永久停在「转写中…」且无重试按钮
+    try {
+      this.store.database.prepare(`
+        UPDATE media_transcripts SET status = 'error', error = '上次中断，可重试', updated_at = ?
+        WHERE status IN ('queued', 'running')
+      `).run(nowSeconds());
+    } catch (_) { /* 表尚未迁移（极老库）时静默，迁移后自然为空 */ }
   }
 
   // MARK: - 进度推送（渲染层订阅）
@@ -580,30 +588,48 @@ class MediaService {
     return this._ftsReady;
   }
 
-  /** 转写端点配置（偏好持久化；默认关闭且未配置——不内置任何云端默认）。 */
+  /** 转写端点配置（偏好持久化；默认关闭且未配置——不内置任何云端默认）。
+   *  apiKey 不在此返回（批 A 审查 P1-2）：走 CredentialStore DPAPI，对外只给 hasKey。 */
   transcribeConfig() {
     let raw = {};
     try { raw = JSON.parse(this.store.preferences.get(TRANSCRIBE_PREF_KEY, '{}') || '{}') || {}; }
     catch (_) { raw = {}; }
+    // 旧版明文迁移：preferences.json 里残留的 apiKey 一次性搬进 CredentialStore 并从 JSON 剥离
+    if (raw.apiKey) {
+      try { this.store.credentials.setTranscribeAPIKey(String(raw.apiKey)); } catch (_) { /* 凭据写失败保留原值不丢 */ }
+      delete raw.apiKey;
+      try { this.store.preferences.set(TRANSCRIBE_PREF_KEY, JSON.stringify(raw)); } catch (_) { /* 忽略 */ }
+    }
     return {
       enabled: raw.enabled === true,
       url: String(raw.url || '').trim(),
-      apiKey: String(raw.apiKey || ''),
       model: String(raw.model || '').trim() || 'whisper-1',
+      hasKey: Boolean(this._transcribeApiKey()),
     };
   }
 
-  /** 写回配置（URL 必须是 http(s)；返回归一化后的配置）。 */
+  /** ASR 鉴权 Key（仅主进程内部上传使用；DPAPI 落盘）。 */
+  _transcribeApiKey() {
+    try { return this.store.credentials.transcribeAPIKey() || ''; }
+    catch (_) { return ''; }
+  }
+
+  /** 写回配置（URL 必须是 http(s)；apiKey 仅在 patch 显式携带时写凭据库，空串=清除）。 */
   transcribeSetConfig(patch) {
-    const next = { ...this.transcribeConfig(), ...(patch || {}) };
+    const p = patch || {};
+    const next = { ...this.transcribeConfig(), ...(p || {}) };
     next.enabled = next.enabled === true;
     next.url = String(next.url || '').trim();
-    next.apiKey = String(next.apiKey || '');
     next.model = String(next.model || '').trim() || 'whisper-1';
     if (next.url && !/^https?:\/\//i.test(next.url)) {
       throw new Error(i18n.localized('转写端点必须是 http(s) 地址。'));
     }
-    this.store.preferences.set(TRANSCRIBE_PREF_KEY, JSON.stringify(next));
+    if (Object.prototype.hasOwnProperty.call(p, 'apiKey')) {
+      this.store.credentials.setTranscribeAPIKey(String(p.apiKey || ''));
+    }
+    this.store.preferences.set(TRANSCRIBE_PREF_KEY, JSON.stringify({
+      enabled: next.enabled, url: next.url, model: next.model,
+    }));
     return this.transcribeConfig();
   }
 
@@ -746,7 +772,8 @@ class MediaService {
       form.append('model', cfg.model);
       form.append('response_format', 'verbose_json');
       const headers = { Accept: 'application/json' };
-      if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+      const apiKey = this._transcribeApiKey();
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       // 建连/响应头看门狗：30s 拿不到响应头即中止（与下载同口径）
       let headerTimer = null;
       const response = await Promise.race([

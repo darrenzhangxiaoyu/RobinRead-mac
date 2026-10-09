@@ -154,10 +154,19 @@ export class MediaView {
       this._spaceToggle();
     };
     document.addEventListener('keydown', this._space, true);
-    // Esc 关闭（与知识中心等浮层一致）；文字稿面板在场时让位（面板自带 Esc 自关）
+    // Esc 关闭（与知识中心等浮层一致）；文字稿面板在场时让位（面板自带 Esc 自关）；
+    // 搜索框有词时先清词不关窗（批 A 审查 P2-3：同设置弹窗「Esc 先清搜索、再按才关」约定）
     this._esc = (event) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (document.querySelector('.nj-transcript-overlay')) return;
+      if (this._searchInput && document.activeElement === this._searchInput && this._searchInput.value) {
+        event.preventDefault();
+        event.stopPropagation();
+        this._searchInput.value = '';
+        this._query = '';
+        this._load();
+        return;
+      }
       this.dismiss();
     };
     document.addEventListener('keydown', this._esc);
@@ -437,7 +446,8 @@ export class MediaView {
   }
 
   async _loadMore() {
-    const result = await window.robin.mediaList(this.filter, { limit: PAGE_SIZE, offset: this.items.length });
+    // 携带与 _load 相同的文字稿过滤词（批 A 审查 P1-3：否则搜索态翻页混入未过滤行）
+    const result = await window.robin.mediaList(this.filter, { limit: PAGE_SIZE, offset: this.items.length, query: this._query || null });
     if (!this.overlay) return;
     const fresh = (Array.isArray(result) ? result : []).filter((m) => !this.items.some((x) => x.itemID === m.itemID));
     this.items.push(...fresh);

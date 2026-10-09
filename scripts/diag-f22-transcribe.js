@@ -177,8 +177,11 @@ app.whenReady().then(async () => {
     const badURLErr = await (async () => store.media.transcribeSetConfig({ url: 'ftp://x' }))().then(() => null, (e) => String(e.message || e));
     ok(!!badURLErr && badURLErr.includes('http(s)'), '2 非法 URL（非 http(s)）写配置被拒');
     cfg = store.media.transcribeSetConfig({ enabled: true, url: asrURL, model: 'mock-whisper', apiKey: 'test-key' });
-    ok(cfg.enabled === true && cfg.url === asrURL && cfg.model === 'mock-whisper' && cfg.apiKey === 'test-key'
-      && store.media.transcribeReady() === true, '2 合法配置写回读回一致（enabled/url/model/key）');
+    ok(cfg.enabled === true && cfg.url === asrURL && cfg.model === 'mock-whisper' && cfg.hasKey === true
+      && store.media.transcribeReady() === true, '2 合法配置写回读回一致（enabled/url/model/hasKey）');
+    ok(!String(store.preferences.get('RobinRead.media.transcribe', '{}')).includes('test-key')
+      && store.credentials.transcribeAPIKey() === 'test-key',
+      '2 apiKey 只进 DPAPI 凭据库，preferences.json 无明文残留（审查 P1-2）');
 
     // ── 3. 状态机 queued → running → done（远端取源路径）──
     const progressStates = [];

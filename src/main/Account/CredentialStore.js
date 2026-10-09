@@ -102,6 +102,15 @@ class CredentialStore {
     this._write('webdav-password', null);
   }
 
+  /** 播客转写（F22）：ASR 端点鉴权 Key，DPAPI 落盘，不进 preferences.json。 */
+  transcribeAPIKey() {
+    return this._read('transcribe-api-key') || '';
+  }
+
+  setTranscribeAPIKey(value) {
+    this._write('transcribe-api-key', value);
+  }
+
   /** 账号登录 JWT（会员服务），同样只存本机。 */
   authToken() {
     return this._read('auth-token') || '';

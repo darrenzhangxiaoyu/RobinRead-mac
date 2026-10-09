@@ -148,23 +148,26 @@ class EventClusterService {
     const db = this.store.database;
     const now = nowSeconds();
     if (existingClusterID) {
-      db.prepare('UPDATE items SET cluster_id = ? WHERE id = ?').run(existingClusterID, self.id);
-      db.prepare(`
-        UPDATE event_clusters SET
-          member_count = (SELECT COUNT(*) FROM items WHERE cluster_id = event_clusters.id),
-          representative_item_id = (
-            SELECT i.id FROM items i INNER JOIN articles a ON a.item_id = i.id
-            WHERE i.cluster_id = event_clusters.id
-            ORDER BY COALESCE(a.published_at, i.created_at) ASC, i.id ASC LIMIT 1
-          ),
-          title = (
-            SELECT IFNULL(a.title, '') FROM items i INNER JOIN articles a ON a.item_id = i.id
-            WHERE i.cluster_id = event_clusters.id
-            ORDER BY COALESCE(a.published_at, i.created_at) ASC, i.id ASC LIMIT 1
-          ),
-          updated_at = ?
-        WHERE id = ?
-      `).run(now, existingClusterID);
+      // 两语句包单事务（批 A 审查 P2-1：语句间崩溃会留陈旧计数/代表）
+      db.transaction(() => {
+        db.prepare('UPDATE items SET cluster_id = ? WHERE id = ?').run(existingClusterID, self.id);
+        db.prepare(`
+          UPDATE event_clusters SET
+            member_count = (SELECT COUNT(*) FROM items WHERE cluster_id = event_clusters.id),
+            representative_item_id = (
+              SELECT i.id FROM items i INNER JOIN articles a ON a.item_id = i.id
+              WHERE i.cluster_id = event_clusters.id
+              ORDER BY COALESCE(a.published_at, i.created_at) ASC, i.id ASC LIMIT 1
+            ),
+            title = (
+              SELECT IFNULL(a.title, '') FROM items i INNER JOIN articles a ON a.item_id = i.id
+              WHERE i.cluster_id = event_clusters.id
+              ORDER BY COALESCE(a.published_at, i.created_at) ASC, i.id ASC LIMIT 1
+            ),
+            updated_at = ?
+          WHERE id = ?
+        `).run(now, existingClusterID);
+      })();
       this.counters.joined += 1;
       return existingClusterID;
     }
