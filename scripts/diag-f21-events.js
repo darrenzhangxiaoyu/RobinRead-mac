@@ -201,6 +201,18 @@ app.whenReady().then(async () => {
     const summaryMs = Number(process.hrtime.bigint() - tSummary) / 1e6;
     ok(summaryMs < 300, `9 summaries 批量载荷 ${summaryMs.toFixed(1)}ms < 300ms（200 簇）`);
 
+    // ── 9c. rebuild 用户入口（批 C 审查遗留收口：功能调用 + IPC + preload + 命令面板）──
+    ok(store2.database.prepare('SELECT COUNT(*) AS n FROM items WHERE feed_id = ?').get(feedPerf.id).n > 0,
+      '9c rebuild 前置：perf 源条目在库');
+    const rebuiltViaIPC = store2.events.rebuild({ windowDays: 7 });
+    ok(rebuiltViaIPC.scanned >= 1 && rebuiltViaIPC.windowDays === 7,
+      `9c rebuild 功能调用：扫描 ${rebuiltViaIPC.scanned} 篇（windowDays=7，幂等再跑）`);
+    ok(read('src/main/ipc.js').includes("'events:rebuild'"), '9c IPC events:rebuild 注册');
+    ok(read('src/main/preload.js').includes('eventsRebuild'), '9c preload 桥 eventsRebuild 通道');
+    const strings = read('src/main/I18NStrings.js');
+    ok(strings.includes('"重建事件索引"') && strings.includes('"事件索引已重建：扫描 %lld 篇 · 新并 %lld 次"'),
+      '9c i18n 重建命令双语键齐备');
+
     store2.events.dispose();
     store2.preferences.flushSync();
     store2.database.close();
@@ -208,7 +220,6 @@ app.whenReady().then(async () => {
     // ── 附：静态接线锚点 ──
     ok(read('src/main/preload.js').includes('eventSummaries'), '附 preload 桥 eventSummaries 通道');
     ok(read('src/main/ipc.js').includes("'events:summaries'"), '附 IPC events:summaries 注册');
-    const strings = read('src/main/I18NStrings.js');
     ok(strings.includes('"%lld 源"') && strings.includes('"切换事件模式"') && strings.includes('"事件"'),
       '附 i18n 中英键齐备（事件/切换事件模式/N 源）');
     const listSrc = read('src/renderer/views/list.js');
@@ -217,6 +228,8 @@ app.whenReady().then(async () => {
     const appSrc = read('src/renderer/app.js');
     ok(appSrc.includes('toggleEventsMode') && appSrc.includes('切换事件模式') && appSrc.includes('eventSummaries'),
       '附 app.js 事件切换 + 命令面板命令 + 摘要拉取接线');
+    ok(appSrc.includes('rebuildEventsIndex') && appSrc.includes('重建事件索引'),
+      '9c 命令面板「重建事件索引」命令 + rebuildEventsIndex 接线');
     ok(read('src/renderer/styles/robin.css').includes('.nj-event-card'), '附 事件卡样式入册');
 
     try { fs.rmSync(userData, { recursive: true, force: true }); }

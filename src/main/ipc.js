@@ -669,6 +669,8 @@ function registerIPCHandlers(store, window) {
 
   // MARK: 事件聚类去重（F21：事件卡摘要——代表条目/N 源/成员清单；簇行惰性回收）
   handle('events:summaries', (ids) => store.events.summaries(ids));
+  // F21 审查遗留收口（批 C）：rebuild 用户入口——命令面板「重建事件索引」对近 7 天存量补聚类
+  handle('events:rebuild', () => store.events.rebuild({ windowDays: 7 }));
 
   // MARK: 播客转文字稿（F22：发起/读回/配置/AI 摘要；进度走推送）
   if (store.media) store.media.onTranscribeProgress((payload) => send('media:transcribe-progress', payload));
@@ -784,6 +786,24 @@ function registerIPCHandlers(store, window) {
   handle('perspectives:mirror', async (entryID) => store.perspectives.mirror(String(entryID || '')));
   handle('perspectives:cancel', (entryID) => store.cancelAI(`perspectives:${String(entryID || '')}`));
   handle('perspectives:groups', (entryID) => store.perspectives.groups(String(entryID || '')));
+
+  // MARK: AI 反方辩手（F25：开场 / 多轮回合 / 取消 / 读回 / 裁决 / 存为批注）
+  const DB = () => store.debates;
+  handle('debates:available', () => DB().available());
+  handle('debates:start', (entryID) => DB().startDebate(String(entryID || '')));
+  handle('debates:reply', (debateID, text) => DB().reply(String(debateID || ''), String(text || '')));
+  handle('debates:cancel', (entryID) => DB().cancel(String(entryID || '')));
+  handle('debates:current', (entryID) => DB().current(String(entryID || '')));
+  handle('debates:verdict', (debateID, verdict) => DB().verdict(String(debateID || ''), verdict));
+  handle('debates:saveHighlight', (debateID) => DB().saveHighlight(String(debateID || '')));
+
+  // MARK: 读后点亮测验（F26：出题 / 判分点亮 / 取消 / 读回最近一次 / 可用性）
+  const QZ = () => store.quiz;
+  handle('quiz:available', () => QZ().available());
+  handle('quiz:generate', (entryID) => QZ().generateQuiz(String(entryID || '')));
+  handle('quiz:submit', (quizID, answers) => QZ().submit(String(quizID || ''), Array.isArray(answers) ? answers : []));
+  handle('quiz:cancel', (entryID) => QZ().cancel(String(entryID || '')));
+  handle('quiz:latest', (entryID) => QZ().latest(String(entryID || '')));
 
   // MARK: AI 自动标签（F15：开关（偏好持久化）/ 立即跑一批 / 诊断快照）
   handle('tags:autoConfig', (patch) => {

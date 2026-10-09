@@ -725,6 +725,7 @@ function buildPaletteCommands() {
     { label: t('专注会话'), keywords: 'focus session 专注 番茄 计时', icon: 'clock', action: () => views.focus?.open() },
     { label: t('智能精选'), keywords: 'smart picks 精选 推荐 画像 兴趣 interest', icon: 'wand', action: () => toggleSmartPicks() },
     { label: t('切换事件模式'), keywords: 'events 事件 聚合 同题 全景 cluster 去重', icon: 'events', desc: t('把多源同题报道聚合成事件卡，一眼看全事件全景。'), action: () => toggleEventsMode() },
+    { label: t('重建事件索引'), keywords: 'events rebuild 事件 聚类 索引 重建 补跑', icon: 'refresh', desc: t('对最近 7 天的存量文章补跑事件聚类，老文章也能聚成事件卡。'), action: () => rebuildEventsIndex() },
     { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
@@ -895,6 +896,18 @@ async function toggleEventsMode() {
   eventsState.save();
   views.list.setEventsMode(eventsState.on);
   await reloadList();
+}
+
+/** 重建事件索引（F21 审查遗留收口·批 C）：对近 7 天存量文章补跑事件聚类。 */
+async function rebuildEventsIndex() {
+  showToast(t('正在重建事件索引…'));
+  try {
+    const result = await window.robin.eventsRebuild();
+    if (eventsState.on) await reloadList(); // 事件模式开着：补跑后立即刷新分组
+    showToast(tf('事件索引已重建：扫描 %lld 篇 · 新并 %lld 次', result?.scanned || 0, result?.clustered || 0));
+  } catch (_) {
+    showToast(t('重建事件索引失败，请稍后再试。'));
+  }
 }
 
 // MARK: - 智能每日精选（F10：工具栏「精选」切换 / 播报 / 不感兴趣）

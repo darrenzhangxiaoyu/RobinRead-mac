@@ -694,15 +694,17 @@ export class KnowledgeCenter {
           <span class="kb-review-title"></span>
           <span class="kb-review-meta">${icon('clock')}<span>${interval} 天 · ${reps} 次复习</span></span>
         </div>
-        ${item.highlightText ? `<div class="kb-hl-text"></div>` : ''}
+        ${item.highlightText || item.quizText ? `<div class="kb-hl-text"></div>` : ''}
         <div class="kb-review-actions">
           <button class="btn-text" data-q="1">😅 忘了</button>
           <button class="btn-text" data-q="3">🤔 想起来了</button>
           <button class="btn-text primary" data-q="5">😎 简单</button>
           <button class="btn-text danger kb-review-remove" title="${attr(t('移出复习队列'))}">${escapeHTML(t('移除'))}</button>
         </div>`;
-      card.querySelector('.kb-review-title').textContent = item.articleTitle || t('未知文章');
-      if (item.highlightText) card.querySelector('.kb-hl-text').textContent = item.highlightText;
+      card.querySelector('.kb-review-title').textContent = item.quizText
+        ? `${t('测验错题')} · ${item.articleTitle || t('未知文章')}`
+        : (item.articleTitle || t('未知文章'));
+      if (item.highlightText || item.quizText) card.querySelector('.kb-hl-text').textContent = item.quizText || item.highlightText;
       card.querySelector('.kb-review-remove').addEventListener('click', async (e) => {
         e.stopPropagation();
         const ok = await confirmBox(t('移出复习'), { message: t('确定把这张卡片移出复习队列吗？'), okLabel: t('移除'), danger: true });
@@ -845,11 +847,27 @@ export class KnowledgeCenter {
       </div>
       <div class="kb-session-foot"><button class="btn-text kb-session-exit"></button></div>`;
     wrap.querySelector('.kb-session-title').textContent = card.articleTitle || t('未知文章');
-    wrap.querySelector('.kb-session-hint').textContent = t('回忆这段高亮的内容，然后翻面');
+    // F26 测验错题卡：题面在正面（回忆答案），翻面见正确答案 + 解析
+    if (card.quizText) {
+      wrap.querySelector('.kb-session-title').textContent = `${t('测验错题')} · ${card.articleTitle || t('未知文章')}`;
+      wrap.querySelector('.kb-session-hint').textContent = card.quizText;
+      wrap.querySelector('.kb-session-hint').classList.add('kb-session-quiz-q');
+      if (card.quizOptions && card.quizAnswer != null) {
+        wrap.querySelector('.kb-session-hint').textContent = `${card.quizText}\n`
+          + card.quizOptions.map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n');
+      }
+    } else {
+      wrap.querySelector('.kb-session-hint').textContent = t('回忆这段高亮的内容，然后翻面');
+    }
     wrap.querySelector('.kb-session-reveal').textContent = t('显示答案');
     wrap.querySelector('.kb-session-count').textContent = (session.index + 1) + ' / ' + total;
     wrap.querySelector('.kb-session-bar-fill').style.width = Math.round((done / total) * 100) + '%';
-    if (card.highlightText) wrap.querySelector('.kb-hl-text').textContent = card.highlightText;
+    if (card.quizText && card.quizAnswer != null && card.quizOptions) {
+      const q = card;
+      wrap.querySelector('.kb-hl-text').textContent = `${t('正确答案')}：${String.fromCharCode(65 + q.quizAnswer)}. ${q.quizOptions[q.quizAnswer] || ''}${q.quizExplain ? `\n${q.quizExplain}` : ''}`;
+    } else if (card.highlightText) {
+      wrap.querySelector('.kb-hl-text').textContent = card.highlightText;
+    }
     if (card.highlightNote) {
       const note = wrap.querySelector('.kb-session-note');
       note.style.display = '';
@@ -1018,7 +1036,7 @@ export class KnowledgeCenter {
     }
     const head = document.createElement('div');
     head.className = 'kb-graph-head';
-    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('知识图谱'))}</span><span class="kb-graph-legend">${escapeHTML(t('大节点 = 高频标签 · 悬停高亮关联 · 点击文章节点直达'))}</span>`;
+    head.innerHTML = `<span class="kb-daily-title">${escapeHTML(t('知识图谱'))}</span><span class="kb-graph-legend">${escapeHTML(t('大节点 = 高频标签 · 悬停高亮关联 · 点击文章节点直达 · ✦ 光环 = 读后测验点亮'))}</span>`;
     el.appendChild(head);
 
     const wrap = document.createElement('div');
@@ -1046,17 +1064,18 @@ export class KnowledgeCenter {
     // 节点/边构建
     const nodes = [];
     const nodeByKey = new Map();
-    const addNode = (key, kind, label, weight) => {
+    const addNode = (key, kind, label, weight, extra = null) => {
       let node = nodeByKey.get(key);
       if (!node) {
-        node = { key, kind, label, weight: 0, x: 0, y: 0, vx: 0, vy: 0 };
+        node = { key, kind, label, weight: 0, x: 0, y: 0, vx: 0, vy: 0, lit: 0 };
         nodeByKey.set(key, node);
         nodes.push(node);
       }
       node.weight += weight;
+      if (extra) Object.assign(node, extra);
       return node;
     };
-    for (const tg of data.tags || []) addNode(`tag:${tg.tag}`, 'tag', tg.tag, tg.count);
+    for (const tg of data.tags || []) addNode(`tag:${tg.tag}`, 'tag', tg.tag, tg.count, { lit: tg.lit ? 1 : 0 });
     for (const a of data.articles || []) addNode(`art:${a.id}`, 'article', a.title || a.id, 1);
     const edges = (data.edges || []).map((e) => ({
       a: nodeByKey.get(`tag:${e.tag}`),
@@ -1144,6 +1163,23 @@ export class KnowledgeCenter {
         const r = radiusOf(node);
         const dim = hoverSet ? !hoverSet.has(node) : false;
         ctx.globalAlpha = dim ? 0.15 : 1;
+        // F26 点亮光环：测验达标的标签节点 = 柔光晕 + 虚线环（走令牌色）
+        if (node.kind === 'tag' && node.lit) {
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r + 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = palette.accent;
+          ctx.globalAlpha = dim ? 0.06 : 0.16;
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, r + 5.5, 0, Math.PI * 2);
+          ctx.strokeStyle = palette.accent;
+          ctx.globalAlpha = dim ? 0.12 : 0.6;
+          ctx.lineWidth = 1.4;
+          ctx.setLineDash([3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = dim ? 0.15 : 1;
+        }
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
         if (node.kind === 'tag') {
@@ -1162,8 +1198,9 @@ export class KnowledgeCenter {
           ctx.fillStyle = palette.ink;
           ctx.font = `${node.kind === 'tag' ? 600 : 400} 11px system-ui, sans-serif`;
           ctx.textAlign = 'center';
+          const mark = node.kind === 'tag' && node.lit ? '✦ ' : '';
           const label = node.label.length > 18 ? `${node.label.slice(0, 17)}…` : node.label;
-          ctx.fillText(label, node.x, node.y - r - 5);
+          ctx.fillText(mark + label, node.x, node.y - r - 5);
         }
         ctx.globalAlpha = 1;
       }

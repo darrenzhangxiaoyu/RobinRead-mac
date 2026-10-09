@@ -105,8 +105,9 @@ contextBridge.exposeInMainWorld('robin', {
   mediaDownloadDelete: (entryID) => data('media:download:delete', entryID),
   onMediaDownloadProgress: (listener) => subscribe('media:download-progress', listener),
 
-  // 事件聚类去重（F21：事件模式按簇分组的事件卡摘要）
+  // 事件聚类去重（F21：事件模式按簇分组的事件卡摘要 + 重建事件索引（批 C 收口））
   eventSummaries: (ids) => data('events:summaries', ids),
+  eventsRebuild: () => data('events:rebuild'),
 
   // 播客转文字稿（F22：发起/读回/端点配置/AI 摘要；onTranscribeProgress 收转写进度推送）
   transcribeMedia: (itemID) => data('media:transcribe', itemID),
@@ -177,6 +178,22 @@ contextBridge.exposeInMainWorld('robin', {
   perspectivesMirror: (entryID) => invoke('perspectives:mirror', entryID),
   perspectivesCancel: (entryID) => invoke('perspectives:cancel', entryID),
   perspectivesGroups: (entryID) => data('perspectives:groups', entryID),
+
+  // AI 反方辩手（F25：开场 / 多轮回合 / 取消 / 读回 / 裁决 / 存为批注）
+  debatesAvailable: () => data('debates:available').then((r) => Boolean(r && r.ai)),
+  debateStart: (entryID) => invoke('debates:start', entryID),
+  debateReply: (debateID, text) => invoke('debates:reply', debateID, text),
+  debateCancel: (entryID) => invoke('debates:cancel', entryID),
+  debateCurrent: (entryID) => data('debates:current', entryID),
+  debateVerdict: (debateID, verdict) => invoke('debates:verdict', debateID, verdict),
+  debateSaveHighlight: (debateID) => invoke('debates:saveHighlight', debateID),
+
+  // 读后点亮测验（F26：可用性 / 出题 / 判分点亮 / 取消 / 读回最近一次）
+  quizAvailable: () => data('quiz:available').then((r) => Boolean(r && r.ai)),
+  quizGenerate: (entryID) => invoke('quiz:generate', entryID),
+  quizSubmit: (quizID, answers) => invoke('quiz:submit', quizID, answers),
+  quizCancel: (entryID) => invoke('quiz:cancel', entryID),
+  quizLatest: (entryID) => data('quiz:latest', entryID),
 
   // AI 自动标签（F15：开关读写（偏好持久化）/ 立即跑一批 / 诊断快照）
   tagsAutoConfig: (patch) => data('tags:autoConfig', patch),

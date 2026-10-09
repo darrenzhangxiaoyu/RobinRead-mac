@@ -628,6 +628,8 @@ export class ReaderView {
   _render() {
     this._ttsStop(); // 正文重排（打开新文/原文精读）：段落锚点重建，朗读必须先停
     this._mirrorToken = null; // F24：换文使在途对照镜回调失效（面板随 scrollEl 重建）
+    this._debateToken = null; // F25：换文使在途辩论回调失效（侧板随 scrollEl 重建）
+    document.getElementById('nj-quiz-overlay')?.remove(); // F26：测验浮层挂 body，换文即收（在途生成随 cancel 通道取消）
     document.getElementById('nj-translate-progress')?.remove(); // P2-3：换文重排时清掉上一篇的翻译进度浮标
     this.articleSearch?.reset(); // 正文重建：搜索高亮与命中导航一并失效
     this.scrollEl.scrollTop = 0;
@@ -796,6 +798,8 @@ export class ReaderView {
       this._ttsAppendHeaderButton(actions);
       this._appendLaterHeaderButton(actions);
       this._appendMirrorHeaderButton(actions);
+      this._appendDebateHeaderButton(actions); // F25 反方辩手（与对照镜并列）
+      this._appendQuizHeaderButton(actions); // F26 读后测验（正文 ≥500 字才显）
       if (entry.url) {
         const readBtn = document.createElement('button');
         readBtn.className = 'btn-text bordered';
@@ -3815,11 +3819,19 @@ export class ReaderView {
     }
     panel.dataset.entryID = entryID;
     this._renderMirrorPanel({ phase: 'loading' });
-    panel.querySelector('.nj-mirror-cancel')?.addEventListener('click', () => {
-      window.robin.perspectivesCancel?.(entryID);
-    });
-    panel.querySelector('.nj-mirror-close')?.addEventListener('click', () => this._closeMirrorPanel());
-    panel.querySelector('.nj-mirror-retry')?.addEventListener('click', () => this._openMirrorPanel());
+    // 事件委托（批 B 审查 P1：_renderMirrorPanel 各相位整体重建 innerHTML，
+    // 逐节点绑定会在重建后失灵——面板级一个 click 监听按 closest 分派）
+    if (!panel.dataset.delegated) {
+      panel.dataset.delegated = '1';
+      panel.addEventListener('click', (event) => {
+        const entry = String(this.entryID || '');
+        const action = event.target?.closest?.('[data-mirror-action]')?.dataset.mirrorAction;
+        if (!action) return;
+        if (action === 'cancel') window.robin.perspectivesCancel?.(entry);
+        else if (action === 'close') this._closeMirrorPanel();
+        else if (action === 'retry') this._openMirrorPanel();
+      });
+    }
 
     const openToken = `${entryID}@${Date.now()}`;
     this._mirrorToken = openToken;
@@ -3864,8 +3876,8 @@ export class ReaderView {
         <span class="nj-mirror-icon">${icon('mirror')}</span>
         <span class="nj-mirror-title">${escapeHTML(t('观点对照镜'))}</span>
         <span class="nj-mirror-state">${phase === 'loading' ? escapeHTML(t('正在翻你的阅读历史…')) : ''}</span>
-        ${phase === 'loading' ? `<button class="study-panel-btn nj-mirror-cancel" title="${attr(t('取消判定'))}">${icon('close')}</button>` : ''}
-        <button class="study-panel-btn nj-mirror-close" title="${attr(t('关闭'))}">${icon('close')}</button>
+        ${phase === 'loading' ? `<button class="study-panel-btn nj-mirror-cancel" data-mirror-action="cancel" title="${attr(t('取消判定'))}">${icon('close')}</button>` : ''}
+        <button class="study-panel-btn nj-mirror-close" data-mirror-action="close" title="${attr(t('关闭'))}">${icon('close')}</button>
       </div>`;
 
     if (phase === 'loading') {
@@ -3876,7 +3888,7 @@ export class ReaderView {
       panel.innerHTML = `${head}<div class="nj-mirror-body"><div class="nj-mirror-empty">
         <p>${escapeHTML(t('对照镜这次没照成。'))}</p>
         <p class="hint">${escapeHTML(message).slice(0, 200)}</p>
-        <button class="btn-text bordered nj-mirror-retry">${escapeHTML(t('重试'))}</button>
+        <button class="btn-text bordered nj-mirror-retry" data-mirror-action="retry">${escapeHTML(t('重试'))}</button>
       </div></div>`;
       return;
     }
@@ -3943,6 +3955,461 @@ export class ReaderView {
       });
     });
   }
+
+  // MARK: - AI 反方辩手（F25：钢人开场 + 多轮辩论 + 你当裁判）
+
+  /**
+   * 头部「反方辩手」按钮（与对照镜并列）：有正文即显示；无 Key 灰置并说明
+   * （异步探测 AI 可用性，配好 Key 后下一篇文章立即生效）。
+   */
+  _appendDebateHeaderButton(actions) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-text bordered nj-debate-header-btn';
+    btn.dataset.role = 'debate';
+    btn.innerHTML = `${icon('bubble')}<span style="margin-left:4px"></span>`;
+    btn.querySelector('span').textContent = t('反方辩手');
+    btn.title = t('召唤钢人反方与你辩论，你当裁判投票');
+    const hasContent = plainLen(this.html || '') > 0;
+    btn.disabled = !hasContent; // 无 Key 灰置（探测后启用）；无正文不设辩题
+    if (!hasContent) btn.title = t('这篇没有可辩论的正文。');
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById('nj-debate-panel');
+      if (panel && panel.dataset.entryID === String(this.entryID || '')) {
+        this._closeDebatePanel();
+        return;
+      }
+      this._openDebatePanel();
+    });
+    actions.appendChild(btn);
+    this._debateBtn = btn;
+    if (hasContent) {
+      window.robin.debatesAvailable?.().then((ok) => {
+        if (!ok && btn.isConnected) {
+          btn.disabled = true;
+          btn.title = t('尚未配置 AI API Key：在 设置 → AI 功能 中配置后可与反方辩论');
+        }
+      }).catch(() => { /* 探测失败保持现状 */ });
+    }
+  }
+
+  /** 打开辩论侧板：有进行中/已裁决的场直接回放，否则一键召唤开场。 */
+  _openDebatePanel() {
+    const entryID = String(this.entryID || '');
+    if (!entryID) return;
+    let panel = document.getElementById('nj-debate-panel');
+    if (!panel) {
+      panel = document.createElement('aside');
+      panel.id = 'nj-debate-panel';
+      panel.className = 'nj-debate-panel';
+      this.body?.parentElement?.insertBefore(panel, this.body);
+    }
+    panel.dataset.entryID = entryID;
+    panel.querySelector('.nj-debate-close')?.addEventListener('click', () => this._closeDebatePanel());
+
+    const openToken = `${entryID}@${Date.now()}`;
+    this._debateToken = openToken;
+    const stale = () => this._debateToken !== openToken || this.entryID !== entryID || !panel.isConnected;
+
+    window.robin.debateCurrent(entryID).then((existing) => {
+      if (stale()) return;
+      if (existing && existing.rounds?.length) {
+        this._renderDebatePanel({ phase: existing.status === 'open' ? 'done' : 'closed', debate: existing });
+        return;
+      }
+      // 无场（或空场）：召唤钢人开场（在途态：转圈 + 取消）
+      this._renderDebatePanel({ phase: 'loading' });
+      panel.querySelector('.nj-debate-cancel')?.addEventListener('click', () => window.robin.debateCancel?.(entryID));
+      panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
+      window.robin.debateStart(entryID).then((envelope) => {
+        if (stale()) return;
+        const debate = envelope && envelope.ok ? envelope.data : null;
+        if (!debate) throw new Error((envelope && envelope.error) || 'no debate');
+        if (debate.rounds?.length) {
+          this._renderDebatePanel({ phase: 'done', debate }); // _renderDebatePanel 内部已绑定交互，勿重复绑
+        } else {
+          // 取消/空结果：不再空转——给「召唤开场」重试出路
+          this._renderDebatePanel({ phase: 'empty' });
+          panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
+        }
+      }).catch((err) => {
+        if (stale()) return;
+        this._renderDebatePanel({ phase: 'error', message: String((err && err.message) || err) });
+        panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
+      });
+    }).catch((err) => {
+      if (stale()) return;
+      this._renderDebatePanel({ phase: 'error', message: String((err && err.message) || err) });
+      panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
+    });
+  }
+
+  _closeDebatePanel() {
+    const panel = document.getElementById('nj-debate-panel');
+    if (!panel) return;
+    if (panel.dataset.entryID) window.robin.debateCancel?.(panel.dataset.entryID);
+    this._debateToken = null;
+    panel.remove();
+  }
+
+  /**
+   * 辩论侧板渲染：气泡流（AI 左 / 用户右）+ 引用原句芯片（点击高亮跳转）+
+   * 输入行（open 且未封顶）+ 裁决两态按钮（open）+ 定格态（closed：裁决徽记 + 存为批注）。
+   */
+  _renderDebatePanel({ phase, debate = null, message = '' }) {
+    const panel = document.getElementById('nj-debate-panel');
+    if (!panel) return;
+    const head = `
+      <div class="nj-debate-head">
+        <span class="nj-debate-icon">${icon('bubble')}</span>
+        <span class="nj-debate-title">${escapeHTML(t('反方辩手'))}</span>
+        <span class="nj-debate-state">${
+          phase === 'loading' ? escapeHTML(t('钢人正在读文章组织开场…'))
+          : debate ? escapeHTML(tf('回合 %lld / %lld', debate.aiTurns || 0, debate.turnsLeft != null ? (debate.aiTurns || 0) + debate.turnsLeft : 6)) : ''
+        }</span>
+        ${phase === 'loading' ? `<button class="study-panel-btn nj-debate-cancel" title="${attr(t('取消生成'))}">${icon('close')}</button>` : ''}
+        <button class="study-panel-btn nj-debate-close" title="${attr(t('关闭'))}">${icon('close')}</button>
+      </div>`;
+
+    if (phase === 'loading') {
+      panel.innerHTML = `${head}<div class="nj-debate-body"><div class="nj-debate-loading"><span class="nj-debate-spinner"></span><p>${escapeHTML(t('反方正在准备最强版本的对手…'))}</p></div></div>`;
+      return;
+    }
+    if (phase === 'error') {
+      panel.innerHTML = `${head}<div class="nj-debate-body"><div class="nj-debate-empty">
+        <p>${escapeHTML(t('反方这次没上场。'))}</p>
+        <p class="hint">${escapeHTML(message).slice(0, 200)}</p>
+        <button class="btn-text bordered nj-debate-retry">${escapeHTML(t('重试'))}</button>
+      </div></div>`;
+      return;
+    }
+    if (phase === 'empty') {
+      panel.innerHTML = `${head}<div class="nj-debate-body"><div class="nj-debate-empty">
+        <p>${escapeHTML(t('开场被取消了——再点一次召唤钢人。'))}</p>
+        <button class="btn-text bordered nj-debate-retry">${escapeHTML(t('召唤开场'))}</button>
+      </div></div>`;
+      return;
+    }
+
+    const closed = debate.status !== 'open';
+    const bubbles = (debate.rounds || []).map((round) => {
+      if (round.role === 'user') {
+        return `<div class="nj-debate-row user"><div class="nj-debate-bubble user">${escapeHTML(round.content)}</div></div>`;
+      }
+      const quotes = (round.quotes || []).map((q) =>
+        `<button type="button" class="nj-debate-quote" data-quote="${attr(q)}" title="${attr(t('高亮跳转到原文'))}">${escapeHTML(q)}</button>`).join('');
+      const kindBadge = round.kind === 'opening' ? `<span class="nj-debate-round-tag">${escapeHTML(t('钢人开场'))}</span>` : '';
+      return `<div class="nj-debate-row ai"><div class="nj-debate-bubble ai">${kindBadge}<div class="nj-debate-bubble-text"></div>${quotes}</div></div>`;
+    }).join('');
+    const flow = bubbles
+      ? `<div class="nj-debate-flow">${bubbles}</div>`
+      : `<div class="nj-debate-empty"><p>${escapeHTML(t('辩论还没开始。'))}</p></div>`;
+
+    let verdictBar = '';
+    if (!closed && !debate.capped) {
+      verdictBar = `<div class="nj-debate-verdicts">
+        <button type="button" class="btn-text bordered nj-debate-verdict" data-verdict="verdict_up">${escapeHTML(t('反方说服了我'))}</button>
+        <button type="button" class="btn-text bordered nj-debate-verdict" data-verdict="verdict_down">${escapeHTML(t('我坚持原文'))}</button>
+      </div>`;
+    } else if (!closed && debate.capped) {
+      verdictBar = `<div class="nj-debate-capped">${escapeHTML(tf('已达回合上限（%lld 轮）——投出你的一票来定格这场辩论。', debate.aiTurns))}</div>`;
+    }
+
+    let closedBar = '';
+    if (closed) {
+      const verdictLabel = debate.verdict === 'verdict_up' ? t('裁决：反方说服了我') : debate.verdict === 'verdict_down' ? t('裁决：我坚持原文') : t('辩论已结束');
+      closedBar = `<div class="nj-debate-closed">
+        <span class="nj-debate-verdict-badge ${debate.verdict === 'verdict_up' ? 'up' : 'down'}">${escapeHTML(verdictLabel)}</span>
+        <button type="button" class="btn-text bordered nj-debate-save">${escapeHTML(t('存为批注'))}</button>
+      </div>`;
+    }
+
+    const inputRow = (!closed && !debate.capped)
+      ? `<div class="nj-debate-inputrow">
+          <textarea class="nj-debate-input" rows="2" placeholder="${attr(t('说出你的反驳…'))}"></textarea>
+          <button type="button" class="btn-text primary nj-debate-send">${escapeHTML(t('回合一枪'))}</button>
+        </div>`
+      : '';
+
+    panel.innerHTML = `${head}<div class="nj-debate-body">${flow}${verdictBar}${closedBar}${inputRow}</div>`;
+    // 气泡文本走 textContent（防注入）；回放定位到底部
+    panel.querySelectorAll('.nj-debate-bubble-text').forEach((el, i) => {
+      const aiRounds = (debate.rounds || []).filter((r) => r.role === 'ai');
+      el.textContent = aiRounds[i]?.content || '';
+    });
+    if (inputRow) panel.querySelector('.nj-debate-input')?.focus();
+    panel.querySelector('.nj-debate-flow')?.scrollTo?.(0, panel.querySelector('.nj-debate-flow').scrollHeight);
+    this._bindDebatePanel(panel, debate);
+  }
+
+  /** 侧板交互绑定：引用跳转 / 发言 / 裁决 / 存为批注 / 关闭。 */
+  _bindDebatePanel(panel, debate = null) {
+    const entryID = String(this.entryID || '');
+    panel.querySelector('.nj-debate-close')?.addEventListener('click', () => this._closeDebatePanel());
+    panel.querySelectorAll('.nj-debate-quote').forEach((chip) => {
+      chip.addEventListener('click', () => this._flashDebateQuote(chip.dataset.quote || ''));
+    });
+    if (!debate) return;
+    if (debate.status === 'open') {
+      const send = () => this._debateReply(panel, debate.id);
+      panel.querySelector('.nj-debate-send')?.addEventListener('click', send);
+      panel.querySelector('.nj-debate-input')?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(); }
+      });
+      panel.querySelectorAll('.nj-debate-verdict').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const envelope = await window.robin.debateVerdict(debate.id, btn.dataset.verdict).catch(() => null);
+          const updated = envelope && envelope.ok ? envelope.data : null;
+          if (updated) this._renderDebatePanel({ phase: 'closed', debate: updated });
+        });
+      });
+    }
+    panel.querySelector('.nj-debate-save')?.addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      const envelope = await window.robin.debateSaveHighlight(debate.id).catch(() => null);
+      if (envelope && envelope.ok && envelope.data?.id) {
+        btn.textContent = t('已存为批注');
+        btn.disabled = true;
+      } else {
+        btn.textContent = t('存批注失败');
+      }
+    });
+    void entryID;
+  }
+
+  /** 用户发言一轮 → AI 回合（在途：输入行换成转圈；失败：行内错误条）。 */
+  async _debateReply(panel, debateID) {
+    if (this._debateSending) return; // 双击/回车重入护栏（第二次会撞主进程单飞锁，谎报错误）
+    const input = panel.querySelector('.nj-debate-input');
+    const text = String(input?.value || '').trim();
+    if (!text) return;
+    this._debateSending = true;
+    if (input) input.disabled = true;
+    const sendBtn = panel.querySelector('.nj-debate-send');
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = t('反方思考中…'); }
+    const entryID = String(this.entryID || '');
+    const envelope = await window.robin.debateReply(debateID, text).catch((err) => ({ ok: false, error: String((err && err.message) || err) }));
+    this._debateSending = false;
+    if (!panel.isConnected || this.entryID !== entryID) return; // 换文/关板：丢弃过期回包
+    const debate = envelope && envelope.ok ? envelope.data : null;
+    if (!debate) {
+      const current = await window.robin.debateCurrent(entryID).catch(() => null);
+      this._renderDebatePanel({ phase: 'done', debate: current || { id: debateID, entryID, status: 'open', rounds: [], aiTurns: 0, turnsLeft: 6, capped: false } });
+      const body = panel.querySelector('.nj-debate-body');
+      const note = document.createElement('div');
+      note.className = 'nj-debate-degraded';
+      note.textContent = String(envelope && envelope.error ? envelope.error : t('反方这次没接上，请再发一次。')).slice(0, 200);
+      body?.prepend(note);
+      return;
+    }
+    this._renderDebatePanel({ phase: debate.rounds?.length ? 'done' : 'loading', debate });
+  }
+
+  /** 引用原句高亮跳转：正文中找包含引用片段的段落 → 滚动定位 + 闪烁标记。 */
+  _flashDebateQuote(quote) {
+    const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+    const q = norm(quote);
+    if (!q || !this.body) return;
+    const fragment = q.length > 16 ? q.slice(0, 16) : q;
+    let target = null;
+    for (const p of this.body.querySelectorAll('[data-nj-id]')) {
+      if (norm(p.textContent).includes(fragment)) { target = p; break; }
+    }
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.remove('nj-debate-quote-hit');
+    // 强制重排重启动画（同一引用连点两次也要闪）
+    void target.offsetWidth;
+    target.classList.add('nj-debate-quote-hit');
+    setTimeout(() => target.classList.remove('nj-debate-quote-hit'), 2400);
+  }
+
+  // MARK: - 读后点亮测验（F26：3 题理解测 → 点亮图谱节点 / 错题入复习）
+
+  /** 头部「读后测验」按钮：正文 ≥500 字才显示；无 Key 灰置并说明。 */
+  _appendQuizHeaderButton(actions) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-text bordered nj-quiz-header-btn';
+    btn.dataset.role = 'quiz';
+    btn.innerHTML = `${icon('question')}<span style="margin-left:4px"></span>`;
+    btn.querySelector('span').textContent = t('读后测验');
+    btn.title = t('三道理解题：答对点亮图谱节点，错题自动进复习');
+    const enough = plainLen(this.html || '') >= 500;
+    btn.hidden = !enough; // 500 字显隐规则：短文无题可出
+    if (!enough) btn.title = t('正文满 500 字后才可以测一测。');
+    btn.addEventListener('click', () => this._openQuizOverlay());
+    actions.appendChild(btn);
+    this._quizBtn = btn;
+    if (enough) {
+      window.robin.quizAvailable?.().then((ok) => {
+        if (!ok && btn.isConnected) {
+          btn.disabled = true;
+          btn.title = t('尚未配置 AI API Key：在 设置 → AI 功能 中配置后可以测一测');
+        }
+      }).catch(() => { /* 探测失败保持现状 */ });
+    }
+  }
+
+  /** 测验浮层（挂 body，Esc 关闭；换文即收）。 */
+  _openQuizOverlay() {
+    if (document.getElementById('nj-quiz-overlay')) return;
+    const entryID = String(this.entryID || '');
+    if (!entryID) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'nj-quiz-overlay';
+    overlay.className = 'nj-quiz-overlay';
+    const card = document.createElement('div');
+    card.className = 'nj-quiz-card';
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    const stale = () => this.entryID !== entryID || !overlay.isConnected;
+
+    const closeBtn = () => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'study-panel-btn nj-quiz-close';
+      btn.title = attr(t('关闭'));
+      btn.innerHTML = icon('close');
+      btn.addEventListener('click', () => { window.robin.quizCancel?.(entryID); overlay.remove(); });
+      return btn;
+    };
+    const escHandler = (event) => {
+      if (event.key === 'Escape' && overlay.isConnected) {
+        event.stopPropagation();
+        window.robin.quizCancel?.(entryID);
+        overlay.remove();
+      }
+    };
+    document.addEventListener('keydown', escHandler, true);
+    overlay.addEventListener('mousedown', (event) => {
+      if (event.target === overlay) { window.robin.quizCancel?.(entryID); overlay.remove(); }
+    });
+
+    const renderGenerating = () => {
+      card.innerHTML = `
+        <div class="nj-quiz-head"><span class="nj-quiz-icon">${icon('question')}</span><span class="nj-quiz-title">${escapeHTML(t('读后测验'))}</span></div>
+        <div class="nj-quiz-loading"><span class="nj-quiz-spinner"></span><p>${escapeHTML(t('AI 正在依正文出 3 道理解题…'))}</p></div>`;
+      card.querySelector('.nj-quiz-head').appendChild(closeBtn());
+    };
+
+    const renderError = (message) => {
+      card.innerHTML = `
+        <div class="nj-quiz-head"><span class="nj-quiz-icon">${icon('question')}</span><span class="nj-quiz-title">${escapeHTML(t('读后测验'))}</span></div>
+        <div class="nj-quiz-empty"><p>${escapeHTML(t('这次没能出成题。'))}</p><p class="hint">${escapeHTML(message).slice(0, 200)}</p></div>`;
+      card.querySelector('.nj-quiz-head').appendChild(closeBtn());
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'btn-text bordered';
+      retry.textContent = t('重试');
+      retry.addEventListener('click', () => { renderGenerating(); start(); });
+      card.querySelector('.nj-quiz-empty').appendChild(retry);
+    };
+
+    const start = () => {
+      renderGenerating();
+      window.robin.quizGenerate(entryID).then((envelope) => {
+        if (stale()) return;
+        const quiz = envelope && envelope.ok ? envelope.data : null;
+        if (!quiz || !quiz.questions?.length) throw new Error((envelope && envelope.error) || t('模型没有返回可用的题目。'));
+        renderQuiz(quiz);
+      }).catch((err) => {
+        if (stale()) return;
+        renderError(String((err && err.message) || err));
+      });
+    };
+
+    // 逐题作答流：题干 + 4 选项单选 → 下一题/提交 → 出分 + 解析 + 点亮反馈
+    const renderQuiz = (quiz) => {
+      const state = { step: 0, picks: new Array(quiz.questions.length).fill(null) };
+      const renderStep = () => {
+        const q = quiz.questions[state.step];
+        const last = state.step === quiz.questions.length - 1;
+        card.innerHTML = `
+          <div class="nj-quiz-head">
+            <span class="nj-quiz-icon">${icon('question')}</span>
+            <span class="nj-quiz-title">${escapeHTML(t('读后测验'))}</span>
+            <span class="nj-quiz-progress">${escapeHTML(tf('第 %lld / %lld 题', state.step + 1, quiz.questions.length))}</span>
+          </div>
+          <div class="nj-quiz-q"></div>
+          <div class="nj-quiz-options"></div>
+          <div class="nj-quiz-foot">
+            <button type="button" class="btn-text primary nj-quiz-next" disabled>${escapeHTML(last ? t('交卷') : t('下一题'))}</button>
+          </div>`;
+        card.querySelector('.nj-quiz-head').appendChild(closeBtn());
+        card.querySelector('.nj-quiz-q').textContent = q.q;
+        const host = card.querySelector('.nj-quiz-options');
+        q.options.forEach((opt, i) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'nj-quiz-option';
+          btn.dataset.index = String(i);
+          const mark = document.createElement('span');
+          mark.className = 'nj-quiz-option-mark';
+          mark.textContent = String.fromCharCode(65 + i);
+          const text = document.createElement('span');
+          text.textContent = opt;
+          btn.append(mark, text);
+          btn.addEventListener('click', () => {
+            state.picks[state.step] = i;
+            host.querySelectorAll('.nj-quiz-option').forEach((b) => b.classList.toggle('picked', b === btn));
+            card.querySelector('.nj-quiz-next').disabled = false;
+          });
+          host.appendChild(btn);
+        });
+        card.querySelector('.nj-quiz-next').addEventListener('click', () => {
+          if (state.picks[state.step] == null) return;
+          if (!last) { state.step += 1; renderStep(); return; }
+          renderGenerating();
+          window.robin.quizSubmit(quiz.id, state.picks).then((envelope2) => {
+            if (stale()) return;
+            const result = envelope2 && envelope2.ok ? envelope2.data : null;
+            if (!result) throw new Error((envelope2 && envelope2.error) || t('判分失败，请重试。'));
+            renderResult(result, quiz);
+          }).catch((err) => { if (!stale()) renderError(String((err && err.message) || err)); });
+        });
+      };
+
+      const renderResult = (result) => {
+        const litLine = result.passed
+          ? (result.litTags.length
+            ? tf('点亮了 %lld 个标签：%s', result.litTags.length, result.litTags.slice(0, 4).map((x) => `#${x}`).join(' '))
+            : t('答得漂亮——这篇文章还没有标签，打个标签就能点亮图谱。'))
+          : t('差一点点：点亮需要答对 2 题（再来一次即可重测）。');
+        card.innerHTML = `
+          <div class="nj-quiz-head"><span class="nj-quiz-icon">${icon('question')}</span><span class="nj-quiz-title">${escapeHTML(t('读后测验'))}</span></div>
+          <div class="nj-quiz-score ${result.passed ? 'pass' : 'fail'}">
+            <b>${escapeHTML(tf('%lld / %lld', result.score, result.total))}</b>
+            <span class="nj-quiz-lit">${escapeHTML(litLine)}</span>
+            ${result.reviewAdded ? `<span class="nj-quiz-review-hint">${escapeHTML(tf('%lld 道错题已加入复习队列', result.reviewAdded))}</span>` : ''}
+            ${result.best != null ? `<span class="nj-quiz-best">${escapeHTML(tf('历史最高：%lld / %lld', result.best, result.total))}</span>` : ''}
+          </div>
+          <div class="nj-quiz-explains"></div>
+          <div class="nj-quiz-foot">
+            <button type="button" class="btn-text bordered nj-quiz-again">${escapeHTML(t('再测一次'))}</button>
+          </div>`;
+        card.querySelector('.nj-quiz-head').appendChild(closeBtn());
+        const host = card.querySelector('.nj-quiz-explains');
+        result.results.forEach((r) => {
+          const q = quiz.questions[r.index];
+          const row = document.createElement('div');
+          row.className = `nj-quiz-explain ${r.correct ? 'ok' : 'bad'}`;
+          const headEl = document.createElement('div');
+          headEl.className = 'nj-quiz-explain-q';
+          headEl.textContent = `${r.correct ? '✓' : '✕'} ${q.q}`;
+          const ans = document.createElement('div');
+          ans.className = 'nj-quiz-explain-a';
+          ans.textContent = `${t('正确答案')}：${String.fromCharCode(65 + r.answer)}. ${q.options[r.answer]}${q.explain ? ` — ${q.explain}` : ''}`;
+          row.append(headEl, ans);
+          host.appendChild(row);
+        });
+        card.querySelector('.nj-quiz-again').addEventListener('click', () => { renderGenerating(); start(); });
+      };
+
+      renderStep();
+    };
+
+    start();
+  }
+
 
   focus() {
     this.scrollEl.focus?.({ preventScroll: true });

@@ -45,6 +45,8 @@ const { SimilarService } = require('./SimilarService');
 const { EventClusterService } = require('./EventClusterService'); // 事件聚类去重（F21）：多源同题报道聚合
 const { GardenService } = require('./GardenService'); // 知识花园·知更养成（F23）：完读浇水/批注种子/断读枯萎
 const { PerspectiveService } = require('./PerspectiveService'); // 观点对照镜（F24）：旧文矛盾/互补/呼应判定
+const { DebateService } = require('./DebateService'); // AI 反方辩手（F25）：钢人开场 + 多轮辩论 + 裁决落批注
+const { QuizService } = require('./QuizService'); // 读后点亮测验（F26）：3 题判分 + 图谱点亮 + 错题入复习
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -176,6 +178,8 @@ class AppStore extends EventEmitter {
     this.events = new EventClusterService(this); // 事件聚类去重（F21）：多源同题报道聚合事件卡
     this.garden = new GardenService(this); // 知识花园·知更养成（F23）：完读浇水/批注种子/断读枯萎（零 AI 纯本地统计）
     this.perspectives = new PerspectiveService(this); // 观点对照镜（F24）：相似旧文召回 + AI 关系判定（无 Key 降级）
+    this.debates = new DebateService(this); // AI 反方辩手（F25）：钢人开场 + 多轮辩论 + 裁决存批注
+    this.quiz = new QuizService(this); // 读后点亮测验（F26）：3 题判分 + 图谱点亮 + 错题入复习
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）

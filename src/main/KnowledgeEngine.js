@@ -124,7 +124,8 @@ class KnowledgeEngine {
 
   // MARK: - 间隔复习
   addToReview({ itemID, highlightID = null }) {
-    const id = `rev-${Date.now()}`;
+    // id 带随机尾巴：同毫秒多张卡（F26 测验一次判分可错多题）不再互相 REPLACE 覆盖
+    const id = `rev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     this.store.database.prepare('INSERT OR REPLACE INTO review_queue (id, item_id, highlight_id, next_review_at) VALUES (?, ?, ?, ?)')
       .run(id, itemID, highlightID, Date.now() / 1000 + 86400);
     this._recordAction(itemID, 'review');
@@ -133,12 +134,23 @@ class KnowledgeEngine {
   getDueReviews() {
     return this.store.database.prepare(`
       SELECT rq.id, rq.item_id, rq.highlight_id, rq.repetitions, rq.interval_days, rq.ease_factor, rq.next_review_at,
+             rq.source, rq.quiz_json,
              a.title as article_title, h.text as highlight_text, h.note as highlight_note
       FROM review_queue rq
       LEFT JOIN articles a ON a.item_id = rq.item_id
       LEFT JOIN highlights h ON h.id = rq.highlight_id
       WHERE rq.next_review_at <= ? ORDER BY rq.next_review_at ASC LIMIT 50
-    `).all(Date.now() / 1000).map((r) => ({ id: r.id, itemID: r.item_id, articleTitle: r.article_title, highlightText: r.highlight_text, highlightNote: r.highlight_note, repetitions: r.repetitions, intervalDays: r.interval_days, easeFactor: r.ease_factor }));
+    `).all(Date.now() / 1000).map((r) => {
+      // F26 测验错题卡：题面快照存 quiz_json（review_queue 无正文列，高亮卡靠 JOIN）
+      let quiz = null;
+      try { quiz = r.quiz_json ? JSON.parse(r.quiz_json) : null; } catch (_) { quiz = null; }
+      return {
+        id: r.id, itemID: r.item_id, articleTitle: r.article_title, highlightText: r.highlight_text, highlightNote: r.highlight_note,
+        repetitions: r.repetitions, intervalDays: r.interval_days, easeFactor: r.ease_factor,
+        source: r.source || null,
+        quizText: quiz?.q || null, quizOptions: quiz?.options || null, quizAnswer: quiz?.answer ?? null, quizExplain: quiz?.explain || null,
+      };
+    });
   }
   reviewCard(id, quality) {
     const r = this.store.database.prepare('SELECT * FROM review_queue WHERE id = ?').get(id);
@@ -183,6 +195,8 @@ class KnowledgeEngine {
   /**
    * 知识图谱数据（标签 ↔ 文章二部关系）：tags 节点 / articles 节点 / edges 边。
    * 供知识中心「图谱」canvas 力导向渲染；行数封顶防止超大库卡顿。
+   * F26 读后点亮测验：quiz_lights（测验达标的 tag×entry）合并进 tags 投影——
+   * lit=1 的标签节点渲染层加点亮光环。
    */
   getGraphData(limit = 220) {
     const rows = this.store.database.prepare(`
@@ -192,6 +206,10 @@ class KnowledgeEngine {
       LEFT JOIN articles a ON a.item_id = i.id
       LIMIT ?
     `).all(Number(limit) || 220);
+    let litSet = new Set();
+    try {
+      litSet = new Set(this.store.database.prepare('SELECT DISTINCT tag FROM quiz_lights').all().map((r) => r.tag));
+    } catch (_) { /* v24 前老库：无点亮表按全暗处理 */ }
     const tagCount = new Map();
     const articles = new Map();
     const edges = [];
@@ -203,9 +221,10 @@ class KnowledgeEngine {
       edges.push({ tag, id: row.item_id });
     }
     return {
-      tags: [...tagCount.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count),
+      tags: [...tagCount.entries()].map(([tag, count]) => ({ tag, count, lit: litSet.has(tag) ? 1 : 0 })).sort((a, b) => b.count - a.count),
       articles: [...articles.values()],
       edges,
+      litCount: litSet.size,
     };
   }
   getItemTags(itemID) { return this.store.database.prepare('SELECT tag, source FROM article_tags WHERE item_id = ?').all(itemID); }

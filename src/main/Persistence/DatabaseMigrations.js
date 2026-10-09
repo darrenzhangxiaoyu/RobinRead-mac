@@ -937,6 +937,85 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v24-debates-quizzes',
+    up: (db) => {
+      // ── F25 AI 反方辩手 ──
+      // debates：钢人辩论会话（一篇文章可多次辩论，进行中（open）仅一场——单飞由
+      //   服务层锁保证，历史 closed 行保留供回看）。
+      // - status: open（进行中）| closed（已裁决）| verdict_up | verdict_down
+      //   （verdict_* 为历史兼容口径；本版裁决只写 status='closed' + verdict 列）；
+      // - rounds_json：完整回合流 [{role:'ai'|'user', kind:'opening'|'reply'|'user',
+      //   content, quotes:[原文引用], at}]——单列 JSON 免建回合子表（回合只随会话整体读写）；
+      // - verdict：verdict_up（反方说服了我）| verdict_down（我坚持原文），裁决后定格。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS debates (
+            id          TEXT PRIMARY KEY NOT NULL,
+            entry_id    TEXT NOT NULL,
+            status      TEXT NOT NULL DEFAULT 'open'
+                CHECK (status IN ('open','closed','verdict_up','verdict_down')),
+            rounds_json TEXT NOT NULL DEFAULT '[]',
+            verdict     TEXT
+                CHECK (verdict IS NULL OR verdict IN ('verdict_up','verdict_down')),
+            created_at  REAL NOT NULL,
+            updated_at  REAL NOT NULL,
+
+            FOREIGN KEY(entry_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_debates_entry
+        ON debates(entry_id, created_at DESC);
+      `);
+
+      // ── F26 读后点亮测验 ──
+      // quizzes：一篇可重测（每次生成新行），保留全部作答历史——
+      //   最高分 = MAX(score)，最近一次 = created_at DESC 首行，读取侧投影。
+      // - questions_json：[{q, options:[4], answer, explain}]；
+      // - score / answered_at：提交作答后回填（未答为 NULL）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS quizzes (
+            id            TEXT PRIMARY KEY NOT NULL,
+            entry_id      TEXT NOT NULL,
+            questions_json TEXT NOT NULL DEFAULT '[]',
+            score         INTEGER,
+            answered_at   REAL,
+            created_at    REAL NOT NULL,
+
+            FOREIGN KEY(entry_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_quizzes_entry
+        ON quizzes(entry_id, created_at DESC);
+      `);
+      // quiz_lights：点亮表（图谱是运行期合成——article_tags 投影 + 此处点亮合并）。
+      // PK(tag, entry_id) 防重：同一篇文章的同一标签只点亮一次（重测高分不重复计）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS quiz_lights (
+            tag        TEXT NOT NULL,
+            entry_id   TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            PRIMARY KEY (tag, entry_id),
+
+            FOREIGN KEY(entry_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_quiz_lights_tag
+        ON quiz_lights(tag);
+      `);
+      // 复习卡来源标记（错题 → SM-2 复习卡，来源='quiz'）+ 错题快照
+      // （review_queue 无正文列，高亮卡靠 JOIN highlights；测验卡把题目/答案/
+      //   解析存 quiz_json，复习面板据此渲染卡面）。加列走幂等 try/catch
+      // （v6/v10/v15/v20 同款：列已存在时重入跳过）。
+      try { db.exec("ALTER TABLE review_queue ADD COLUMN source TEXT"); }
+      catch (_) { /* 列已存在：幂等重入 */ }
+      try { db.exec('ALTER TABLE review_queue ADD COLUMN quiz_json TEXT'); }
+      catch (_) { /* 列已存在：幂等重入 */ }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_review_queue_source ON review_queue(source);');
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */
