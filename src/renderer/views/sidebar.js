@@ -448,6 +448,17 @@ export class SidebarView {
     this.gardenBtn = gardenBtn;
     this._refreshGardenBadge();
 
+    // 时间胶囊徽章（F27）：到期未开启枚数兜底入口（无简报习惯的用户也从这里浮出）
+    const capsuleBtn = document.createElement('button');
+    capsuleBtn.className = 'footer-nav-btn footer-capsule-btn';
+    capsuleBtn.title = t('时间胶囊');
+    capsuleBtn.innerHTML = `${icon('clock')}<span class="nav-label"></span><span class="nj-capsule-badge" hidden>0</span>`;
+    capsuleBtn.querySelector('.nav-label').textContent = t('胶囊');
+    capsuleBtn.addEventListener('click', () => this.handlers.onOpenCapsules?.());
+    nav.appendChild(capsuleBtn);
+    this.capsuleBtn = capsuleBtn;
+    this._refreshCapsuleBadge();
+
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
     settingsBtn.title = t('设置');
@@ -481,6 +492,24 @@ export class SidebarView {
       this._gardenSubscribed = true;
       window.robin.onGardenChanged(() => this._refreshGardenBadge());
     }
+  }
+
+  /**
+   * 时间胶囊徽章刷新（F27）：到期未开启枚数；0 枚时隐藏角标（入口仍在，
+   * 点开是空态引导）。懒查询，通道缺失（旧 preload）静默。
+   */
+  _refreshCapsuleBadge() {
+    const btn = this.capsuleBtn;
+    if (!btn) return;
+    window.robin.capsulePending?.().then((count) => {
+      if (!btn.isConnected) return;
+      const badge = btn.querySelector('.nj-capsule-badge');
+      if (!badge) return;
+      const n = Number(count) || 0;
+      badge.textContent = String(n);
+      badge.hidden = n <= 0;
+      btn.title = n > 0 ? tf('%lld 枚时间胶囊已到期', n) : t('时间胶囊');
+    }).catch(() => { /* 胶囊计数不可得：徽章保持静默 */ });
   }
 
   /** 账号入口按钮：未登录=人形图标；已登录=头像（会员加金圈）。昵称与状态放 title。 */

@@ -195,6 +195,18 @@ contextBridge.exposeInMainWorld('robin', {
   quizCancel: (entryID) => invoke('quiz:cancel', entryID),
   quizLatest: (entryID) => data('quiz:latest', entryID),
 
+  // 时间胶囊（F27：封存 / 到期浮出 / 开启仪式 / 历史 / 徽标计数 / 简报段投影）
+  capsuleSeal: (payload) => invoke('capsule:seal', payload),
+  capsuleDue: () => data('capsule:due'),
+  capsulePending: () => data('capsule:pending'),
+  capsuleOpen: (capsuleID) => invoke('capsule:open', capsuleID),
+  capsuleList: (opts) => data('capsule:list', opts),
+  capsuleDigest: () => data('capsule:digest'),
+
+  // 批注漂流瓶（F28：导出（保存对话框）/ 导入（打开对话框））
+  bundleExport: (payload) => invoke('bundle:export', payload),
+  bundleImportPick: () => invoke('bundle:importPick'),
+
   // AI 自动标签（F15：开关读写（偏好持久化）/ 立即跑一批 / 诊断快照）
   tagsAutoConfig: (patch) => data('tags:autoConfig', patch),
   tagsAutoKick: () => invoke('tags:autoKick'),

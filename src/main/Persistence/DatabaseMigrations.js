@@ -1016,6 +1016,54 @@ const MIGRATIONS = [
       db.exec('CREATE INDEX IF NOT EXISTS idx_review_queue_source ON review_queue(source);');
     },
   },
+  {
+    id: 'v25-capsules-bundle-origin',
+    up: (db) => {
+      // ── F27 时间胶囊 ──
+      // time_capsules：批注（高亮/笔记）封存给未来的自己，open_at 到期后随每日简报
+      //   顶部「时间胶囊」段浮出（懒结算：到期判定发生在读取时，无定时器）。
+      // - annotation_kind + annotation_id：高亮（highlights）/笔记（notes）二选一的
+      //   来源指认——两类批注分表存储，单列 annotation_id 无法定位表。
+      // - 不设外键：文章删除随 items 级联会连带删批注，胶囊作为「写给未来的信」
+      //   保留封存凭证（历史报告不消失），读取侧 JOIN 不到批注/文章时按缺失上下文
+      //   降级展示，与「永不删除红线」精神一致。
+      // - status: sealed（封存中）| opened（已开启）。opened 即不再进简报段
+      //   （防重复浮出），但保留在历史报告里（opens_count 记录开启次数）。
+      // - message：封存时写给未来自己的一句话（可选，纯文本截断落库）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS time_capsules (
+            id              TEXT PRIMARY KEY NOT NULL,
+            annotation_id   TEXT NOT NULL,
+            annotation_kind TEXT NOT NULL CHECK (annotation_kind IN ('highlight','note')),
+            entry_id        TEXT NOT NULL,
+            open_at         REAL NOT NULL,
+            opens_count     INTEGER NOT NULL DEFAULT 0,
+            status          TEXT NOT NULL DEFAULT 'sealed' CHECK (status IN ('sealed','opened')),
+            message         TEXT,
+            created_at      REAL NOT NULL,
+            opened_at       REAL
+        );
+        CREATE INDEX IF NOT EXISTS idx_time_capsules_open_at
+        ON time_capsules(status, open_at);
+        CREATE INDEX IF NOT EXISTS idx_time_capsules_entry
+        ON time_capsules(entry_id);
+      `);
+
+      // ── F28 批注漂流瓶 ──
+      // 导入来源标记：.robin 包导入的批注 origin='imported'（本机原生为 NULL），
+      // origin_id = 包内批注 uid（哈希）——再导出时带上，往返不丢；重复导入按
+      // origin_id / anchor+文本哈希去重，冲突（同位置不同内容）并存不覆盖。
+      // 加列走幂等 try/catch（v6/v9/v15 同款：列已存在时重入跳过）。
+      for (const table of ['highlights', 'notes']) {
+        try { db.exec(`ALTER TABLE ${table} ADD COLUMN origin TEXT`); }
+        catch (_) { /* 列已存在：幂等重入 */ }
+        try { db.exec(`ALTER TABLE ${table} ADD COLUMN origin_id TEXT`); }
+        catch (_) { /* 列已存在：幂等重入 */ }
+      }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_highlights_origin ON highlights(origin_id);');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_notes_origin ON notes(origin_id);');
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

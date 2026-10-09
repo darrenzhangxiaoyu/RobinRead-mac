@@ -108,8 +108,10 @@ const OFFLINE = [
   { file: 'scripts/diag-f22-transcribe.js', runner: 'electron', desc: 'F22 播客转文字稿：v22迁移/mock ASR端点(multipart+模型+鉴权头+segments)/默认关闭未配置报错与非法URL拒绝/状态机queued→running→done/进度推送含转写中%/失败HTTP500落error列与重试恢复/单飞排队maxActive=1/本地优先零远端请求/临时文件即删/幂等/FTS关键字过滤(含<3字符LIKE回退与kind叠加)/AI摘要无Key拒绝与mock生成落库/UI转写按钮未配置灰置与稿徽标与文字稿面板时间戳与复制与摘要置顶与Esc让位/配置与文字稿跨重启持久化（离线）' },
   { file: 'scripts/diag-f23-garden.js', runner: 'electron', desc: 'F23 知识花园·知更养成：v23迁移与老库无损/数值模型(完读浇水/批注种子N字门槛/断读枯萎一级不掉回零/长假封顶两级/回读复活/连击重计/防刷UNIQUE单次)/五阶段跃迁纯函数与服务级/知更羽毛五档升级/开花报告(7天窗口/阶段跃迁/新开花投影)/markRead与批注钩子接线/gardenArt确定性SVG逐字节同输出/浮层花园+报告双tab/阶段跃迁入场动画/reduced-motion豁免/侧栏花园徽章/Esc关浮层（离线）' },
   { file: 'scripts/diag-f24-mirror.js', runner: 'electron', desc: 'F24 观点对照镜：v23迁移perspectives/召回(相似引擎复用/时间差≥14天同文异龄优先/不同源加分/噪声过滤/不含自身)/mock LLM批量判定(一次prompt/JSON解析/围栏容错/非法relation兜底none/坏输出parseFailed不落库)/持久化防重(同对二次mirror零调用/唯一约束)/单飞锁与cancelAI取消零落库canceller清理/无Key降级(相似旧文明示未判定零调用)/UI按钮显隐(观点词/AI可用/两者皆否)/判定中转圈与取消/侧板三组卡片流(标题+日期+理由)/卡片点击跳转/降级侧板/空态/换文无残留（离线）' },
-  { file: 'scripts/diag-f25-debate.js', runner: 'electron', desc: 'F25 AI 反方辩手：v24迁移debates(status/verdict CHECK)与老库重启无损/钢人开场(mock LLM)落库/编造引用过滤/多轮回合流(用户+AI顺序/回合计数)/轮数上限6超限拒绝/verdict两态落库与重复裁决拒绝/存为批注落highlights管线+花园种子钩子/单飞互斥(requestInProgress+canceller注册debate:<entryID>)/取消空场收场发言保留canceller清理/空场复用不堆行/prompt注入防护(article包裹+4000截断+用户发言只进reader区不进system+伪标记中性化)/解析器围栏与纯文本降级/无Key灰置与missingAPIKey拒绝/一篇多辩历史保留/UI灰置与开场气泡与引用芯片高亮跳转与用户气泡与回合推进与裁决定格与存为批注（离线）' },
-  { file: 'scripts/diag-f26-quiz.js', runner: 'electron', desc: 'F26 读后点亮测验：v24迁移quizzes/quiz_lights/review_queue加列与老库重启无损/出题JSON容错(围栏+杂文/坏JSON null/非法选项数剔题/越界answer剔题/超量截3/空选项)/出题落库与单飞互斥canceller/取消空卷/坏输出拒绝可重试/判分逐题结果/最高分保留与最近一次投影/点亮quiz_lights PK防重与未达标不点亮/图谱合并投影lit=1+litCount/错题SM-2真实入队(source=quiz+quiz_json快照/同毫秒多卡不互吞/dueReviews投影/记忆曲线评分)/无Key灰置/UI按钮500字显隐与无Key灰置/浮层三题逐答/出分+点亮+复习队列提示+历史最高/解析回显/再测一次/关闭浮层（离线）' },
+  { file: 'scripts/diag-f25-debate.js', runner: 'electron', timeout: 480000, desc: 'F25 AI 反方辩手：v24迁移debates(status/verdict CHECK)与老库重启无损/钢人开场(mock LLM)落库/编造引用过滤/多轮回合流(用户+AI顺序/回合计数)/轮数上限6超限拒绝/verdict两态落库与重复裁决拒绝/存为批注落highlights管线+花园种子钩子/单飞互斥(requestInProgress+canceller注册debate:<entryID>)/取消空场收场发言保留canceller清理/空场复用不堆行/prompt注入防护(article包裹+4000截断+用户发言只进reader区不进system+伪标记中性化)/解析器围栏与纯文本降级/无Key灰置与missingAPIKey拒绝/一篇多辩历史保留/UI灰置与开场气泡与引用芯片高亮跳转与用户气泡与回合推进与裁决定格与存为批注（离线）' },
+  { file: 'scripts/diag-f26-quiz.js', runner: 'electron', timeout: 480000, desc: 'F26 读后点亮测验：v24迁移quizzes/quiz_lights/review_queue加列与老库重启无损/出题JSON容错(围栏+杂文/坏JSON null/非法选项数剔题/越界answer剔题/超量截3/空选项)/出题落库与单飞互斥canceller/取消空卷/坏输出拒绝可重试/判分逐题结果/最高分保留与最近一次投影/点亮quiz_lights PK防重与未达标不点亮/图谱合并投影lit=1+litCount/错题SM-2真实入队(source=quiz+quiz_json快照/同毫秒多卡不互吞/dueReviews投影/记忆曲线评分)/无Key灰置/UI按钮500字显隐与无Key灰置/浮层三题逐答/出分+点亮+复习队列提示+历史最高/解析回显/再测一次/关闭浮层（离线）' },
+  { file: 'scripts/diag-f27-capsule.js', runner: 'electron', desc: 'F27 时间胶囊：v25迁移time_capsules(status/annotation_kind CHECK)与highlights/notes origin加列与索引/封存30-90-365天open_at精确与非法期限拒绝与批注缺失拒绝与同批注在途防重与留言截断/到期懒结算(未到期不浮出/注入时钟到期浮现/同日多枚open_at升序/pendingCount/opened即剔防重复/due幂等无定时器)/开启仪式数据面(status翻转+opened_at+opens_count/批注原文+文章上下文/alreadyOpen幂等/笔记胶囊/批注已删降级)/简报段投影(只含到期sealed/标题+原文+封存天数/DIGEST_MAX封顶/开启后剔除)/时钟回拨不浮出/重启读回胶囊与opened历史与origin列无损/preload-IPC-reader封存卡-侧栏徽章-app浮层仪式简报段-CSS reduced-motion豁免-i18n锚点/UI徽章计数+浮层到期卡+开启仪式文案+前往文章+徽章回落（离线）' },
+  { file: 'scripts/diag-f28-bundle.js', runner: 'electron', desc: 'F28 批注漂流瓶：导出包结构(format/version/文章元数据/正文消毒/批注全量含anchor颜色/suggestedName.robin/轻量模式)/三道闸(恶意HTML白名单剔除script-iframe-onerror/超10MB拒绝/版本不符与format不符与坏JSON明确报错)/漂流入库(platform=drift合成源/确定性entryID/正文缓存is_sanitized/作者署名/同源重导URL归并)/同源合并(已存在只并批注/同文同位哈希去重/冲突同位异文并存不覆盖/origin=imported+uid落库/整包重导零重复/超大anchor截断/条数封顶500)/再导出往返(导入身份随身携带/落盘读回一致/跨库导入批注存活/uid跨库保持/B库重导零重复)/pickSavePath mock写盘与取消零写盘/右键菜单打包(mock保存对话框真写盘)/命令面板导入(mock打开对话框真导入+toast统计)/漂流文章入列表（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];
@@ -131,16 +133,32 @@ for (const probe of suite) {
     ? [probe.file]
     : ['electron', probe.file];
   process.stdout.write(`\n===== ${probe.desc} (${probe.file}) =====\n`);
-  const result = spawnSync(runner, args, {
-    cwd: path.join(__dirname, '..'),
-    // stderr 同步 inherit：失败时探针自身报错能直接出现在套件日志里（不再被丢弃）
-    stdio: ['ignore', 'inherit', 'inherit'],
-    timeout: probe.runner === 'node' ? 60000 : 300000,
-    shell: process.platform === 'win32',
-  });
+  // electron 探针被看门狗击杀（exit=null，Desktop Heap 耗尽致新窗口创建同步死锁）→
+  // 新进程重试一次：堆配额随进程重置，环境性偶发自此自愈（非代码回归，不复现即过）
+  let result = null;
+  let retried = false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    result = spawnSync(runner, args, {
+      cwd: path.join(__dirname, '..'),
+      // stderr 同步 inherit：失败时探针自身报错能直接出现在套件日志里（不再被丢弃）
+      stdio: ['ignore', 'inherit', 'inherit'],
+      // 探针可声明 probe.timeout（重型双阶段探针：服务级+UI 级在 CI 高载下 5 分钟不够）
+      timeout: probe.runner === 'node' ? 60000 : (probe.timeout || 300000),
+      shell: process.platform === 'win32',
+    });
+    // 顺序注意：timeout 击杀时 spawnSync 会同时置 result.error（ETIMEDOUT）——
+    // 重试判定必须先于 result.error 检查，否则环境性挂起永远跳过重试
+    if (result.status === 0) break;
+    if (attempt === 0 && result.status === null && probe.runner !== 'node') {
+      // status=null = 看门狗击杀（win32 shell 包装下 signal 不恒为 SIGTERM）：
+      // Desktop Heap 耗尽致新窗口创建同步死锁——新进程重试一次，堆配额重置
+      retried = true;
+      console.log(`>>> RETRY ${probe.file}（看门狗击杀=环境性挂起，新进程重试一次）`);
+    } else break;
+  }
   const ok = result.status === 0;
-  results.push({ ...probe, ok, status: result.status });
-  console.log(ok ? `>>> PASS ${probe.file}` : `>>> FAIL ${probe.file} (exit=${result.status})`);
+  results.push({ ...probe, ok, status: result.status, retried });
+  console.log(ok ? `>>> PASS ${probe.file}${retried ? '（重试自愈）' : ''}` : `>>> FAIL ${probe.file} (exit=${result.status})`);
 }
 
 console.log('\n===== SUMMARY =====');

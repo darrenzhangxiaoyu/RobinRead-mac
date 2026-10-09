@@ -124,6 +124,7 @@ async function bootstrap() {
     onOpenMedia: () => openMediaView(),
     onOpenTopics: () => openTopicsView(),
     onOpenGarden: () => openGardenView(),
+    onOpenCapsules: () => openCapsuleView(), // F27 时间胶囊：到期浮出兜底入口
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -730,6 +731,8 @@ function buildPaletteCommands() {
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
     { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', desc: t('高亮、笔记、复习与知识图谱的中心。'), action: openKnowledgeCenter },
+    { label: t('时间胶囊'), keywords: 'capsule 时间胶囊 胶囊 封存 浮出 open', icon: 'clock', desc: t('封存给未来的批注，到期随简报浮出。'), action: () => openCapsuleView() },
+    { label: t('导入批注包…'), keywords: 'bundle robin 导入 批注 包 漂流 分享 import', icon: 'import', desc: t('导入 .robin 批注包：读对方的划线与笔记，续写后可导回合并。'), action: () => importRobinBundle() },
     { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
     { label: t('从链接精读…'), keywords: 'url link 链接 精读 extract openUrl', icon: 'globe', action: () => readFromUrlPrompt() },
@@ -1259,6 +1262,7 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
       copyBtn.style.display = '';
       radioBtn.style.display = '';
       mountDigestGoal(body);
+      mountDigestCapsules(body); // F27：时间胶囊段浮在简报顶部
       return;
     }
   }
@@ -1296,6 +1300,7 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
   copyBtn.style.display = '';
   radioBtn.style.display = '';
   mountDigestGoal(body);
+  mountDigestCapsules(body); // F27：时间胶囊段浮在简报顶部
 }
 
 /**
@@ -2202,7 +2207,47 @@ async function showListRowContext(event, item) {
       // 加入文集（F12）：把文章所属订阅源并入文集——文集按源成书，后续新文章自动入册
       label: t('加入文集'), icon: 'books', children: await addToBookMenuItems([item.feedID]),
     },
+    {
+      // 批注漂流瓶（F28）：文章 + 批注打包 .robin 分享，主进程保存对话框落盘
+      label: t('打包批注分享…'), icon: 'export', onClick: () => exportRobinBundle(item.id),
+    },
   ]);
+}
+
+/**
+ * 批注漂流瓶 · 导出（F28）：.robin 包 = 文章元数据 + 正文 + 全部高亮/笔记。
+ * 走主进程保存对话框（books:build 同款许可链），完成后 toast 回执。
+ */
+async function exportRobinBundle(entryID) {
+  showToast(t('正在打包批注…'));
+  const result = await window.robin.bundleExport({ entryID, includeFullText: true }).catch((err) => ({ ok: false, error: String(err) }));
+  if (!result || (result.ok && !result.data)) return; // 通道失败 / 用户取消保存对话框：静默
+  if (result.ok) {
+    showToast(result.data?.annotationCount > 0
+      ? tf('已打包：1 篇文章 + %lld 条批注', result.data.annotationCount)
+      : t('已打包：1 篇文章（暂无批注）'));
+  } else {
+    showToast(String(result?.error || t('打包失败')));
+  }
+}
+
+/** 批注漂流瓶 · 导入（F28）：pickOpenPath 对话框选 .robin → 消毒/合并 → 统计 toast。 */
+async function importRobinBundle() {
+  const result = await window.robin.bundleImportPick().catch((err) => ({ ok: false, error: String(err) }));
+  if (!result || (result.ok && !result.data)) return; // 通道失败 / 用户取消：静默
+  if (result.ok) {
+    const d = result.data || {};
+    const parts = [];
+    if (d.drift) parts.push(t('导入 1 篇漂流文章'));
+    else parts.push(t('已并入既有文章'));
+    if (d.added > 0) parts.push(tf('新增 %lld 条批注', d.added));
+    if (d.duplicates > 0) parts.push(tf('跳过重复 %lld 条', d.duplicates));
+    if (d.conflicts > 0) parts.push(tf('并存 %lld 条', d.conflicts));
+    showToast(parts.join('，'));
+    reloadAll();
+  } else {
+    showToast(String(result?.error || t('导入失败')));
+  }
 }
 
 async function confirmDeleteFeeds(feeds, countOverride = null) {
@@ -2310,6 +2355,191 @@ function openAihotView() {
 function openGardenView() {
   const gv = new GardenView({ toast: showToast });
   gv.present();
+}
+
+// MARK: - 时间胶囊（F27：到期浮出 + 开启仪式）
+
+/**
+ * 胶囊浮层（侧栏徽章兜底入口）：今日到期列表 + 历史报告。
+ * 点击到期胶囊 → 开启仪式（轻遮罩动画）→ 可直达文章并定位批注。
+ */
+async function openCapsuleView() {
+  document.getElementById('nj-capsule-view')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'nj-capsule-view';
+  const modal = document.createElement('div');
+  modal.className = 'modal nj-capsule-modal';
+  modal.innerHTML = `
+    <div class="modal-header"><h3>${escapeHTMLInline(t('时间胶囊'))}</h3>
+      <span class="nj-capsule-sub"></span>
+      <button class="btn icon-only nj-capsule-close">${''}</button></div>
+    <div class="nj-capsule-body"><div class="nj-capsule-loading">${escapeHTMLInline(t('正在挖出你的胶囊…'))}</div></div>`;
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+  modal.querySelector('.nj-capsule-close').innerHTML = icon('close');
+  modal.querySelector('.nj-capsule-close').addEventListener('click', () => overlay.remove());
+
+  const body = modal.querySelector('.nj-capsule-body');
+  let due = [];
+  let history = [];
+  try {
+    [due, history] = await Promise.all([
+      window.robin.capsuleDue?.() || [],
+      window.robin.capsuleList?.({ limit: 30 }) || [],
+    ]);
+  } catch (_) { /* 通道缺失/失败：空态 */ }
+  const openedHistory = (Array.isArray(history) ? history : []).filter((c) => c && c.status === 'opened');
+  modal.querySelector('.nj-capsule-sub').textContent = (due.length > 0
+    ? tf('今日到期 %lld 枚', due.length)
+    : t('还没有到期的胶囊'));
+  body.innerHTML = '';
+  if (due.length) {
+    const secDue = document.createElement('div');
+    secDue.className = 'nj-capsule-sec';
+    secDue.innerHTML = `<div class="nj-capsule-sec-title">${escapeHTMLInline(t('今日到期'))}</div>`;
+    for (const capsule of due) secDue.appendChild(capsuleCard(capsule, { due: true }));
+    body.appendChild(secDue);
+  } else {
+    const empty = document.createElement('div');
+    empty.className = 'nj-capsule-empty';
+    empty.innerHTML = `<span class="nj-capsule-empty-icon">${icon('clock')}</span><p>${escapeHTMLInline(t('在阅读里划选一段文字，点时钟图标，把它装进胶囊。30、90 或 365 天后，它会带着当时的心得回来找你。'))}</p>`;
+    body.appendChild(empty);
+  }
+  if (openedHistory.length) {
+    const secHist = document.createElement('div');
+    secHist.className = 'nj-capsule-sec';
+    secHist.innerHTML = `<div class="nj-capsule-sec-title">${escapeHTMLInline(t('已开启的报告'))}</div>`;
+    for (const capsule of openedHistory.slice(0, 12)) secHist.appendChild(capsuleCard(capsule, { due: false }));
+    body.appendChild(secHist);
+  }
+
+  function capsuleCard(capsule, { due: isDue }) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = `nj-capsule-card${isDue ? ' is-due' : ''}`;
+    const title = capsule.article?.title || t('文章已不在库里');
+    const excerpt = capsule.annotation?.text || t('（原批注已随文章清理）');
+    card.innerHTML = `
+      <span class="nj-capsule-card-icon">${icon(isDue ? 'clock' : 'checkCircle')}</span>
+      <span class="nj-capsule-card-main">
+        <span class="nj-capsule-card-quote"></span>
+        <span class="nj-capsule-card-meta"></span>
+      </span>
+      <span class="nj-capsule-card-go">${escapeHTMLInline(isDue ? t('开启') : t('回看'))}</span>`;
+    card.querySelector('.nj-capsule-card-quote').textContent = excerpt.slice(0, 80) + (excerpt.length > 80 ? '…' : '');
+    card.querySelector('.nj-capsule-card-meta').textContent = `${title} · ${t('当时写下的')}`;
+    card.addEventListener('click', async () => {
+      const result = await window.robin.capsuleOpen(capsule.id).catch(() => null);
+      if (!result?.ok) { showToast(String(result?.error || t('开启失败'))); return; }
+      openCapsuleCeremony(result.data, { from: overlay });
+      refreshSidebarBadges();
+    });
+    return card;
+  }
+}
+
+/**
+ * 开启仪式（F27）：全屏轻遮罩 + 胶囊开启动画（reduced-motion 直达终态，见 robin.css）。
+ * 展示当年批注原文 + 文章上下文；「前往文章」直达并定位批注。
+ */
+function openCapsuleCeremony(capsule, { from = null } = {}) {
+  document.getElementById('nj-capsule-ceremony')?.remove();
+  const overlay = document.createElement('div');
+  overlay.className = 'nj-capsule-ceremony';
+  overlay.id = 'nj-capsule-ceremony';
+  const kindLabel = capsule.annotationKind === 'note' ? t('当时写下的笔记') : t('当时划下的句子');
+  const articleTitle = capsule.article?.title || t('文章已不在库里');
+  const annotationText = capsule.annotation?.text || t('（原批注已随文章清理，但这封信还在。）');
+  const note = capsule.annotation?.note || null;
+  const message = capsule.message || null;
+  const daysAgo = capsule.openAt && capsule.createdAt
+    ? Math.max(1, Math.round((capsule.openAt - capsule.createdAt) / 86400)) // 约定封存期（openAt-created），与时钟注入无关
+    : null;
+  overlay.innerHTML = `
+    <div class="nj-ceremony-backdrop"></div>
+    <div class="nj-ceremony-card" role="dialog" aria-modal="true">
+      <div class="nj-ceremony-capsule"><span class="nj-ceremony-glow"></span>${icon('clock')}</div>
+      <div class="nj-ceremony-kicker"></div>
+      <blockquote class="nj-ceremony-quote"></blockquote>
+      ${note ? `<p class="nj-ceremony-note"></p>` : ''}
+      ${message ? `<p class="nj-ceremony-message"></p>` : ''}
+      <div class="nj-ceremony-meta"></div>
+      <div class="nj-ceremony-actions">
+        <button class="btn-text nj-ceremony-later">${escapeHTMLInline(t('先收下'))}</button>
+        <button class="btn-text primary nj-ceremony-goto">${escapeHTMLInline(t('前往文章'))}</button>
+      </div>
+    </div>`;
+  overlay.querySelector('.nj-ceremony-kicker').textContent = capsule.alreadyOpen
+    ? t('回看一封开启过的胶囊')
+    : (daysAgo ? tf('这封信封存了 %lld 天', daysAgo) : t('来自过去的你'));
+  overlay.querySelector('.nj-ceremony-quote').textContent = annotationText;
+  if (note) overlay.querySelector('.nj-ceremony-note').textContent = note;
+  if (message) overlay.querySelector('.nj-ceremony-message').textContent = `—— ${message}`;
+  overlay.querySelector('.nj-ceremony-meta').textContent = `${kindLabel} · 《${articleTitle}》`;
+  const close = () => overlay.remove();
+  overlay.querySelector('.nj-ceremony-later').addEventListener('click', close);
+  overlay.querySelector('.nj-ceremony-goto').addEventListener('click', () => {
+    close();
+    from?.remove?.();
+    if (!capsule.entryID) return;
+    handleEntrySelect(capsule.entryID, { isRead: true });
+    const target = capsule.annotationID;
+    if (target && capsule.annotationKind === 'highlight') {
+      setTimeout(() => views.reader?.revealHighlight?.(target), 900);
+    }
+  });
+  overlay.addEventListener('click', (event) => { if (event.target === overlay.querySelector('.nj-ceremony-backdrop')) close(); });
+  document.body.appendChild(overlay);
+}
+
+/**
+ * 每日简报顶部「时间胶囊」段（F27）：今日到期 N 枚——当年批注原文 + 文章标题
+ * +「当时写下的」语态；点击开启仪式 → 直达文章。无到期时整段隐藏。
+ */
+async function mountDigestCapsules(body) {
+  try {
+    const projection = await window.robin.capsuleDigest?.();
+    if (!projection || !projection.items?.length) return;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!document.body.contains(body) || body.querySelector('.dg-capsules')) return;
+      const sec = document.createElement('div');
+      sec.className = 'dg-capsules';
+      const head = document.createElement('div');
+      head.className = 'dg-capsules-head';
+      head.innerHTML = `${icon('clock')}<b></b><span></span>`;
+      head.querySelector('b').textContent = t('时间胶囊');
+      head.querySelector('span').textContent = tf('今日到期 %lld 枚 · 当时写下的', projection.count);
+      sec.appendChild(head);
+      for (const item of projection.items) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'dg-capsule-card';
+        const quote = item.annotationText || t('（原批注已随文章清理）');
+        const title = item.articleTitle || t('文章已不在库里');
+        card.innerHTML = `
+          <span class="dg-capsule-quote"></span>
+          <span class="dg-capsule-meta"></span>
+          <span class="dg-capsule-open">${escapeHTMLInline(t('开启'))}</span>`;
+        card.querySelector('.dg-capsule-quote').textContent = `「${quote.slice(0, 90)}${quote.length > 90 ? '…' : ''}」`;
+        card.querySelector('.dg-capsule-meta').textContent = `${t('当时写下的')} · 《${title}》 · ${tf('%lld 天前封存', item.daysAgo)}`;
+        card.addEventListener('click', async () => {
+          const result = await window.robin.capsuleOpen(item.id).catch(() => null);
+          if (!result?.ok) { showToast(String(result?.error || t('开启失败'))); return; }
+          openCapsuleCeremony(result.data);
+          refreshSidebarBadges();
+        });
+        sec.appendChild(card);
+      }
+      body.insertBefore(sec, body.firstChild); // 顶部段：胶囊先于简报正文浮出
+    }));
+  } catch (_) { /* 胶囊段失败不阻塞简报 */ }
+}
+
+/** F27：侧栏徽章热更（开启胶囊后计数即时回落）。 */
+function refreshSidebarBadges() {
+  try { views.sidebar?._refreshCapsuleBadge?.(); } catch (_) { /* 忽略 */ }
 }
 
 /** 媒体中心（F3）：媒体条目浮层（音频→迷你播放器 / 视频→打开阅读器内嵌播放）。 */

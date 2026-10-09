@@ -805,6 +805,40 @@ function registerIPCHandlers(store, window) {
   handle('quiz:cancel', (entryID) => QZ().cancel(String(entryID || '')));
   handle('quiz:latest', (entryID) => QZ().latest(String(entryID || '')));
 
+  // MARK: 时间胶囊（F27：封存 / 到期浮出（懒结算）/ 开启仪式 / 历史报告 / 侧栏徽标计数 / 简报段投影）
+  const CP = () => store.capsule;
+  handle('capsule:seal', (payload) => CP().seal(payload || {}));
+  handle('capsule:due', () => CP().due());
+  handle('capsule:pending', () => CP().pendingCount());
+  handle('capsule:open', (capsuleID) => CP().open(String(capsuleID || '')));
+  handle('capsule:list', (opts) => CP().list(opts || {}));
+  handle('capsule:digest', () => CP().digestProjection());
+
+  // MARK: 批注漂流瓶（F28：导出（保存对话框→主进程落盘，照 BooksService 手动成书先例）/
+  //   导入（打开对话框→主进程读取→消毒/版本/大小三道闸））
+  const RB = () => store.bundles;
+  handle('bundle:export', async (payload) => {
+    const { entryID, includeFullText = true } = payload || {};
+    const bundle = RB().buildBundle(String(entryID || ''), { includeFullText });
+    const result = await dialog.showSaveDialog(window, {
+      title: '打包批注分享',
+      defaultPath: bundle.suggestedName,
+      filters: [{ name: 'RobinRead 批注包', extensions: ['robin'] }, { name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    const written = RB().writeBundleFile(bundle.json, result.filePath);
+    return { ...written, annotationCount: bundle.annotationCount, title: bundle.payload.article.title };
+  });
+  handle('bundle:importPick', async () => {
+    const result = await dialog.showOpenDialog(window, {
+      title: '导入批注包',
+      filters: [{ name: 'RobinRead 批注包', extensions: ['robin'] }, { name: 'All Files', extensions: ['*'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return RB().importFromFile(result.filePaths[0]);
+  });
+
   // MARK: AI 自动标签（F15：开关（偏好持久化）/ 立即跑一批 / 诊断快照）
   handle('tags:autoConfig', (patch) => {
     if (patch && typeof patch === 'object' && 'enabled' in patch) store.tagAuto.setEnabled(patch.enabled === true);

@@ -47,6 +47,8 @@ const { GardenService } = require('./GardenService'); // 知识花园·知更养
 const { PerspectiveService } = require('./PerspectiveService'); // 观点对照镜（F24）：旧文矛盾/互补/呼应判定
 const { DebateService } = require('./DebateService'); // AI 反方辩手（F25）：钢人开场 + 多轮辩论 + 裁决落批注
 const { QuizService } = require('./QuizService'); // 读后点亮测验（F26）：3 题判分 + 图谱点亮 + 错题入复习
+const { CapsuleService } = require('./CapsuleService'); // 时间胶囊（F27）：批注封存到期浮出（懒结算）
+const { RobinBundleService } = require('./RobinBundleService'); // 批注漂流瓶（F28）：.robin 包导出/导入/合并
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -180,6 +182,8 @@ class AppStore extends EventEmitter {
     this.perspectives = new PerspectiveService(this); // 观点对照镜（F24）：相似旧文召回 + AI 关系判定（无 Key 降级）
     this.debates = new DebateService(this); // AI 反方辩手（F25）：钢人开场 + 多轮辩论 + 裁决存批注
     this.quiz = new QuizService(this); // 读后点亮测验（F26）：3 题判分 + 图谱点亮 + 错题入复习
+    this.capsule = new CapsuleService(this); // 时间胶囊（F27）：批注封存 30/90/365 天后随简报浮出（懒结算）
+    this.bundles = new RobinBundleService(this, userDataPath); // 批注漂流瓶（F28）：.robin 包导出/导入/双端合并
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）

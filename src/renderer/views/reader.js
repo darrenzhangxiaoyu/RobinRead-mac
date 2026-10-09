@@ -2626,6 +2626,18 @@ export class ReaderView {
       });
       pill.appendChild(dot);
     }
+    // F27 时间胶囊：划词直接封存（先落黄色高亮，再选封存期限）
+    const capsuleBtn = document.createElement('button');
+    capsuleBtn.className = 'nj-hl-dot nj-capsule-pick';
+    capsuleBtn.dataset.role = 'capsule';
+    capsuleBtn.title = t('装进时间胶囊，给未来的自己');
+    capsuleBtn.innerHTML = icon('clock');
+    capsuleBtn.addEventListener('mousedown', (event) => event.preventDefault());
+    capsuleBtn.addEventListener('click', () => {
+      pill.remove();
+      this._sealSelectionIntoCapsule(payload);
+    });
+    pill.appendChild(capsuleBtn);
     document.body.appendChild(pill);
     const pw = pill.getBoundingClientRect().width;
     let x = payload.rect.x + payload.rect.width / 2 - pw / 2;
@@ -2682,6 +2694,135 @@ export class ReaderView {
     this._bindMarkClicks(hl);
     this._refreshAnnotationsPanel();
     this.handlers.onFeedback?.(t('已高亮'));
+  }
+
+  // MARK: - 时间胶囊（F27：批注封存给未来的自己）
+
+  /** 划词胶囊入口：先落黄色高亮，成功后弹出封存期限卡。 */
+  async _sealSelectionIntoCapsule(payload) {
+    if (!this.entryID || !payload?.selection) return;
+    const hl = await this._createHighlightQuietly(payload, 'yellow');
+    if (!hl) return;
+    this._openCapsuleSealDialog({ annotationID: hl.id, annotationKind: 'highlight' });
+  }
+
+  /** 静默建高亮（与 _doHighlight 同管线，但不出 toast——封存卡自己给反馈）。 */
+  async _createHighlightQuietly(payload, color) {
+    try {
+      const result = await window.robin.kbAddHighlight({
+        itemID: this.entryID,
+        text: payload.selection.slice(0, 2000),
+        color,
+        paragraphID: payload.paragraphID,
+        anchor: this._anchorForSelection(payload),
+      });
+      const hl = result?.ok ? result.data : null;
+      if (!hl) return null;
+      this.highlights.push(hl);
+      try { document.dispatchEvent(new CustomEvent('robinread:annotation-created', { detail: { kind: 'highlight', itemID: this.entryID } })); } catch (_) { /* 忽略 */ }
+      let marks = [];
+      try { marks = this._wrapRange(payload.range, (mark) => this._decorateMark(mark, hl)); } catch (_) { marks = []; }
+      if (!marks.length) marks = this._applyHighlight(hl);
+      this._bindMarkClicks(hl);
+      this._refreshAnnotationsPanel();
+      return hl;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /** 选区锚点（与 _doHighlight 同口径，供胶囊/静默路径复用）。 */
+  _anchorForSelection(payload) {
+    try {
+      const text = payload.selection.slice(0, 2000);
+      const block = payload.paragraphID
+        ? this.body?.querySelector(`[data-nj-id="${cssEscape(payload.paragraphID)}"]`) : null;
+      if (block) {
+        const blockText = block.textContent || '';
+        const at = blockText.indexOf(text.slice(0, 80));
+        if (at >= 0) {
+          return {
+            paragraphID: payload.paragraphID,
+            prefix: blockText.slice(Math.max(0, at - 48), at),
+            suffix: blockText.slice(at + text.length, at + text.length + 48),
+          };
+        }
+      }
+      if (payload.paragraphID) return { paragraphID: payload.paragraphID };
+    } catch (_) { /* 锚点可选 */ }
+    return null;
+  }
+
+  /**
+   * 封存期限卡（30/90/365 天 + 一句给未来的话）：确认后 capsuleSeal 落库。
+   * @param {object} p { annotationID, annotationKind: 'highlight'|'note' }
+   */
+  _openCapsuleSealDialog({ annotationID, annotationKind }) {
+    this._dismissCapsuleSealDialog();
+    const layer = document.createElement('div');
+    layer.className = 'nj-capsule-seal';
+    layer.id = 'nj-capsule-seal';
+    layer.innerHTML = `
+      <div class="nj-capsule-seal-card">
+        <div class="nj-capsule-seal-head">
+          <span class="nj-capsule-seal-icon">${icon('clock')}</span>
+          <b>${escapeHTML(t('装进时间胶囊'))}</b>
+          <button class="nj-capsule-seal-close" title="${attr(t('取消'))}">${icon('close')}</button>
+        </div>
+        <p class="nj-capsule-seal-sub">${escapeHTML(t('这段批注先封存起来，到期后随每日简报浮出，重现当时的心得。'))}</p>
+        <div class="nj-capsule-seal-days" role="radiogroup">
+          ${[30, 90, 365].map((d, i) => `<button type="button" class="nj-capsule-seal-day${i === 0 ? ' on' : ''}" data-days="${d}">${escapeHTML(tf('%lld 天后', d))}</button>`).join('')}
+        </div>
+        <input class="nj-capsule-seal-msg" maxlength="280" placeholder="${attr(t('给未来的自己留一句话（可选）'))}"/>
+        <div class="nj-capsule-seal-foot">
+          <span class="tb-spring"></span>
+          <button class="btn-text nj-capsule-seal-cancel">${escapeHTML(t('取消'))}</button>
+          <button class="btn-text primary nj-capsule-seal-confirm">${escapeHTML(t('封存'))}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(layer);
+    const close = () => layer.remove();
+    layer.querySelector('.nj-capsule-seal-close').addEventListener('click', close);
+    layer.querySelector('.nj-capsule-seal-cancel').addEventListener('click', close);
+    layer.querySelectorAll('.nj-capsule-seal-day').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        layer.querySelectorAll('.nj-capsule-seal-day').forEach((b) => b.classList.remove('on'));
+        btn.classList.add('on');
+      });
+    });
+    layer.querySelector('.nj-capsule-seal-confirm').addEventListener('click', async () => {
+      const days = Number(layer.querySelector('.nj-capsule-seal-day.on')?.dataset.days) || 30;
+      const message = layer.querySelector('.nj-capsule-seal-msg')?.value?.trim() || null;
+      const result = await window.robin.capsuleSeal({
+        entryID: this.entryID, annotationID, annotationKind, days, message,
+      }).catch(() => null);
+      close();
+      if (result?.ok) this.handlers.onFeedback?.(tf('已封存，%lld 天后与你重逢', days));
+      else this.handlers.onFeedback?.(String(result?.error || t('封存失败')));
+    });
+  }
+
+  _dismissCapsuleSealDialog() {
+    document.getElementById('nj-capsule-seal')?.remove();
+  }
+
+  /** 直达批注：胶囊开启后从简报/浮层跳回文章，正文渲染完成后滚动定位并闪示。 */
+  revealHighlight(highlightID, { attempts = 40 } = {}) {
+    const scrollOnce = () => {
+      const mark = this.body?.querySelector(`mark.nj-hl[data-hl-id="${cssEscape(String(highlightID))}"]`);
+      if (!mark) return false;
+      mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      mark.classList.add('nj-hl-flash');
+      setTimeout(() => mark.classList.remove('nj-hl-flash'), 2200);
+      return true;
+    };
+    if (scrollOnce()) return true;
+    let left = attempts;
+    const timer = setInterval(() => {
+      left -= 1;
+      if (scrollOnce() || left <= 0) clearInterval(timer);
+    }, 250);
+    return false;
   }
 
   _decorateMark(mark, hl) {
@@ -2811,6 +2952,7 @@ export class ReaderView {
       <div class="nj-hl-menu-colors"></div>
       <div class="nj-hl-menu-actions">
         <button data-act="note" title="${attr(hl.note ? t('查看/编辑笔记') : t('添加笔记'))}">${icon('noteSticky')}</button>
+        <button data-act="capsule" title="${attr(t('装进时间胶囊，给未来的自己'))}">${icon('clock')}</button>
         <button data-act="copy" title="${attr(t('复制文字'))}">${icon('copy')}</button>
         <button data-act="delete" title="${attr(t('取消高亮'))}">${icon('trash')}</button>
       </div>`;
@@ -2826,6 +2968,11 @@ export class ReaderView {
     menu.querySelector('[data-act="note"]').addEventListener('click', () => {
       this._dismissHighlightMenu();
       this._showHighlightNoteEditor(hl);
+    });
+    // F27 时间胶囊：既有高亮一键封存
+    menu.querySelector('[data-act="capsule"]').addEventListener('click', () => {
+      this._dismissHighlightMenu();
+      this._openCapsuleSealDialog({ annotationID: hl.id, annotationKind: 'highlight' });
     });
     menu.querySelector('[data-act="copy"]').addEventListener('click', async () => {
       await window.robin.copyText(hl.text);
@@ -2896,6 +3043,12 @@ export class ReaderView {
       <textarea class="nj-note-editor-input" placeholder="${attr(t('写下你的想法…'))}"></textarea>
       <div class="nj-note-editor-foot">
         <button class="btn-text danger nj-note-editor-del" style="display:${existing ? '' : 'none'}">${escapeHTML(t('删除笔记'))}</button>
+        <select class="nj-note-editor-capsule" title="${attr(t('装进时间胶囊，给未来的自己'))}">
+          <option value="">${escapeHTML(t('不装胶囊'))}</option>
+          <option value="30">${escapeHTML(tf('%lld 天后', 30))}</option>
+          <option value="90">${escapeHTML(tf('%lld 天后', 90))}</option>
+          <option value="365">${escapeHTML(tf('%lld 天后', 365))}</option>
+        </select>
         <span class="tb-spring"></span>
         <button class="btn-text nj-note-editor-cancel">${escapeHTML(t('取消'))}</button>
         <button class="btn-text primary nj-note-editor-save">${escapeHTML(t('保存'))}</button>
@@ -2915,8 +3068,15 @@ export class ReaderView {
         el.classList.toggle('has-note', Boolean(content));
       }
       this._refreshAnnotationsPanel();
+      // F27 时间胶囊：保存时可选一并封存（kind=highlight，正文=划线原文）
+      const capsuleDays = Number(layer.querySelector('.nj-note-editor-capsule')?.value) || 0;
+      if (capsuleDays > 0) {
+        await window.robin.capsuleSeal({
+          entryID: this.entryID, annotationID: hl.id, annotationKind: 'highlight', days: capsuleDays,
+        }).catch(() => null);
+      }
       close();
-      this.handlers.onFeedback?.(content ? t('笔记已保存') : t('笔记已清空'));
+      this.handlers.onFeedback?.(capsuleDays > 0 ? tf('已封存，%lld 天后与你重逢', capsuleDays) : (content ? t('笔记已保存') : t('笔记已清空')));
     });
     layer.querySelector('.nj-note-editor-del').addEventListener('click', async () => {
       hl.note = null;
@@ -2940,6 +3100,12 @@ export class ReaderView {
       </div>
       <textarea class="nj-note-editor-input" placeholder="${attr(t('写下你的想法…'))}"></textarea>
       <div class="nj-note-editor-foot">
+        <select class="nj-note-editor-capsule" title="${attr(t('装进时间胶囊，给未来的自己'))}">
+          <option value="">${escapeHTML(t('不装胶囊'))}</option>
+          <option value="30">${escapeHTML(tf('%lld 天后', 30))}</option>
+          <option value="90">${escapeHTML(tf('%lld 天后', 90))}</option>
+          <option value="365">${escapeHTML(tf('%lld 天后', 365))}</option>
+        </select>
         <span class="tb-spring"></span>
         <button class="btn-text nj-note-editor-cancel">${escapeHTML(t('取消'))}</button>
         <button class="btn-text primary nj-note-editor-save">${escapeHTML(t('保存笔记'))}</button>
@@ -2964,6 +3130,16 @@ export class ReaderView {
         try { document.dispatchEvent(new CustomEvent('robinread:annotation-created', { detail: { kind: 'note', itemID: this.entryID } })); } catch (_) { /* 忽略 */ }
         this._renderNoteMarkers();
         this._refreshAnnotationsPanel();
+        // F27 时间胶囊：锚定笔记保存时可选一并封存（kind=note）
+        const capsuleDays = Number(layer.querySelector('.nj-note-editor-capsule')?.value) || 0;
+        if (capsuleDays > 0) {
+          await window.robin.capsuleSeal({
+            entryID: this.entryID, annotationID: note.id, annotationKind: 'note', days: capsuleDays,
+          }).catch(() => null);
+          if (capsuleDays > 0) this.handlers.onFeedback?.(tf('已封存，%lld 天后与你重逢', capsuleDays));
+          close();
+          return;
+        }
       }
       close();
       this.handlers.onFeedback?.(t('笔记已保存'));
@@ -4004,7 +4180,19 @@ export class ReaderView {
       this.body?.parentElement?.insertBefore(panel, this.body);
     }
     panel.dataset.entryID = entryID;
-    panel.querySelector('.nj-debate-close')?.addEventListener('click', () => this._closeDebatePanel());
+    // 事件委托（批 C 审查 P1：loading/error/empty 相位整体重建 innerHTML，逐节点绑定会失灵——
+    // 面板级一个 click 监听按 data-debate-action 分派 cancel/close/retry，与对照镜同款）
+    if (!panel.dataset.delegated) {
+      panel.dataset.delegated = '1';
+      panel.addEventListener('click', (event) => {
+        const entry = String(this.entryID || '');
+        const action = event.target?.closest?.('[data-debate-action]')?.dataset.debateAction;
+        if (!action) return;
+        if (action === 'cancel') window.robin.debateCancel?.(entry);
+        else if (action === 'close') this._closeDebatePanel();
+        else if (action === 'retry') this._openDebatePanel();
+      });
+    }
 
     const openToken = `${entryID}@${Date.now()}`;
     this._debateToken = openToken;
@@ -4016,10 +4204,8 @@ export class ReaderView {
         this._renderDebatePanel({ phase: existing.status === 'open' ? 'done' : 'closed', debate: existing });
         return;
       }
-      // 无场（或空场）：召唤钢人开场（在途态：转圈 + 取消）
+      // 无场（或空场）：召唤钢人开场（在途态：转圈 + 取消；cancel/retry 由面板委托分派）
       this._renderDebatePanel({ phase: 'loading' });
-      panel.querySelector('.nj-debate-cancel')?.addEventListener('click', () => window.robin.debateCancel?.(entryID));
-      panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
       window.robin.debateStart(entryID).then((envelope) => {
         if (stale()) return;
         const debate = envelope && envelope.ok ? envelope.data : null;
@@ -4027,19 +4213,16 @@ export class ReaderView {
         if (debate.rounds?.length) {
           this._renderDebatePanel({ phase: 'done', debate }); // _renderDebatePanel 内部已绑定交互，勿重复绑
         } else {
-          // 取消/空结果：不再空转——给「召唤开场」重试出路
+          // 取消/空结果：不再空转——给「召唤开场」重试出路（retry 由面板委托分派）
           this._renderDebatePanel({ phase: 'empty' });
-          panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
         }
       }).catch((err) => {
         if (stale()) return;
         this._renderDebatePanel({ phase: 'error', message: String((err && err.message) || err) });
-        panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
       });
     }).catch((err) => {
       if (stale()) return;
       this._renderDebatePanel({ phase: 'error', message: String((err && err.message) || err) });
-      panel.querySelector('.nj-debate-retry')?.addEventListener('click', () => this._openDebatePanel());
     });
   }
 
@@ -4066,8 +4249,8 @@ export class ReaderView {
           phase === 'loading' ? escapeHTML(t('钢人正在读文章组织开场…'))
           : debate ? escapeHTML(tf('回合 %lld / %lld', debate.aiTurns || 0, debate.turnsLeft != null ? (debate.aiTurns || 0) + debate.turnsLeft : 6)) : ''
         }</span>
-        ${phase === 'loading' ? `<button class="study-panel-btn nj-debate-cancel" title="${attr(t('取消生成'))}">${icon('close')}</button>` : ''}
-        <button class="study-panel-btn nj-debate-close" title="${attr(t('关闭'))}">${icon('close')}</button>
+        ${phase === 'loading' ? `<button class="study-panel-btn nj-debate-cancel" data-debate-action="cancel" title="${attr(t('取消生成'))}">${icon('close')}</button>` : ''}
+        <button class="study-panel-btn nj-debate-close" data-debate-action="close" title="${attr(t('关闭'))}">${icon('close')}</button>
       </div>`;
 
     if (phase === 'loading') {
@@ -4078,14 +4261,14 @@ export class ReaderView {
       panel.innerHTML = `${head}<div class="nj-debate-body"><div class="nj-debate-empty">
         <p>${escapeHTML(t('反方这次没上场。'))}</p>
         <p class="hint">${escapeHTML(message).slice(0, 200)}</p>
-        <button class="btn-text bordered nj-debate-retry">${escapeHTML(t('重试'))}</button>
+        <button class="btn-text bordered nj-debate-retry" data-debate-action="retry">${escapeHTML(t('重试'))}</button>
       </div></div>`;
       return;
     }
     if (phase === 'empty') {
       panel.innerHTML = `${head}<div class="nj-debate-body"><div class="nj-debate-empty">
         <p>${escapeHTML(t('开场被取消了——再点一次召唤钢人。'))}</p>
-        <button class="btn-text bordered nj-debate-retry">${escapeHTML(t('召唤开场'))}</button>
+        <button class="btn-text bordered nj-debate-retry" data-debate-action="retry">${escapeHTML(t('召唤开场'))}</button>
       </div></div>`;
       return;
     }
@@ -4141,10 +4324,9 @@ export class ReaderView {
     this._bindDebatePanel(panel, debate);
   }
 
-  /** 侧板交互绑定：引用跳转 / 发言 / 裁决 / 存为批注 / 关闭。 */
+  /** 侧板交互绑定：引用跳转 / 发言 / 裁决 / 存为批注（关闭钮走面板级 data-debate-action 委托）。 */
   _bindDebatePanel(panel, debate = null) {
     const entryID = String(this.entryID || '');
-    panel.querySelector('.nj-debate-close')?.addEventListener('click', () => this._closeDebatePanel());
     panel.querySelectorAll('.nj-debate-quote').forEach((chip) => {
       chip.addEventListener('click', () => this._flashDebateQuote(chip.dataset.quote || ''));
     });

@@ -63,11 +63,15 @@ class KnowledgeEngine {
   }
   getHighlight(id) {
     const r = this.store.database.prepare('SELECT * FROM highlights WHERE id = ?').get(id);
-    return r ? { id: r.id, itemID: r.item_id, text: r.text, color: r.color, note: r.note, paragraphID: r.paragraph_id, startOffset: r.start_offset, endOffset: r.end_offset, anchor: this._parseAnchor(r.anchor), createdAt: r.created_at } : null;
+    return r ? this._rowToHighlight(r) : null;
   }
   getHighlights(itemID) {
     return this.store.database.prepare('SELECT * FROM highlights WHERE item_id = ? ORDER BY created_at ASC').all(itemID)
-      .map((r) => ({ id: r.id, itemID: r.item_id, text: r.text, color: r.color, note: r.note, paragraphID: r.paragraph_id, anchor: this._parseAnchor(r.anchor), createdAt: r.created_at }));
+      .map((r) => this._rowToHighlight(r));
+  }
+  /** 行 → 高亮投影（含 origin/origin_id：F28 批注漂流瓶的导入身份随批注走）。 */
+  _rowToHighlight(r) {
+    return { id: r.id, itemID: r.item_id, text: r.text, color: r.color, note: r.note, paragraphID: r.paragraph_id, startOffset: r.start_offset, endOffset: r.end_offset, anchor: this._parseAnchor(r.anchor), origin: r.origin ?? null, originID: r.origin_id ?? null, createdAt: r.created_at };
   }
   getAllHighlights(limit = 100) {
     return this.store.database.prepare(`
@@ -102,8 +106,7 @@ class KnowledgeEngine {
   }
   getNotes(itemID) {
     return this.store.database.prepare('SELECT * FROM notes WHERE item_id = ? ORDER BY updated_at DESC').all(itemID).map((r) => this._rowToNote(r));
-  }
-  getAllNotes(limit = 200) {
+  }  getAllNotes(limit = 200) {
     return this.store.database.prepare(`
       SELECT n.id, n.item_id, n.content, n.tags, n.created_at, n.updated_at,
              a.title as article_title
@@ -119,7 +122,7 @@ class KnowledgeEngine {
   deleteNote(id) { this.store.database.prepare('DELETE FROM notes WHERE id = ?').run(id); }
   _rowToNote(r) {
     let tags = []; try { tags = JSON.parse(r.tags || '[]'); } catch (_) {}
-    return { id: r.id, itemID: r.item_id, content: r.content, tags, anchor: this._parseAnchor(r.anchor), articleTitle: r.article_title, createdAt: r.created_at, updatedAt: r.updated_at };
+    return { id: r.id, itemID: r.item_id, content: r.content, tags, anchor: this._parseAnchor(r.anchor), articleTitle: r.article_title, origin: r.origin ?? null, originID: r.origin_id ?? null, createdAt: r.created_at, updatedAt: r.updated_at };
   }
 
   // MARK: - 间隔复习

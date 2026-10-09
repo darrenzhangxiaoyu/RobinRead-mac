@@ -7336,3 +7336,189 @@ body.nj-win-drag .nj-snap-edge { opacity: 0.85; }
 
 /* F26 测验错题复习卡：题面多行（题干+选项） */
 .kb-session-quiz-q { white-space: pre-line; font-size: 13.5px; line-height: 1.6; color: var(--text-primary); }
+
+/* ============ F27 时间胶囊 ============ */
+
+/* 划词色条上的「装进胶囊」按钮（时钟图标，与五色圆点同尺寸） */
+.nj-capsule-pick { color: var(--text-secondary); }
+.nj-capsule-pick:hover { color: var(--accent); }
+.nj-capsule-pick svg { width: 14px; height: 14px; }
+
+/* 封存期限卡（30/90/365 + 留言） */
+.nj-capsule-seal {
+  position: fixed; inset: 0; z-index: var(--z-modal, 900);
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklch, var(--paper, #14100c) 42%, transparent);
+}
+.nj-capsule-seal-card {
+  width: min(380px, calc(100vw - 64px));
+  background: var(--note-background);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 18px 48px color-mix(in oklch, black 22%, transparent);
+  padding: var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.nj-capsule-seal-head { display: flex; align-items: center; gap: var(--space-2); }
+.nj-capsule-seal-head b { flex: 1; font-size: 15px; }
+.nj-capsule-seal-icon { display: inline-flex; color: var(--accent); }
+.nj-capsule-seal-icon svg { width: 18px; height: 18px; }
+.nj-capsule-seal-close { appearance: none; border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer; padding: 4px; border-radius: var(--radius-sm); }
+.nj-capsule-seal-close:hover { background: var(--row-hover); color: var(--text-primary); }
+.nj-capsule-seal-sub { margin: 0; font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); }
+.nj-capsule-seal-days { display: flex; gap: var(--space-2); }
+.nj-capsule-seal-day {
+  flex: 1; appearance: none; cursor: pointer;
+  padding: 7px 0; text-align: center;
+  border: 1px solid var(--note-border); border-radius: 9px;
+  background: transparent; color: var(--text-secondary);
+  font-size: 12.5px;
+  transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.nj-capsule-seal-day:hover { border-color: var(--accent); }
+.nj-capsule-seal-day.on { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 14%, transparent); color: var(--accent); font-weight: 600; }
+.nj-capsule-seal-msg {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid var(--note-border); border-radius: 9px;
+  background: transparent; color: var(--text-primary);
+  padding: 8px 10px; font-size: 13px;
+}
+.nj-capsule-seal-msg:focus { outline: none; border-color: var(--accent); }
+.nj-capsule-seal-foot { display: flex; align-items: center; gap: var(--space-2); }
+
+/* 笔记编辑卡里的胶囊下拉 */
+.nj-note-editor-capsule {
+  appearance: auto; cursor: pointer;
+  border: 1px solid var(--note-border); border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  font-size: 12px; padding: 3px 6px; max-width: 130px;
+}
+
+/* 侧栏胶囊徽章（到期未开启枚数；0 枚隐藏） */
+.footer-capsule-btn { position: relative; }
+.nj-capsule-badge {
+  position: absolute; top: 4px; right: 6px;
+  min-width: 14px; height: 14px; padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink, #f6f2e7);
+  font-size: var(--fs-xs); line-height: 14px; font-weight: 700; text-align: center;
+  box-shadow: 0 0 0 2px transparent;
+}
+.nj-capsule-badge[hidden] { display: none; }
+
+/* 胶囊浮层（侧栏兜底入口）：到期列表 + 已开启报告 */
+.nj-capsule-modal { width: min(560px, calc(100vw - 72px)); max-height: calc(100vh - 88px); flex-direction: column; overflow-y: auto; }
+.nj-capsule-sub { flex: 1; font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-capsule-body { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4); }
+.nj-capsule-loading { padding: var(--space-5); text-align: center; color: var(--text-tertiary); }
+.nj-capsule-sec-title { font-size: 12.5px; font-weight: 700; color: var(--text-tertiary); letter-spacing: 0.04em; margin-bottom: var(--space-2); }
+.nj-capsule-empty { text-align: center; color: var(--text-secondary); padding: var(--space-5) var(--space-4); }
+.nj-capsule-empty p { font-size: 13px; line-height: 1.7; max-width: 380px; margin: 10px auto 0; }
+.nj-capsule-empty-icon svg { width: 34px; height: 34px; color: var(--accent); opacity: 0.75; }
+.nj-capsule-card {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; text-align: left; cursor: pointer;
+  appearance: none; border: 1px solid var(--note-border); border-radius: 11px;
+  background: transparent; color: var(--text-primary);
+  padding: 10px 12px; margin-bottom: var(--space-2);
+  transition: border-color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+.nj-capsule-card:hover { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 6%, transparent); }
+.nj-capsule-card.is-due { border-color: color-mix(in oklch, var(--accent) 42%, var(--note-border)); }
+.nj-capsule-card-icon { display: inline-flex; color: var(--accent); flex: 0 0 auto; }
+.nj-capsule-card-icon svg { width: 17px; height: 17px; }
+.nj-capsule-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.nj-capsule-card-quote { font-size: 13px; line-height: 1.55; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.nj-capsule-card-meta { font-size: var(--fs-lg); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nj-capsule-card-go { flex: 0 0 auto; font-size: 12px; color: var(--accent); font-weight: 600; }
+
+/* 简报顶部「时间胶囊」段 */
+.dg-capsules {
+  border: 1px solid color-mix(in oklch, var(--accent) 34%, var(--note-border));
+  background: color-mix(in oklch, var(--accent) 7%, transparent);
+  border-radius: var(--radius-xl); padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+.dg-capsules-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2); }
+.dg-capsules-head svg { width: 15px; height: 15px; color: var(--accent); align-self: center; }
+.dg-capsules-head b { font-size: 13.5px; }
+.dg-capsules-head span { font-size: 12px; color: var(--text-tertiary); }
+.dg-capsule-card {
+  display: flex; align-items: center; gap: var(--space-3);
+  width: 100%; text-align: left; cursor: pointer;
+  appearance: none; border: 0; border-top: 1px dashed var(--note-border);
+  background: transparent; color: var(--text-primary);
+  padding: 9px 2px; font-size: 13px;
+}
+.dg-capsule-card:hover .dg-capsule-open { opacity: 1; }
+.dg-capsule-quote { flex: 1; min-width: 0; line-height: 1.6; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dg-capsule-meta { flex: 0 0 auto; font-size: var(--fs-lg); color: var(--text-tertiary); }
+.dg-capsule-open { flex: 0 0 auto; font-size: 12px; color: var(--accent); font-weight: 600; opacity: 0.72; }
+
+/* 开启仪式：全屏轻遮罩 + 胶囊开启动画（reduced-motion 直达终态） */
+.nj-capsule-ceremony { position: fixed; inset: 0; z-index: var(--z-modal, 900); display: flex; align-items: center; justify-content: center; }
+.nj-ceremony-backdrop { position: absolute; inset: 0; background: color-mix(in oklch, var(--paper, #14100c) 55%, transparent); }
+.nj-ceremony-card {
+  position: relative; z-index: 1;
+  width: min(460px, calc(100vw - 72px));
+  max-height: calc(100vh - 96px); overflow-y: auto;
+  background: var(--note-background);
+  border: 1px solid var(--note-border);
+  border-radius: 18px;
+  box-shadow: 0 24px 64px color-mix(in oklch, black 30%, transparent);
+  padding: var(--space-5);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
+  text-align: center;
+}
+.nj-ceremony-capsule {
+  position: relative; display: flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px; border-radius: 50%;
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.nj-ceremony-capsule svg { width: 30px; height: 30px; }
+.nj-ceremony-glow {
+  position: absolute; inset: -8px; border-radius: 50%;
+  border: 2px solid color-mix(in oklch, var(--accent) 45%, transparent);
+  opacity: 0.6;
+}
+.nj-ceremony-kicker { font-size: 12.5px; letter-spacing: 0.08em; color: var(--text-tertiary); }
+.nj-ceremony-quote {
+  margin: 0; font-size: 16px; line-height: 1.8; color: var(--text-primary);
+  border-left: 3px solid color-mix(in oklch, var(--accent) 55%, transparent);
+  padding: 2px 0 2px 14px; text-align: left;
+}
+.nj-ceremony-note { margin: 0; font-size: 13px; line-height: 1.7; color: var(--text-secondary); text-align: left; }
+.nj-ceremony-message { margin: 0; font-size: 13px; color: var(--accent); font-style: italic; }
+.nj-ceremony-meta { font-size: 12px; color: var(--text-tertiary); }
+.nj-ceremony-actions { display: flex; gap: var(--space-3); margin-top: var(--space-2); }
+@media (prefers-reduced-motion: no-preference) {
+  .nj-ceremony-card { animation: nj-ceremony-rise 0.42s var(--ease-out, ease-out) both; }
+  .nj-ceremony-glow { animation: nj-ceremony-glow 1.6s ease-out both; }
+}
+@keyframes nj-ceremony-rise {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes nj-ceremony-glow {
+  0% { transform: scale(0.7); opacity: 0; }
+  35% { opacity: 0.85; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-ceremony-card, .nj-ceremony-glow { animation: none !important; }
+}
+
+/* 胶囊直达批注：定位闪示 */
+mark.nj-hl.nj-hl-flash { animation: nj-hl-flash-pulse 1.1s ease-in-out 2; }
+@keyframes nj-hl-flash-pulse {
+  0%, 100% { background-color: transparent; box-shadow: none; }
+  50% { background-color: color-mix(in oklch, var(--accent) 38%, transparent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  mark.nj-hl.nj-hl-flash { animation: none !important; background-color: color-mix(in oklch, var(--accent) 30%, transparent) !important; }
+}
+
+/* ============ F28 批注漂流瓶 ============ */
+/* 无专属面板：导出走主进程保存对话框、导入走打开对话框，反馈统一 toast；
+   漂流条目以 platform='drift' 合成源入侧栏，行卡样式与普通文章一致。 */
