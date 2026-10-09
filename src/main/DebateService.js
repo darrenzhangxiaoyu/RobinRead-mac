@@ -275,6 +275,9 @@ class DebateService {
     const row = this._row(debateID);
     if (!row) throw new Error('辩论不存在。');
     if (row.status !== 'open') throw new Error('本场辩论已裁决过。');
+    // 裁决定格同时取消在途生成（批 C 审查 P2：否则回包照旧 _appendRound——现由 _appendRound 的
+    // status 守卫双保险兜底）
+    try { this.cancel(row.entry_id); } catch (_) { /* 忽略 */ }
     this.store.database.prepare(
       "UPDATE debates SET status = 'closed', verdict = ?, updated_at = ? WHERE id = ?"
     ).run(v, nowSeconds(), row.id);
@@ -294,6 +297,11 @@ class DebateService {
       `【反方辩手 · ${debate.verdict === 'verdict_up' ? '反方说服了我' : debate.verdict === 'verdict_down' ? '我坚持原文' : '未裁决'}】`,
       ...debate.rounds.map((r) => `${r.role === 'ai' ? '反方' : '我'}：${r.content}`),
     ].join('\n').slice(0, 4000);
+    // 幂等（批 C 审查 P2）：同一篇的辩论批注只存一次——重开面板重复点击不再重复落批注/重复结花园种子
+    const existing = this.store.database.prepare(
+      "SELECT id FROM highlights WHERE item_id = ? AND note LIKE '【反方辩手 ·%' LIMIT 1"
+    ).get(debate.entryID);
+    if (existing) return this.store.knowledge.getHighlight(existing.id);
     const highlight = this.store.knowledge.addHighlight({
       itemID: debate.entryID,
       text: `【反方辩手】${firstAI.slice(0, DEBATE.HIGHLIGHT_TEXT_SLICE)}`,
@@ -325,7 +333,9 @@ class DebateService {
   /** 追加一个回合并持久化（rounds_json 单列整体写）。 */
   _appendRound(debateID, round) {
     const debate = this.get(debateID);
-    const rounds = [...(debate ? debate.rounds : []), { ...round, at: nowSeconds() }];
+    // status 守卫（批 C 审查 P2：verdict 不取消在途生成——closed 后 LLM 回包不得追加进已定格的场）
+    if (!debate || debate.status !== 'open') return;
+    const rounds = [...(debate.rounds || []), { ...round, at: nowSeconds() }];
     this.store.database.prepare(
       'UPDATE debates SET rounds_json = ?, updated_at = ? WHERE id = ?'
     ).run(JSON.stringify(rounds), nowSeconds(), debateID);
