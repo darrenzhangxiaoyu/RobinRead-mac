@@ -131,6 +131,10 @@ body.dark {
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* hidden 属性全局护栏：组件 display:flex/grid 会压掉 UA 的 [hidden]{display:none}
+   （实锤：媒体中心空态 .nj-media-empty 为 flex，hidden 后仍渲染，与媒体行同屏） */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; overflow: hidden; }
 
 body {
