@@ -64,6 +64,10 @@ function parseMirrorPayload(text, count) {
       index = Number(item.index) - 1;
     }
     if (index < 0 || index >= count) {
+      if (index >= count || (Number.isFinite(Number(item && item.index)) && Number(item.index) > 0)) {
+        // 显式越界（0 起始/11/10/乱序大号）：丢弃该条，绝不顺位张冠李戴（批 B 审查 P2-1）。
+        continue;
+      }
       // 缺 index：填入第一个空位（顺位兜底）
       index = out.findIndex((slot) => slot === null);
       if (index === -1) break;
@@ -73,7 +77,9 @@ function parseMirrorPayload(text, count) {
   }
   // 完全没填进任何槽位 → 视为整体解析失败
   if (out.every((slot) => slot === null)) return null;
-  return out.map((slot) => slot || { relation: 'none', reason: '' });
+  // 缺槽不落 none（批 B 审查 P2-2）：落库层只写非空槽，空槽留给下次重判——
+  // LLM 截断输出不应把未判定对永久判死（none 防重会挡住重试）。
+  return out;
 }
 
 /** 单条候选的 prompt 块。 */
@@ -158,7 +164,7 @@ class PerspectiveService {
              IFNULL(a.title, '') AS title, IFNULL(f.title, '') AS sourceTitle,
              COALESCE(a.published_at, i.created_at) AS publishedAt
       FROM perspectives p
-      LEFT JOIN items i ON i.id = p.related_entry_id
+      INNER JOIN items i ON i.id = p.related_entry_id
       LEFT JOIN articles a ON a.item_id = p.related_entry_id
       LEFT JOIN feeds f ON f.id = i.feed_id
       WHERE p.entry_id = ?
@@ -236,7 +242,8 @@ class PerspectiveService {
                 VALUES (?, ?, ?, ?, ?, ?)
               `);
               for (let i = 0; i < pending.length; i += 1) {
-                const verdict = verdicts[i] || { relation: 'none', reason: '' };
+                const verdict = verdicts[i];
+                if (!verdict) continue; // 缺槽不落 none（审查 P2-2）：留给下次重判，不被防重挡死
                 judgedCount += 1;
                 const info = insert.run(
                   id, pending[i].id, verdict.relation, verdict.reason || '',

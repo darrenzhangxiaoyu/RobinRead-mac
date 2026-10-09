@@ -148,8 +148,10 @@ class GardenService {
       }
     }
 
-    // ── 阳光：今日首次活动 +1（同日幂等；断档重计从 1 起） ──
-    const sameDay = row.last_active_day === day;
+    // ── 阳光：今日首次活动 +1（同日幂等；断档重计从 1 起）──
+    // 时钟回拨防护（批 B 审查 P2-4）：已有活动日且 day <= last_active_day 视为同日，
+    // 回拨一天读一篇不可无限刷连击（满园 sun 门槛否则可被纯刷穿）；last_active_day 为空=首次活动照常 +1。
+    const sameDay = Boolean(row.last_active_day) && day <= row.last_active_day;
     if (!sameDay) row.sun_streak += 1;
     const wiltedToday = events.some((e) => e.kind === 'wilt');
 

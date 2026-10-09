@@ -98,11 +98,11 @@ app.whenReady().then(async () => {
     ok(normalizeRelation('CONTRADICT') === 'contradict' && normalizeRelation('胡说') === 'none',
       '3 解析器：relation 归一（大小写/非法值兜底 none）');
     ok(JSON.stringify(parseMirrorPayload('[{"relation":"echo","reason":"呼应"},{"index":9,"relation":"complement","reason":"x"}]', 2))
-      === JSON.stringify([{ relation: 'echo', reason: '呼应' }, { relation: 'complement', reason: 'x' }]),
-      '3 解析器：越界 index 顺位兜底 + 长度对齐');
+      === JSON.stringify([{ relation: 'echo', reason: '呼应' }, null]),
+      '3 解析器：显式越界 index 丢弃不顺位张冠李戴（审查 P2-1），缺槽返回 null 不落库');
     ok(JSON.stringify(parseMirrorPayload('[{"index":2,"relation":"echo","reason":"r"}]', 2))
-      === JSON.stringify([{ relation: 'none', reason: '' }, { relation: 'echo', reason: 'r' }]),
-      '3 解析器：缺位自动补 none（长度合同）');
+      === JSON.stringify([null, { relation: 'echo', reason: 'r' }]),
+      '3 解析器：缺槽留 null 留给重判（不补 none 永久判死，审查 P2-2）');
 
     // ── 3/4. mock LLM 批量判定 + 持久化防重 ──
     const llmCalls = [];
