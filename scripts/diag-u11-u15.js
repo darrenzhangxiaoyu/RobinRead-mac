@@ -59,7 +59,9 @@ app.whenReady().then(async () => {
     ok(/\.nj-breath \{/.test(robin) && /@keyframes nj-breathe/.test(robin), 'U11 呼吸点 .nj-breath 在册');
     ok(/\.nj-indet \{/.test(robin) && /@keyframes nj-indet-slide/.test(robin), 'U11 不确定进度条 .nj-indet 在册');
     ok(/\.list-loading-more::before \{/.test(robin), 'U11 加载更多呼吸点（::before）在册');
-    ok(/\.aihot-skeleton-rank, \.aihot-skeleton-line \{[^}]*kb-shimmer/.test(robin), 'U11 AIHOT 骨架并入统一 shimmer');
+    // P2-1 同步断言：shimmer 光带位移已从 background-position 收口为 ::before translateX（合成器路径），
+    // 统一 shimmer 层选择器随之变化；AIHOT 骨架仍与 .nj-sk 同层（"并入统一 shimmer"语义不变）。
+    ok(/\.nj-sk::before, \.nj-sk-dot::before, \.aihot-skeleton-rank::before, \.aihot-skeleton-line::before \{[^}]*kb-shimmer/.test(robin), 'U11 AIHOT 骨架并入统一 shimmer（::before translateX 层）');
 
     // U12：令牌与规则
     ok(/--press-scale: 0\.96;/.test(robin) && /--lift-y: -2px;/.test(robin), 'U12 --press-scale/--lift-y 令牌归档在册');
@@ -124,8 +126,10 @@ app.whenReady().then(async () => {
       const el = document.createElement('div');
       el.className = 'nj-sk nj-sk-line w70';
       document.body.appendChild(el);
-      const dur = getComputedStyle(el).animationDuration;
-      const iter = getComputedStyle(el).animationIterationCount;
+      // P2-1 同步：shimmer 动画移至 ::before 位移层，reduced-motion 收敛效果同样读伪元素
+      const skPseudo = getComputedStyle(el, '::before');
+      const dur = skPseudo.animationDuration;
+      const iter = skPseudo.animationIterationCount;
       el.remove();
       const tr = document.createElement('button');
       tr.className = 'btn';

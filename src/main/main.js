@@ -154,7 +154,21 @@ if (!IS_PROBE) {
   let tray = null;
 
   app.whenReady().then(() => {
-    store = new AppStore(app.getPath('userData'));
+    // P1-2：库损坏/迁移失败原本会变成未处理 rejection——进程无 UI 静默挂死。
+    // 显式弹窗告知（含建议的备份恢复路径）后退出，让用户能感知并自救。
+    try {
+      store = new AppStore(app.getPath('userData'));
+    } catch (err) {
+      console.error('[RobinRead] 数据目录打开失败：', err);
+      dialog.showErrorBox(
+        'RobinRead 无法启动',
+        '数据目录打开失败（数据库文件可能已损坏或被占用）。\n\n'
+        + `错误信息：${String((err && err.message) || err)}\n\n`
+        + `建议：先备份数据目录（${app.getPath('userData')}，含 library.db 与 preferences.json）再尝试恢复，或删除损坏文件后重新启动。`,
+      );
+      app.exit(1);
+      return;
+    }
 
     // 图片防盗链治理在 ipc.js 的 registerNetworkInterceptors() 中统一安装。
 

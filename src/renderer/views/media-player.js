@@ -171,11 +171,16 @@ export class MediaMiniPlayer {
     this._endedFired = true;
     this._saveProgress({ finished: true }); // 播完 flush（主进程归零 = 已播完）
     this._updatePlayButton();
-    const next = await window.robin.mediaQueueNext(this.current ? this.current.itemID : null);
-    if (next && next.itemID) {
-      await this.open(next.itemID); // 自动连播
-    } else {
-      this.close(); // 队列空：收起播放器
+    try {
+      const next = await window.robin.mediaQueueNext(this.current ? this.current.itemID : null);
+      if (next && next.itemID) {
+        await this.open(next.itemID); // 自动连播
+      } else {
+        this.close(); // 队列空：收起播放器
+      }
+    } catch (_) {
+      // P2：连播 IPC 拒绝不得成为未处理 rejection——停在结束态并提示
+      this.deps.toast?.(t('自动连播失败，已停止播放。'));
     }
   }
 

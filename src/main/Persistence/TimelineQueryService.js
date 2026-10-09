@@ -252,6 +252,29 @@ class TimelineQueryService {
     return this.database.prepare(sql).all(...params).map(rowToListItem);
   }
 
+  /**
+   * P2-4：scope 内全部未读行的 id/accountID（无打分过滤、无 LIMIT）。
+   * markAllRead 专用：侧栏未读计数不带打分阈值，「全部已读」必须与之同口径——
+   * 走 fetchListItems 的行集会被 AppStore._applyScoring 按 minScore 过滤，
+   * 低分未读永远置不到读 → 侧栏计数只增不减永久堆积。
+   */
+  fetchUnreadEntries({ accountID = null, scope }) {
+    const { where, params } = this._scopeClauses(accountID, scope, []);
+    where.push('COALESCE(s.is_read, 0) = 0');
+    return this.database.prepare(`
+      SELECT i.id AS id, i.account_id AS account_id
+      FROM items i
+      INNER JOIN feeds f ON f.id = i.feed_id
+      LEFT JOIN articles a ON a.item_id = i.id
+      LEFT JOIN article_states s ON s.item_id = i.id
+      LEFT JOIN accounts acc ON acc.id = i.account_id
+      WHERE ${where.join(' AND ')}
+    `).all(...params).map((row) => ({
+      id: row.id,
+      accountID: row.account_id || 'local-default',
+    }));
+  }
+
   fetchAdjacentItem({ accountID = null, scope, currentItemID, direction, retainingIDs = [] }) {
     const curRow = this.database.prepare(`
       SELECT COALESCE(a.published_at, i.created_at) AS sort_time

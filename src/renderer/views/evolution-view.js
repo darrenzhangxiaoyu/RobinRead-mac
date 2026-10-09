@@ -53,9 +53,12 @@ export class EvolutionView {
       feedback: async () => window.robin.evoFeedbackSummary(),
       density: async () => ({ byFeed: await window.robin.evoDensityByFeed(14), byDay: await window.robin.evoDensityByDay(14) }),
     };
-    const loader = loads[this.section];
+    // P1-5：await 前快照 section——快速切分区时旧载荷不得渲染进新分区视图
+    const section = this.section;
+    const loader = loads[section];
     if (!loader) return;
     const result = await loader();
+    if (this.section !== section) return; // 已切到其他分区：过期载荷丢弃
     this.data = result;
     this._renderContent();
   }

@@ -100,7 +100,7 @@
 }
 .acct-auth-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .acct-auth-fields { display: flex; flex-direction: column; gap: 8px; }
-.acct-auth-error { font-size: var(--fs-lg); color: #c93b3b; }
+.acct-auth-error { font-size: var(--fs-lg); color: var(--danger); } /* P1-5：归 --danger 令牌（暗 note 上 2.86→4.91:1） */
 
 
 .acct-usage {

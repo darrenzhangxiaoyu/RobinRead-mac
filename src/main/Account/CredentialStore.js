@@ -42,7 +42,11 @@ class CredentialStore {
         try {
           return safeStorage.decryptString(data);
         } catch (_) {
-          // 首次写入可能是明文（尚未加密），回退读取
+          // P2-3：解密失败不能把 DPAPI 密文当明文返回——调用方会拿密文当真实凭据去认证，
+          // 制造难排查的「密码错误」。Windows DPAPI blob 固定以 0x01 版本字节开头；
+          // 仅当首字节非 0x01（= 无 DPAPI 环境写入的明文兜底）才保留明文回退，
+          // 真正解不开的密文一律返回 null（所有调用方均有 null → 凭据缺失的既有处理路径）。
+          if (data[0] === 0x01) return null;
           return data.toString('utf8');
         }
       }

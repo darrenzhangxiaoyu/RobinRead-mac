@@ -95,15 +95,31 @@ const PreferenceKey = Object.freeze({
 class PreferenceStore {
   constructor() {
     this.filePath = path.join(app.getPath('userData'), 'preferences.json');
-    this.values = {};
-    try {
-      if (fs.existsSync(this.filePath)) {
-        this.values = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
-      }
-    } catch (_) {
-      this.values = {};
-    }
+    this.values = this._readOrQuarantine();
     this._migrateLegacyKeys();
+  }
+
+  /** 读取偏好；损坏文件改名留存（corrupt-<ts>）后从 {} 起步——不再无痕吞掉用户数据。 */
+  _readOrQuarantine() {
+    try {
+      if (!fs.existsSync(this.filePath)) return {};
+      const parsed = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
+      // 合法 JSON 但不是普通对象（数组/标量/字面 null）同样按损坏处理，否则 get/set 行为未定义
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('preferences root is not an object');
+      }
+      return parsed;
+    } catch (err) {
+      // P1-1：崩溃/断电留下的截断 JSON 不再静默清零——原文件改名留存供人工抢救
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      try {
+        fs.renameSync(this.filePath, `${this.filePath}.corrupt-${stamp}`);
+        console.warn(`[RobinRead] preferences.json 已损坏（${err && err.message || err}），原文件留存为 preferences.json.corrupt-${stamp}，本次以空偏好启动`);
+      } catch (_) {
+        console.warn('[RobinRead] preferences.json 已损坏且留存失败，本次以空偏好启动');
+      }
+      return {};
+    }
   }
 
   /** 旧版偏好键（PaperRss.* / NanJuPaper.*）一次性迁移到新键名（RobinRead.*），并清理旧键避免双份残留。 */
@@ -153,7 +169,11 @@ class PreferenceStore {
     }
     try {
       fs.mkdirSync(path.dirname(this.filePath), { recursive: true });
-      fs.writeFileSync(this.filePath, JSON.stringify(this.values, null, 2), 'utf8');
+      // P1-1：原子写（tmp + rename，先例 AuthService._writeState）——崩溃/断电瞬间
+      // 不会留下截断的 JSON 把全部偏好无痕清零
+      const tmp = `${this.filePath}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(this.values, null, 2), 'utf8');
+      fs.renameSync(tmp, this.filePath);
     } catch (_) { /* 保存失败不阻塞主流程 */ }
   }
 }

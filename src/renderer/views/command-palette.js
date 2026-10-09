@@ -337,7 +337,12 @@ export class CommandPalette {
       }
       item.addEventListener('click', () => this._run(cmd));
       item.addEventListener('mousemove', () => {
-        if (this.activeIndex !== index) { this.activeIndex = index; this._render(); }
+        if (this.activeIndex === index) return;
+        // P2：悬停只翻 active 类 + 联动预览（与 _move 同款零重建语义），不整表 _render() 重建 DOM
+        this.listHost.querySelectorAll('.cmd-item')[this.activeIndex]?.classList.remove('active');
+        item.classList.add('active');
+        this.activeIndex = index;
+        this._renderPreview(this.filtered[index]);
       });
       this.listHost.appendChild(item);
     });

@@ -508,6 +508,7 @@ export class SidebarView {
       starred: counts?.starred ?? 0,
       later: counts?.laterCount ?? 0,
       media: counts?.mediaUnfinished ?? 0, // F3：媒体未播完计数
+      topics: counts?.topicsEnabled ?? 0, // F4：话题盯梢行——缺键会把话题徽标清零隐藏（P2 修复）
     };
     smartRows.forEach((row) => this._bindCount(row, map[row.dataset.scope] ?? 0));
   }

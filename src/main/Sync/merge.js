@@ -6,6 +6,7 @@
  * {
  *   version: 1, deviceId, updatedAt,
  *   feeds: [{ feedURL, title, siteURL, folder, platform, platformRef, updatedAt }],
+ *   deletedFeedIDs: [{ feedURL, deletedAt }],   // 删除墓碑（P2-2）：本机软删订阅的 feedURL + 删除时间
  *   prefs: { values: {白名单键...}, updatedAt },
  *   annotations: [{ entryURL, kind:'highlight'|'note', text?, content?, color?, note?,
  *                   paragraphID?, startOffset?, endOffset?, anchor?, tags?, createdAt, updatedAt }],
@@ -15,11 +16,13 @@
  *
  * 合并语义（本地优先，全部幂等——同快照合并两次零 diff）：
  * - feeds：按 feedURL 并集；同源时整条记录「updatedAt 新者胜」；
+ *   墓碑排除：feed 记录的 updatedAt ≤ 墓碑 deletedAt → 视为已删，从并集中剔除
+ *   （订阅记录比墓碑新 = 本机重订阅 → 保留）；旧快照无该字段 = 无墓碑（兼容）；
  * - annotations：按 (entryURL, kind, 锚点摘要) 去重并集（批注永不删）；
  * - progress：按 entryURL 取 at 更新者；
  * - tags：并集（tag+source 归一去重）；
  * - prefs：整块「新者胜」（本地基准 = prefsDirtyAt，与 remote.prefs.updatedAt 比较）。
- * 护栏：快照 >8MB 拒绝（tooLarge）；annotations >5000 截最旧。
+ * 护栏：快照 >8MB 拒绝（tooLarge）；annotations >5000 截最旧；墓碑 >500 条截最旧。
  */
 const { stableDigest } = require('../Models');
 
@@ -27,6 +30,7 @@ const SNAPSHOT_VERSION = 1;
 const SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;   // 单快照 8MB 上传护栏
 const ANNOTATION_LIMIT = 5000;                // 批注上限（超出截最旧）
 const PROGRESS_LIMIT = 2000;                  // 阅读位置上限（超出截最旧）
+const DELETION_TOMBSTONE_LIMIT = 500;         // 删除墓碑上限（超出截最旧，防快照无限膨胀）
 
 /** 同步层错误（kind: tooLarge|invalid|config）。 */
 class SyncError extends Error {
@@ -77,6 +81,28 @@ function truncateProgress(progress, limit = PROGRESS_LIMIT) {
   return Object.fromEntries(entries.slice(entries.length - limit));
 }
 
+/**
+ * 删除墓碑归一化（P2-2）：接受 [{ feedURL, deletedAt }] 或旧式字符串数组；
+ * 按 feedURL 去重（保留最大 deletedAt）、按 deletedAt 截最新 limit 条。
+ * deletedAt 缺省记 0（未知删除时间）：合并时只有墓碑时间 ≥ 订阅记录时间才生效，
+ * 未知时间墓碑不参与排除（保守：无删除时间证据不动远端订阅）。
+ */
+function normalizeTombstones(value, limit = DELETION_TOMBSTONE_LIMIT) {
+  const list = Array.isArray(value) ? value : [];
+  const byURL = new Map();
+  for (const item of list) {
+    const url = typeof item === 'string' ? item : String(item && item.feedURL || '');
+    if (!/^https?:\/\//i.test(url)) continue;
+    const at = (item && typeof item === 'object') ? (Number(item.deletedAt) || 0) : 0;
+    const prev = byURL.get(url);
+    if (prev == null || at > prev) byURL.set(url, at);
+  }
+  return Array.from(byURL.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([feedURL, deletedAt]) => ({ feedURL, deletedAt }));
+}
+
 /** 序列化（>8MB 抛 SyncError('tooLarge')，拒绝上传）。 */
 function serializeSnapshot(snapshot) {
   const text = JSON.stringify(snapshot);
@@ -109,6 +135,8 @@ function parseSnapshot(text) {
     deviceId: raw.deviceId,
     updatedAt: Number(raw.updatedAt) || 0,
     feeds: Array.isArray(raw.feeds) ? raw.feeds.filter((f) => f && typeof f.feedURL === 'string') : [],
+    // 旧快照无 deletedFeedIDs 字段 = 无墓碑（兼容：缺省空数组）
+    deletedFeedIDs: normalizeTombstones(raw.deletedFeedIDs),
     prefs: (raw.prefs && typeof raw.prefs === 'object' && !Array.isArray(raw.prefs))
       ? { values: (raw.prefs.values && typeof raw.prefs.values === 'object') ? raw.prefs.values : {}, updatedAt: Number(raw.prefs.updatedAt) || 0 }
       : { values: {}, updatedAt: 0 },
@@ -127,6 +155,7 @@ function mergeSnapshots(local, remote, { prefsDirtyAt = 0 } = {}) {
     feedsAddedFromRemote: 0,
     feedsKeptLocalNewer: 0,
     feedsKeptRemoteNewer: 0,
+    feedsExcludedByTombstone: 0,
     annotationsAddedFromRemote: 0,
     progressUpdatedFromRemote: 0,
     progressKeptLocalNewer: 0,
@@ -134,7 +163,14 @@ function mergeSnapshots(local, remote, { prefsDirtyAt = 0 } = {}) {
     prefsSource: 'local',
   };
 
-  // ── feeds：按 feedURL 并集，整条新者胜 ──
+  // ── 删除墓碑（P2-2）：双端并集，去重截最旧 ──
+  const tombstones = normalizeTombstones([
+    ...((local && local.deletedFeedIDs) || []),
+    ...((remote && remote.deletedFeedIDs) || []),
+  ]);
+  const tombstoneAt = new Map(tombstones.map((t) => [t.feedURL, t.deletedAt]));
+
+  // ── feeds：按 feedURL 并集，整条新者胜；墓碑时间 ≥ 记录时间 → 已删剔除 ──
   const feedMap = new Map();
   for (const feed of (Array.isArray(local.feeds) ? local.feeds : [])) {
     if (feed && feed.feedURL) feedMap.set(feed.feedURL, feed);
@@ -156,6 +192,16 @@ function mergeSnapshots(local, remote, { prefsDirtyAt = 0 } = {}) {
       stats.feedsKeptLocalNewer += 1;
     }
   }
+  const feeds = Array.from(feedMap.values()).filter((feed) => {
+    const deletedAt = tombstoneAt.get(feed.feedURL);
+    if (deletedAt == null) return true;
+    // 订阅记录至少与删除一样旧 → 已被删除；记录更新（本机重订阅）→ 保留（墓碑对它失效）
+    if (deletedAt >= (Number(feed.updatedAt) || 0)) {
+      stats.feedsExcludedByTombstone += 1;
+      return false;
+    }
+    return true;
+  });
 
   // ── annotations：按去重键并集（批注永不删）──
   const annMap = new Map();
@@ -224,7 +270,8 @@ function mergeSnapshots(local, remote, { prefsDirtyAt = 0 } = {}) {
     version: SNAPSHOT_VERSION,
     deviceId: local.deviceId || remote.deviceId,
     updatedAt: local.updatedAt || remote.updatedAt,
-    feeds: Array.from(feedMap.values()),
+    feeds,
+    deletedFeedIDs: tombstones,
     prefs,
     annotations,
     progress: truncateProgress(progress),
@@ -238,11 +285,13 @@ module.exports = {
   SNAPSHOT_MAX_BYTES,
   ANNOTATION_LIMIT,
   PROGRESS_LIMIT,
+  DELETION_TOMBSTONE_LIMIT,
   SyncError,
   annotationKey,
   annotationTime,
   truncateAnnotations,
   truncateProgress,
+  normalizeTombstones,
   serializeSnapshot,
   parseSnapshot,
   mergeSnapshots,

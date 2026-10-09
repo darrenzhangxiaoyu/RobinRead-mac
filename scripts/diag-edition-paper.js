@@ -60,7 +60,8 @@ app.whenReady().then(async () => {
     ok(day.seq.join(',') === 'white,book,kraft,paper,white', '日间四态循环 white→book→kraft→paper→white（' + day.seq.join(',') + '）');
     ok(day.storeDay === 'kraft' && !day.storeDark, '日间切纸写 magPaper、不碰 magPaperDark（day=' + day.storeDay + ', dark=' + day.storeDark + '）');
     ok(/^#E9DCC0$/i.test(day.kraftPaper), '日间牛皮 --erp-paper #E9DCC0 生效（' + day.kraftPaper + '）');
-    ok(/^#6E6047$/i.test(day.kraftMuted), '日间牛皮 muted 提深 #6E6047（' + day.kraftMuted + '）');
+    // P1-4 同步断言：kraft muted 由 #6E6047（对牛皮纸 4.51:1 贴线）压深至 #695C42（4.82:1）
+    ok(/^#695C42$/i.test(day.kraftMuted), '日间牛皮 muted 提深 #695C42（' + day.kraftMuted + '）');
     ok(day.chipBg.includes('233, 220, 192') || /#E9DCC0/i.test(day.chipBg), '纸态按钮样本点为牛皮色（' + day.chipBg + '）');
     // 夜间：回退日间值 → 独立写入 → 变量换深色套
     const night = await run('night', `

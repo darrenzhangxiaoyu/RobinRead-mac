@@ -3457,6 +3457,13 @@ function smallModal(title) {
     }
   };
   document.addEventListener('keydown', esc);
+  // P2：取消/确认等关闭路径都直接调 overlay.remove()——包装 remove 统一卸载 document 级
+  // esc 监听，避免多次开关小窗后残留监听器累积（Esc 误触多窗同关）
+  const baseRemove = overlay.remove.bind(overlay);
+  overlay.remove = () => {
+    document.removeEventListener('keydown', esc);
+    baseRemove();
+  };
   return { overlay, modal };
 }
 

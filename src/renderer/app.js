@@ -541,16 +541,25 @@ function currentEntryIsRead() {
 function toggleStarWithGuide() {
   if (!state.selectedEntryID) return;
   const item = state.listItems.find((entry) => entry.id === state.selectedEntryID);
-  const willStar = !(item?.isStarred ?? views.reader?.entry?.isStarred);
-  window.robin.toggleStar(state.selectedEntryID);
-  if (willStar) {
-    showToast(t('已收藏'), 1800, {
-      label: t('查看收藏'),
-      onClick: () => handleScopeSelect({ kind: 'starred' }),
-    });
-  } else {
-    showToast(t('已取消收藏'));
+  const readerEntry = views.reader?.entry;
+  const knownItem = item && typeof item.isStarred === 'boolean';
+  const knownReader = Boolean(readerEntry && typeof readerEntry.isStarred === 'boolean');
+  const willStar = !(item?.isStarred ?? readerEntry?.isStarred);
+  // P2：状态可预知才预写文案——item/reader.entry 都缺 isStarred 时 willStar 恒 true，
+  // 乐观提示可说反；缺字段时不预写，操作后由状态推送按实际状态刷新 UI
+  if (knownItem || knownReader) {
+    if (willStar) {
+      showToast(t('已收藏'), 1800, {
+        label: t('查看收藏'),
+        onClick: () => handleScopeSelect({ kind: 'starred' }),
+      });
+    } else {
+      showToast(t('已取消收藏'));
+    }
   }
+  Promise.resolve(window.robin.toggleStar(state.selectedEntryID)).catch((e) => {
+    showToast(`${t('操作失败')}：${String(e?.message || e)}`);
+  });
 }
 
 function updateToolbarState() {
@@ -946,10 +955,15 @@ async function runSearch(query) {
   views.list.setDigestVisible(false);
   views.list.setPicksVisible(false); // F10：搜索态收起精选入口（清空搜索后经 reloadList 恢复）
   views.list.showSkeleton(); // U11：全文检索在途占位
+  // P1-3：搜索并入 listReqSeq 同一序号空间——reloadList/onStateChanged 重拉在途时，
+  // 慢返回的搜索结果不得乱序覆盖新请求（落地时 seq 不符即丢弃）
+  const seq = ++listReqSeq;
   // 优先全文搜索（含正文），空结果回退到标题/摘要搜索
   let items = await window.robin.fullTextSearch(query);
+  if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次搜索结果过期
   if (!items || !items.length) {
     const result = await window.robin.search(query);
+    if (seq !== listReqSeq) return; // 回退查询同样受序号约束
     items = result.ok ? result.data : [];
   }
   state.listItems = items || [];
@@ -1368,9 +1382,13 @@ async function showEditionExport(entryIDs) {
 }
 async function loadMoreEntries() {
   if (state.listItems.length === 0 || state.listItems.length % 100 !== 0) return;
+  // P1-2：翻页在途切视野守卫——await 前快照 scope，落地时不一致即丢弃，
+  // 旧视野的 offset 页不得 push 进新视野的 listItems
+  const scopeSnapshot = JSON.stringify(state.scope || {});
   const result = await window.robin.getList(state.scope, {
     limit: 100, offset: state.listItems.length, sort: currentListSort(),
   });
+  if (JSON.stringify(state.scope || {}) !== scopeSnapshot) return; // 视野已切换：过期页丢弃
   if (!result.ok || result.data.length === 0) return;
   const existing = new Set(state.listItems.map((entry) => entry.id));
   const fresh = result.data.filter((entry) => !existing.has(entry.id));
@@ -2208,7 +2226,10 @@ function openResearchView() {
 
 /** 智能文件夹：任一关键词命中即收录（OR 语义），列表头显示文件夹名。 */
 async function runSmartFolderSearch(name, query) {
+  // P1-3：并入 listReqSeq 同一序号空间——慢返回不得覆盖其后发起的视野/搜索请求
+  const seq = ++listReqSeq;
   const result = await window.robin.smartFolderSearch(query, 200);
+  if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次结果过期丢弃
   const items = result.ok ? result.data : [];
   state.listItems = items;
   state.activeQuery = query;
@@ -2449,28 +2470,33 @@ function bindEvents() {
       return;
     }
     // 静默刷新行状态（不整体重建，避免打断滚动与选择）
-    const seq = ++listReqSeq; // P1-8：与 reloadList 同一序号空间，互相竞争时新者胜
-    const result = await window.robin.getList(state.scope, { limit: Math.max(100, state.listItems.length), retainingIDs: [...state.retainedIDs], sort: currentListSort() });
-    if (result.ok && seq === listReqSeq) {
-      const beforeIDs = new Set(state.listItems.map((entry) => entry.id));
-      const afterIDs = new Set(result.data.map((entry) => entry.id));
-      let sameSet = beforeIDs.size === afterIDs.size;
-      if (sameSet) for (const id of afterIDs) { if (!beforeIDs.has(id)) { sameSet = false; break; } }
-      state.listItems = result.data;
-      if (sameSet) {
-        views.list.updateItems(result.data, state.selectedEntryID);
-      } else {
-        // 行集变化（过滤规则/新增文章/删除）：全量重建，保持选择与滚动位置
-        const scrollTop = document.getElementById('list-scroll')?.scrollTop || 0;
-        // F10：精选开启时行集变化走精选重取（普通 render 会让位于精选视图，载荷需新）
-        if (picksState.on && ListView.picksEligible(state.scope)) {
-          await refreshSmartPicks();
+    // P1-4：搜索/智能文件夹结果展示中（searchMode）跳过按视野重拉——
+    // 否则任何状态推送都会把搜索结果替换成视野列表，而搜索框仍显示在搜（假象）；
+    // 搜索取消/清空时经 runSearch('') → reloadList 自然恢复视野列表
+    if (!state.searchMode) {
+      const seq = ++listReqSeq; // P1-8：与 reloadList 同一序号空间，互相竞争时新者胜
+      const result = await window.robin.getList(state.scope, { limit: Math.max(100, state.listItems.length), retainingIDs: [...state.retainedIDs], sort: currentListSort() });
+      if (result.ok && seq === listReqSeq) {
+        const beforeIDs = new Set(state.listItems.map((entry) => entry.id));
+        const afterIDs = new Set(result.data.map((entry) => entry.id));
+        let sameSet = beforeIDs.size === afterIDs.size;
+        if (sameSet) for (const id of afterIDs) { if (!beforeIDs.has(id)) { sameSet = false; break; } }
+        state.listItems = result.data;
+        if (sameSet) {
+          views.list.updateItems(result.data, state.selectedEntryID);
         } else {
-          views.list.render(result.data, state.scope, state.selectedEntryID, currentHasUnread());
+          // 行集变化（过滤规则/新增文章/删除）：全量重建，保持选择与滚动位置
+          const scrollTop = document.getElementById('list-scroll')?.scrollTop || 0;
+          // F10：精选开启时行集变化走精选重取（普通 render 会让位于精选视图，载荷需新）
+          if (picksState.on && ListView.picksEligible(state.scope)) {
+            await refreshSmartPicks();
+          } else {
+            views.list.render(result.data, state.scope, state.selectedEntryID, currentHasUnread());
+          }
+          views.list.setDigestVisible(state.scope?.kind === 'today' || state.scope?.kind === 'unread');
+          const scroller = document.getElementById('list-scroll');
+          if (scroller) scroller.scrollTop = scrollTop;
         }
-        views.list.setDigestVisible(state.scope?.kind === 'today' || state.scope?.kind === 'unread');
-        const scroller = document.getElementById('list-scroll');
-        if (scroller) scroller.scrollTop = scrollTop;
       }
     }
     const item = state.listItems.find((entry) => entry.id === state.selectedEntryID);

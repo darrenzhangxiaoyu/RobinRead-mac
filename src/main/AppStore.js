@@ -1278,14 +1278,21 @@ class AppStore extends EventEmitter {
 
   markAllRead(scope) {
     scope = this._normalizedScope(scope);
-    const items = this.listItems(scope, { limit: 5000 });
+    // P2-4：改走无打分查询路径——原先走 listItems，行集被 _applyScoring 按 minScore
+    // 过滤，而侧栏未读计数不带打分阈值；低分未读永远置不到读，计数只增不减永久堆积。
+    // 现按账户直查全量未读（与 fetchSidebarCounts 同口径，无 LIMIT）。
+    const enabledAccounts = this.accounts.enabledAccounts();
+    if (enabledAccounts.length === 0) return 0;
+    const rows = [];
+    for (const account of enabledAccounts) {
+      rows.push(...this.timeline.fetchUnreadEntries({ accountID: account.id, scope }));
+    }
     const entryIDs = [];
     const byAccount = new Map();
-    for (const item of items) {
-      if (item.isRead) continue;
-      entryIDs.push(item.id);
-      if (!byAccount.has(item.accountID)) byAccount.set(item.accountID, []);
-      byAccount.get(item.accountID).push(item.id);
+    for (const row of rows) {
+      entryIDs.push(row.id);
+      if (!byAccount.has(row.accountID)) byAccount.set(row.accountID, []);
+      byAccount.get(row.accountID).push(row.id);
     }
     // P2-4：批量置读合并为单事务（原先每条 setRead 一个事务 = 每条一次 WAL fsync）
     this.database.transaction(() => {
@@ -3264,28 +3271,42 @@ class AppStore extends EventEmitter {
     const paragraphs = ArticleExtractor.readerParagraphs(html, entry.title);
     const paragraph = paragraphs.find((p) => p.id === paragraphID);
     if (!paragraph) throw new Error('paragraph not found');
-    const translation = await this.llm.translate(paragraph.original, config, apiKey, onDelta);
 
-    const contentHash = stableDigest(html);
-    const cacheArtifact = this.artifactsRepo.anyLatestArtifact({
-      itemID: entryID, kind: AIArtifactKind.bilingual, contentHash,
-    });
-    const segments = [...(cacheArtifact?.segments || []), { id: paragraphID, original: paragraph.original, translation }];
-    this.artifactsRepo.saveArtifact({
-      id: cacheArtifact?.id ?? uuid(),
-      accountID: entry.accountID,
-      itemID: entryID,
-      subjectKey: `bilingual:${entryID}`,
-      kind: AIArtifactKind.bilingual,
-      contentHash,
-      model: config.model,
-      targetLanguage: config.targetLanguage,
-      promptVersion: TRANSLATION_PROMPT_VERSION,
-      content: '',
-      segments,
-      isComplete: false,
-    });
-    return translation;
+    // P2-5：单飞锁——同 entry 并发流式翻译会在保存时互相整行覆盖丢段（与 generateBilingual 同模式）
+    const lockKey = `translation:${entryID}`;
+    if (this.activeAICancellers.has(lockKey)) throw new LLMServiceError('requestInProgress');
+    const canceller = createCanceller();
+    this.activeAICancellers.set(lockKey, canceller);
+
+    try {
+      const translation = await this.llm.translate(paragraph.original, config, apiKey, onDelta, canceller.controller.signal);
+
+      // P2-5：保存前重读最新 artifact——await 期间其他段落可能已落库，
+      // 用 await 前的快照整行保存会把那些段吞掉；按段 id 合并（同 id 新译覆盖旧译）
+      const contentHash = stableDigest(html);
+      const latestArtifact = this.artifactsRepo.anyLatestArtifact({
+        itemID: entryID, kind: AIArtifactKind.bilingual, contentHash,
+      });
+      const mergedByID = new Map((latestArtifact?.segments || []).map((s) => [s.id, s]));
+      mergedByID.set(paragraphID, { id: paragraphID, original: paragraph.original, translation });
+      this.artifactsRepo.saveArtifact({
+        id: latestArtifact?.id ?? uuid(),
+        accountID: entry.accountID,
+        itemID: entryID,
+        subjectKey: `bilingual:${entryID}`,
+        kind: AIArtifactKind.bilingual,
+        contentHash,
+        model: config.model,
+        targetLanguage: config.targetLanguage,
+        promptVersion: TRANSLATION_PROMPT_VERSION,
+        content: '',
+        segments: Array.from(mergedByID.values()),
+        isComplete: false,
+      });
+      return translation;
+    } finally {
+      this.activeAICancellers.delete(lockKey);
+    }
   }
 
   cachedBilingual(entryID, html) {

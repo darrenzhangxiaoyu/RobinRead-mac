@@ -5,13 +5,16 @@
  * 网络：本地 node:http 假 WebDAV 服务器（最小内存文件系统：PROPFIND/GET/PUT/MKCOL/MOVE
  * + Basic Auth + ETag/If-Match），客户端走真实 WebDAVClient（无注入短路）。覆盖（对应 F7 探针 10 条）：
  *  1 WebDAV 客户端：PROPFIND 存在/不存在、GET 404/200、PUT 上行内容一致、MKCOL、MOVE、
- *    401 认证分类、412 冲突分类、超时分类
+ *    401 认证分类、412 冲突分类、超时分类、GET >8MB 响应护栏（tooLarge）
  *  2 快照序列化/解析 roundtrip + 8MB 护栏 + annotations 5000 截断 + progress 截断
+ *    + 删除墓碑 roundtrip（deletedFeedIDs）+ 旧快照无墓碑字段兼容
  *  3 合并幂等：同快照合并两次零 diff；双端各自新增 feeds/annotations → 并集正确；
- *    progress 新者胜；prefs 新者胜
+ *    progress 新者胜；prefs 新者胜；墓碑排除远端订阅（删除不复活）；重订阅（updatedAt 更新）胜过墓碑
  *  4 端到端（假 DAV）：设备 A 上传 → 设备 B（空库+另一 deviceId）下载合并 → B 得到 A 的
  *    订阅/批注/偏好/进度；B 新增批注 → 同步回 A → A 得到
  *  5 本地优先红线：远端独有批注被合并进来；本地独有数据永不被删；重复同步零新增（幂等）
+ *  5b 删除墓碑端到端：A 软删订阅 → 上行墓碑 → B 同步后同源订阅被软删（不再复活）；
+ *     B 重订阅 → 墓碑失效，A 复活且无重复行
  *  6 自动同步触发：kick 节流（<10 分钟抑制 / 归零后放行 / 关闭后抑制）+ 手动立即同步
  *  7 凭据 DPAPI 存取 + 断开清除
  *  8 冲突路径：远端 updatedAt 更新（他机写入）→ GET 合并不上传（远端文件未被改写）
@@ -160,7 +163,7 @@ app.whenReady().then(async () => {
   const cleanup = [];
   try {
     const { AppStore } = require('../src/main/AppStore');
-    const { WebDAVClient, DAVError } = require('../src/main/Sync/WebDAVClient');
+    const { WebDAVClient, DAVError, RESPONSE_MAX_BYTES } = require('../src/main/Sync/WebDAVClient');
     const {
       serializeSnapshot, parseSnapshot, mergeSnapshots, SyncError,
       truncateAnnotations, annotationKey, SNAPSHOT_MAX_BYTES, ANNOTATION_LIMIT,
@@ -208,6 +211,15 @@ app.whenReady().then(async () => {
       let timeoutErr = null;
       try { await slowClient.get(slowClient.url('forever')); } catch (e) { timeoutErr = e; }
       ok(timeoutErr instanceof DAVError && timeoutErr.kind === 'timeout', `1 超时 → timeout 分类（${timeoutErr && timeoutErr.kind}）`);
+      // P2-6：GET 响应字节护栏（>8MB → tooLarge，中断下载不再整吞内存）
+      await client.put(client.url('robinread', 'probe-huge.bin'), 'x'.repeat(RESPONSE_MAX_BYTES + 1024));
+      let hugeErr = null;
+      try { await client.get(client.url('robinread', 'probe-huge.bin')); } catch (e) { hugeErr = e; }
+      ok(hugeErr instanceof DAVError && hugeErr.kind === 'tooLarge', `1 GET >8MB → tooLarge 分类（${hugeErr && hugeErr.kind}）`);
+      // 护栏边界内照常可读（8MB 以内小文件）
+      await client.put(client.url('robinread', 'probe-ok.bin'), 'y'.repeat(1024));
+      const okBody = await client.get(client.url('robinread', 'probe-ok.bin'));
+      ok(okBody.body.length === 1024, '1 GET 8MB 以内照常可读');
     }
 
     // ══ 2. 快照序列化 / 护栏 ══
@@ -240,6 +252,15 @@ app.whenReady().then(async () => {
       }));
       const kept = truncateAnnotations(many);
       ok(kept.length === ANNOTATION_LIMIT && Math.min(...kept.map((r) => r.createdAt)) === 100, '2 批注 >5000 → 截最旧（保留最新 5000）');
+      // P2-2：删除墓碑 roundtrip + 旧快照兼容
+      const tombSnap = { ...snap, deletedFeedIDs: [{ feedURL: 'https://x.test/gone.xml', deletedAt: 123 }, 'https://x.test/legacy.xml'] };
+      const tombParsed = parseSnapshot(serializeSnapshot(tombSnap));
+      ok(Array.isArray(tombParsed.deletedFeedIDs) && tombParsed.deletedFeedIDs.length === 2
+        && tombParsed.deletedFeedIDs[0].feedURL === 'https://x.test/gone.xml' && tombParsed.deletedFeedIDs[0].deletedAt === 123
+        && tombParsed.deletedFeedIDs[1].deletedAt === 0,
+        '2 删除墓碑 roundtrip（对象/旧式字符串混排归一化）');
+      const legacyParsed = parseSnapshot(serializeSnapshot(snap)); // snap 无 deletedFeedIDs 字段 = 旧快照
+      ok(Array.isArray(legacyParsed.deletedFeedIDs) && legacyParsed.deletedFeedIDs.length === 0, '2 旧快照无墓碑字段 → 兼容（空数组）');
     }
 
     // ══ 3. 合并纯函数：幂等 + 并集 + 新者胜 ══
@@ -290,6 +311,22 @@ app.whenReady().then(async () => {
       ok(localNewer.merged.prefs.values.appTheme === 'light' && localNewer.stats.prefsSource === 'local', '3 prefs 本机更新时本地胜');
       const tagsOf = m.tags['https://f.test/a1'].map((x) => x.t).sort();
       ok(deepEqual(tagsOf, ['本地', '远端']), '3 tags 并集');
+      // P2-2：墓碑排除远端订阅（删除不复活）+ 重订阅（updatedAt 晚于墓碑）胜过墓碑
+      const tLocal = { ...local, deletedFeedIDs: [{ feedURL: 'https://f.test/b.xml', deletedAt: T + 40 }] }; // 本机删了 B 源（晚于远端记录 T+20）
+      const tombMerged = mergeSnapshots(tLocal, remote, { prefsDirtyAt: T });
+      ok(!tombMerged.merged.feeds.some((f) => f.feedURL === 'https://f.test/b.xml')
+        && tombMerged.merged.deletedFeedIDs.some((t) => t.feedURL === 'https://f.test/b.xml')
+        && tombMerged.stats.feedsExcludedByTombstone === 1, '3 墓碑排除远端订阅（删除不复活）');
+      const resubRemote = {
+        ...remote,
+        feeds: remote.feeds.map((f) => (f.feedURL === 'https://f.test/b.xml' ? { ...f, updatedAt: T + 50 } : f)),
+      };
+      const resubMerged = mergeSnapshots(tLocal, resubRemote, { prefsDirtyAt: T });
+      ok(resubMerged.merged.feeds.some((f) => f.feedURL === 'https://f.test/b.xml'), '3 重订阅（updatedAt 晚于墓碑）胜过墓碑');
+      // 幂等回归：墓碑版合并两次零 diff
+      const tombFirst = mergeSnapshots(tLocal, remote, { prefsDirtyAt: T });
+      const tombSecond = mergeSnapshots(tombFirst.merged, remote, { prefsDirtyAt: tombFirst.merged.prefs.updatedAt });
+      ok(deepEqual(tombFirst.merged, tombSecond.merged), '3 墓碑合并幂等：两次零 diff');
     }
 
     // ══ 4–8. 端到端（双设备 + 真 SyncService）══
@@ -435,6 +472,39 @@ app.whenReady().then(async () => {
       const pushed = JSON.parse(dav.fileText('/dav/robinread/sync.json'));
       ok(pushed.deviceId === 'device-A' && pushed.annotations.some((a) => a.text === 'C 的批注'),
         '8 pending 批注随上行快照保留（批注永不删）');
+    }
+
+    // ══ 5b. P2-2 删除墓碑端到端：A 删订阅 → 上行墓碑 → B 软删生效；B 重订阅 → A 复活 ══
+    {
+      const victim = storeA.feedsRepo.feedByURL(LOCAL_ACCOUNT_ID, 'https://b.test/daily.xml');
+      ok(!!victim, '5b 前置：A 持有 B 的日报订阅');
+      storeA.feedsRepo.updateFeed(victim.id, (f) => ({ ...f, isDeleted: true }));
+      const statDel = await storeA.sync.syncNow({ origin: 'manual' });
+      ok(['upload', 'merge-upload'].includes(statDel.direction),
+        `5b 删除算本机变更 → 墓碑随上行快照出发（direction=${statDel.direction}）`);
+      const remoteAfterDel = JSON.parse(dav.fileText('/dav/robinread/sync.json'));
+      ok((remoteAfterDel.deletedFeedIDs || []).some((t) => t.feedURL === 'https://b.test/daily.xml'),
+        '5b 远端快照含删除墓碑（deletedFeedIDs）');
+      await storeB.sync.syncNow({ origin: 'manual' });
+      const bRowAfter = storeB.database.prepare(
+        'SELECT is_deleted FROM feeds WHERE account_id = ? AND feed_url = ?',
+      ).get(LOCAL_ACCOUNT_ID, 'https://b.test/daily.xml');
+      ok(bRowAfter && Number(bRowAfter.is_deleted) === 1, '5b B 的同源订阅被墓碑软删（删除不再被同步复活）');
+      ok(storeB.sync.buildLocalSnapshot().deletedFeedIDs.some((t) => t.feedURL === 'https://b.test/daily.xml'),
+        '5b B 快照继承墓碑（删除可继续向第三台设备传播）');
+      ok((storeB.feedsRepo.feeds(LOCAL_ACCOUNT_ID) || []).every((f) => f.feedURL !== 'https://b.test/daily.xml'),
+        '5b B 活跃订阅列表不再含被删源');
+      // 重订阅胜过墓碑：B 重订阅同 URL → 上行 → A 复活且无重复行
+      storeB.feedsRepo.insertFeed({ accountID: LOCAL_ACCOUNT_ID, title: 'B 的日报', feedURL: 'https://b.test/daily.xml' });
+      await storeB.sync.syncNow({ origin: 'manual' });
+      await storeA.sync.syncNow({ origin: 'manual' });
+      const aRows = storeA.database.prepare(
+        'SELECT is_deleted FROM feeds WHERE account_id = ? AND feed_url = ?',
+      ).all(LOCAL_ACCOUNT_ID, 'https://b.test/daily.xml');
+      ok(aRows.length === 1 && Number(aRows[0].is_deleted) === 0,
+        `5b 重订阅跨设备复活且无重复行（rows=${aRows.length}）`);
+      const bActive = storeB.feedsRepo.feedByURL(LOCAL_ACCOUNT_ID, 'https://b.test/daily.xml');
+      ok(bActive && Number(bActive.isDeleted ?? 0) === 0, '5b B 重订阅行保持活跃');
     }
 
     // ══ 6. 自动同步：kick 节流 + 手动立即同步 ══

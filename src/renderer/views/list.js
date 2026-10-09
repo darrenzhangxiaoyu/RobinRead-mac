@@ -261,6 +261,10 @@ export class ListView {
     this._markNew = this._knownIds.size > 0;
     this.topInset.querySelector('.list-top-title').textContent = this.titleForScope(scope);
     this.rowsHost.innerHTML = '';
+    // P1-1：rowsHost 已整体清空——渲染代际 +1，旧渐进渲染 rAF 链（appendNext 闭包）即刻失效，
+    // 二次 render 后旧闭包不得继续 append 旧视野行（混排假象）；同时复位翻页抑制标志
+    this._renderGen = (this._renderGen || 0) + 1;
+    this._renderingPages = false;
 
     if (items.length === 0) {
       const empty = document.createElement('div');
@@ -318,10 +322,13 @@ export class ListView {
     const renderEntry = (entry) => entry.type === 'cluster' ? this.clusterRow(entry) : this.rowFor(entry.item);
     if (clusters.length > BATCH) {
       let idx = 0;
+      const gen = this._renderGen; // P1-1：闭包捕获本次渲染代际，过期链自动停摆
       // 渲染期间抑制 onLoadMore（R6 遗留）：分帧 append 不断推高 scrollHeight，
       // 滚动监听会把"还没渲染完"误判为"已到页尾"而提前翻页
       this._renderingPages = true;
       const appendNext = () => {
+        // P1-1：期间发生新的整体渲染（rowsHost 已被清空重建）——旧链立即停止，不碰新视野的 DOM/标志
+        if (gen !== this._renderGen) return;
         const end = Math.min(clusters.length, idx + BATCH);
         const frag = document.createDocumentFragment();
         for (; idx < end; idx += 1) frag.appendChild(renderEntry(clusters[idx]));

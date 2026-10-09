@@ -127,10 +127,14 @@ export class KnowledgeCenter {
       threads: async () => window.robin.threadsList(), // F13：线索聚类（_renderThreads 自取详情）
       dash: async () => window.robin.dashOverview(), // F16：源体检总览（60s 缓存）
     };
-    const loader = loads[this.tab];
+    // P1-5：await 前快照 tab——快速切 tab 时旧载荷不得写错键/错渲染；
+    // 落地时已切走则按快照键入缓存（回到该 tab 仍可用），但不渲染当前视图
+    const tab = this.tab;
+    const loader = loads[tab];
     if (!loader) return;
     const result = await loader();
-    this.data[this.tab] = result;
+    this.data[tab] = result;
+    if (this.tab !== tab) return; // 已切到其他 tab：只入缓存，不渲染
     this._renderContent();
   }
 

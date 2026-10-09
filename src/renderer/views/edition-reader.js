@@ -27,6 +27,8 @@ import { PAPERS, paperPref, setPaperPref, paperLabel } from './paper-pref.js';
 import { editionCoverArt } from './edition-cover-art.js';
 
 const escapeHTML = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// 属性位转义（P2）：与 escapeHTML 同表（已含引号转义），语义上标明用于 HTML 属性值内（src/title 等）
+const attr = escapeHTML;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 // ── 版面常量（MagazinePaginator）──
@@ -1720,7 +1722,7 @@ export class EditionReader {
         <div class="er-cover-title">${escapeHTML(this.title)}</div>
         <div class="er-rule"></div>
         ${volNum ? `<div class="er-cover-volbig"><span class="er-vol-label">${escapeHTML(t('总第'))}</span><span class="er-vol-num">${escapeHTML(volNum)}</span><span class="er-vol-label">${escapeHTML(t('期'))}</span></div>` : `<div class="er-cover-vol">${escapeHTML(this._coverVol())}</div>`}
-        ${lead ? `<div class="er-cover-lead"><img src="${escapeHTML(lead)}" alt="" referrerPolicy="no-referrer" loading="eager"></div><div class="er-cover-leadcap" title="${escapeHTML(leadEntry.title)}">${escapeHTML(leadEntry.title)}</div>` : `<div class="er-cover-stats">${escapeHTML(t('本期收录'))} ${this.items.length} ${escapeHTML(t('篇'))}</div>`}
+        ${lead ? `<div class="er-cover-lead"><img src="${attr(lead)}" alt="" referrerPolicy="no-referrer" loading="eager"></div><div class="er-cover-leadcap" title="${attr(leadEntry.title)}">${escapeHTML(leadEntry.title)}</div>` : `<div class="er-cover-stats">${escapeHTML(t('本期收录'))} ${this.items.length} ${escapeHTML(t('篇'))}</div>`}
         <div class="er-cover-date">${escapeHTML(this._coverDate())}</div>
       </div>`;
     if (first) {
@@ -2648,6 +2650,18 @@ export class EditionReader {
   // ────────────────────────────────────────────────
   _keydown(e) {
     if (!this.overlay) return;
+    // BLOCKER-1：输入框打字守卫——期刊搜索框（findbar input）等 INPUT/TEXTAREA/contentEditable
+    // 聚焦时，字母/符号键（f/s/l/p/?）必须原样进入输入框，不被 document 级 capture 键盘导航劫持；
+    // Ctrl/Cmd 组合键除外（Ctrl+F 仍呼出搜索条）。Esc 不在此拦截，交还输入框自身监听
+    // （findbar input 自带 Esc → _findClose，capture 放行后照常触发）。
+    if (!e.ctrlKey && !e.metaKey) {
+      const tgt = e.target;
+      const inEditable = Boolean(
+        tgt && (tgt.isContentEditable
+          || (typeof tgt.closest === 'function' && tgt.closest('input,textarea,[contenteditable]'))),
+      );
+      if (inEditable) return;
+    }
     // 灯箱开启时：Esc 放大态先复位再关闭、←→ 切换画廊图片，其余按键忽略防误翻页
     if (this._lightboxOn && this.overlay.querySelector('.er-lightbox.on')) {
       if (e.key === 'Escape') {

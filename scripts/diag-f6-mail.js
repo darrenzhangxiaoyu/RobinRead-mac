@@ -364,6 +364,13 @@ app.whenReady().then(async () => {
       ok(readBack === PASS, '7 CredentialStore 写入/读取（DPAPI）');
       store.credentials.setMailPassword(account.id, 'rotated-pw');
       ok(store.credentials.mailPassword(account.id) === 'rotated-pw', '7 密码可轮换');
+      // P2-3：解密失败（密文损坏/换环境密钥）→ 返回 null（不再把 DPAPI 密文当明文返回）
+      const credFile = path.join(userData, 'credentials', `mail-password-${account.id}.bin`);
+      fs.writeFileSync(credFile, Buffer.from([0x01, 0x00, 0x00, 0x00, 0xde, 0xad, 0xbe, 0xef]));
+      ok(store.credentials.mailPassword(account.id) === null, '7 损坏 DPAPI 密文 → null（不回退明文）');
+      // 非 DPAPI 魔数（首字节非 0x01）的明文兜底文件仍可读（无 DPAPI 环境写入的旧数据兼容）
+      fs.writeFileSync(credFile, Buffer.from('plain-fallback-pw', 'utf8'));
+      ok(store.credentials.mailPassword(account.id) === 'plain-fallback-pw', '7 非密文明文兜底仍可读');
       store.credentials.setMailPassword(account.id, PASS); // 还原供后续用例
     }
 

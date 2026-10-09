@@ -6,6 +6,9 @@
 :root {
   --accent: #617357;             /* rgb(0.38, 0.45, 0.34) */
   --accent-pressed: #4e5c47;
+  /* P2-4：--accent-ink 此前全库未定义（10+ 处靠 #f6f2e7 回退）。补定义：强调底上的墨。
+     暗态随 body.dark 提亮 accent 后按引擎 onAccent 逻辑翻深墨（见 body.dark）。 */
+  --accent-ink: #f6f2e7;
   --warm-accent: #a3573d;        /* rgb(0.64, 0.34, 0.24) */
   --chrome-background: #f2efe7;  /* rgb(0.948, 0.938, 0.907) */
   --page-background: #f6f2e7;    /* rgb(0.965, 0.949, 0.906) */
@@ -23,6 +26,9 @@
   --row-selected: rgba(97, 115, 87, 0.16);
   --unread-dot: #617357;
   --star-color: #a3573d;
+  /* P1-5：错误红语义令牌补定义（此前 6137/6175/6176/6282 已在消费 var(--danger,#c93b3b) 但令牌缺席）。
+     暗态提亮档见 body.dark。 */
+  --danger: #c93b3b;
   --kb-hl-yellow: #d4a834;      /* 知识卡「黄色高亮」描边：暗态见 body.dark 覆盖 */
   --shadow-card: 0 1px 2px rgba(41, 38, 32, 0.06), 0 4px 14px rgba(41, 38, 32, 0.05);
   --radius-card: 14px;
@@ -70,7 +76,9 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.25, 1);
   --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.15);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
-  --focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+  /* P2-6：55% 光环对纸底实算仅 2.10:1（弱于非文本 3:1 指标），80% 后浅色 3.18:1、
+     暗色（随 body.dark 提亮 accent）4.34:1；消费点 6048/6359/6376/6389/6813 自动跟随。 */
+  --focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent);
   /* ── U6 表面三档（卡片/弹层/模态）──
      浅色=现状等值别名（--surface-1 即摘要卡原公式、2=chrome、3=page，零回归）；
      暗色=由既有纸面令牌 color-mix 派生的三档浮起（见 body.dark），层与层可辨。 */
@@ -113,6 +121,15 @@ body.dark {
   --row-hover: rgba(238, 234, 224, 0.05);
   --row-selected: rgba(151, 178, 134, 0.14);
   --kb-hl-yellow: #c9a23d;      /* 暗态提亮一档，保持与暗纸面的可辨度 */
+  /* ── P1-1/P1-3/P1-5/P2-4：暗态语义色提亮（全部经 sRGB 相对亮度实算 ≥4.5，见 tmp-contrast-check）──
+     accent：审查建议 #7C9070 在 --note-background 上仅 4.16:1、surface-2/3 亦不足（4.48/4.32），
+     取同族再提一档 #8A9E7C——page/list/sidebar/note/surface-1/2/3 全部 4.97~6.02:1。 */
+  --accent: #8A9E7C;
+  --accent-pressed: #9BB08A;    /* 引擎暗态惯例=accent 提亮一档（+0.05L），按压仍可辨（page 上 7.43:1） */
+  --accent-ink: #1F231A;        /* 暗 accent 已提亮，按引擎 onAccent 逻辑翻深墨（accent 底 5.53:1） */
+  --warm-accent: #C98A6B;       /* 暖赭/星标暗态提亮：最亮纸面 note 上 5.02:1（原 #a3573d 仅 3.30） */
+  --star-color: #C98A6B;
+  --danger: #E07A6E;            /* 错误红暗态提亮：note 上 4.91:1（原 #c93b3b 仅 2.86） */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.25);
   /* ── U6-①：暗色表面三档分层（elevation）──
      自既有纸面令牌 color-mix 派生（note-background 为最亮暗纸面）：page(0%) → 卡片 45% → 弹层 65% → 模态 85%。
@@ -1101,7 +1118,7 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
   display: flex; align-items: center; gap: 8px;
   color: var(--text-secondary); font-size: 0.9em; margin-top: 4px;
 }
-.robin-summary-error { color: #c93b3b; }
+.robin-summary-error { color: var(--danger); }
 .robin-summary-action-btn {
   background: transparent; border: none; color: var(--accent);
   font-weight: 600; cursor: pointer; padding: 2px 6px;
@@ -1578,7 +1595,7 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
   max-height: 42vh; overflow-y: auto;
 }
 .nj-explanation-body.loading { color: var(--text-tertiary); }
-.nj-explanation-body.error { color: #c93b3b; }
+.nj-explanation-body.error { color: var(--danger); }
 /* Markdown 渲染后的 AI 回答 */
 .nj-explanation-body.rendered { white-space: normal; }
 .nj-explanation-body.rendered h1,
@@ -1881,7 +1898,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 }
 .btn-text:hover { filter: brightness(1.05); }
 .btn-text.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #f6f2e7); }
-.btn-text.danger { color: #c93b3b; }
+.btn-text.danger { color: var(--danger); }
 .btn-text:disabled { opacity: 0.45; pointer-events: none; }
 .btn-text.bordered { background: transparent; }
 .btn-text.icon-label { display: inline-flex; align-items: center; gap: 6px; }
@@ -1898,7 +1915,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 }
 .ai-test-status svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .ai-test-status.ok { color: #4e9c51; }
-.ai-test-status.err { color: #c93b3b; }
+.ai-test-status.err { color: var(--danger); }
 .ai-test-status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 服务商卡片（多服务商管理） */
@@ -1931,7 +1948,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 }
 .prov-actions { display: flex; gap: 4px; flex: 0 0 auto; }
 .prov-actions .btn { width: 26px; height: 26px; }
-.prov-actions .prov-del { color: #c93b3b; }
+.prov-actions .prov-del { color: var(--danger); }
 .prov-conn { border-top: 1px solid var(--separator); margin-top: 10px; }
 
 .toggle {
@@ -2026,7 +2043,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 .context-menu-item:hover { background: var(--row-selected); }
 .context-menu-item.disabled { color: var(--text-tertiary); opacity: 0.6; }
 .context-menu-item.disabled:hover { background: transparent; }
-.context-menu-item.destructive { color: #c93b3b; }
+.context-menu-item.destructive { color: var(--danger); }
 .context-menu-item .check { margin-left: auto; color: var(--accent); }
 .context-menu-separator { height: 1px; background: var(--separator); margin: 4px 9px; }
 
@@ -2294,7 +2311,7 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
 .td-json-btns .btn-text svg { width: 13px; height: 13px; }
 .td-json-status { font-size: var(--fs-lg); min-height: 16px; color: transparent; transition: color var(--dur-fast) var(--ease-out); }
 .td-json-status.ok { color: #4e9c51; }
-.td-json-status.err { color: #c93b3b; }
+.td-json-status.err { color: var(--danger); }
 
 /* 底部 */
 .td-footer {
@@ -2325,7 +2342,31 @@ body.zen .list-top-inset { display: none; }
   flex: 0 1 auto; min-width: 30px;            /* 让出空间给搜索框 */
 }
 .list-top-inset .tb-spring { flex: 0 0 6px; min-width: 6px; } /* 小弹簧 */
-.list-search { flex: 0 1 150px; min-width: 80px; margin-right: 17px !important; } /* 右缘避让滚动条（store.css 同名规则后加载，!important 保margin生效） */
+/* ── 列表搜索框（P2-5：全家族单点定义——原 store.css 同名分叉已撤，尺寸取两版级联后的生效值，
+   margin-right 去 !important）── */
+.list-search {
+  display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--separator); border-radius: var(--radius-sm); /* 修复轮收口：迁入 robin.css 时字面量 7px 归最近令牌（phase12 护栏） */
+  background: var(--page-background);
+  height: 26px; padding: 0 8px;
+  color: var(--text-tertiary);
+  flex: 0 1 170px; min-width: 90px;
+  margin-right: 17px; /* 右缘避让滚动条 */
+}
+.list-search:focus-within { border-color: var(--accent); }
+.list-search svg { width: 11px; height: 11px; flex: 0 0 auto; }
+.list-search input {
+  border: none; outline: none; background: transparent;
+  color: var(--text-primary); font-family: inherit; font-size: 12px; flex: 1; min-width: 0;
+}
+.list-search input::placeholder { color: var(--text-tertiary); }
+.list-search .clear {
+  border: none; background: transparent; color: var(--text-tertiary);
+  width: 24px; height: 24px; margin: 0 -4px; border-radius: var(--radius-sm);
+  display: none; align-items: center; justify-content: center; cursor: default; padding: 0;
+}
+.list-search.has-value .clear { display: inline-flex; }
+.list-search .clear:hover { color: var(--text-primary); background: var(--row-hover); }
 .digest-btn { flex: 0 0 auto; }                                 /* 简报按钮不缩 */
 
 /* 工具栏中区精确对齐（跟随列表实际宽度，含分割条 5px） */
@@ -2364,9 +2405,9 @@ body.zen .list-top-inset { display: none; }
 .kb-tag-chip:hover { border-color: var(--accent); color: var(--accent); }
 .kb-col-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .kb-col-top .kb-card-actions .btn { color: var(--text-tertiary); }
-.kb-col-top .kb-card-actions .btn:hover { color: #c93b3b; }
+.kb-col-top .kb-card-actions .btn:hover { color: var(--danger); }
 .kb-item-remove { color: var(--text-tertiary) !important; }
-.kb-item-remove:hover { color: #c93b3b !important; }
+.kb-item-remove:hover { color: var(--danger) !important; }
 .kb-review-remove { padding: 4px 10px; font-size: var(--fs-lg); }
 .kb-hl-text { padding: 4px 0 4px 10px; font-size: 13px; line-height: 1.6; color: var(--text-primary); user-select: text; }
 .kb-hl-note { font-size: 12px; color: var(--text-secondary); margin-top: 6px; padding-left: 13px; font-style: italic; }
@@ -2501,14 +2542,14 @@ body.zen .list-top-inset { display: none; }
 .evo-check.bad .evo-check-icon { color: #dd8a1e; }
 .evo-check-label { font-weight: 600; flex: 0 0 120px; }
 .evo-check-detail { color: var(--text-secondary); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evo-dead-feed { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #c93b3b; padding: 5px 12px; }
+.evo-dead-feed { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--danger); padding: 5px 12px; }
 .evo-dead-feed svg { width: 12px; height: 12px; }
 
 .evo-feed { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--separator); font-size: 12.5px; }
 .evo-feed-status { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .evo-feed-status.ok { background: #4e9c51; }
-.evo-feed-status.bad { background: #c93b3b; }
-.evo-feed.dead .evo-feed-name { color: #c93b3b; text-decoration: line-through; }
+.evo-feed-status.bad { background: var(--danger); }
+.evo-feed.dead .evo-feed-name { color: var(--danger); text-decoration: line-through; }
 .evo-feed-name { flex: 0 0 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .evo-feed-bar { flex: 1; height: 5px; background: var(--separator); border-radius: 3px; overflow: hidden; }
 .evo-feed-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
@@ -2598,10 +2639,11 @@ body.zen .list-top-inset { display: none; }
 .aihot-hero b { font-size: 14px; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .aihot-hero svg { width: 12px; height: 12px; color: var(--accent); vertical-align: -2px; }
 
-/* 奖牌排名 */
+/* 奖牌排名（P2-4：奖牌底为固定字面量红铜系，不随 accent 变——墨固定浅色，
+   不吃 --accent-ink 暗态深墨（深墨对 #c14e36 仅 3.36:1，浅墨 4.26:1）） */
 .aihot-rank.medal {
   width: 30px; height: 30px; line-height: 30px; border-radius: 50%;
-  color: var(--accent-ink, #f6f2e7); font-size: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+  color: #F6F2E7; font-size: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.18);
 }
 .aihot-rank.medal.m1 { background: #c14e36; }
 .aihot-rank.medal.m2 { background: #b45a3a; }
@@ -2683,13 +2725,13 @@ body.zen .list-top-inset { display: none; }
   display: flex; gap: 12px; padding: 14px; margin-bottom: 10px;
   border: 1px solid var(--separator); border-radius: var(--radius-lg);
 }
-.aihot-skeleton-rank { width: 26px; height: 26px; border-radius: 50%; background: var(--row-selected); animation: aihot-pulse 1.4s ease infinite; }
+.aihot-skeleton-rank { width: 26px; height: 26px; border-radius: 50%; background: var(--row-selected); }
 .aihot-skeleton-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.aihot-skeleton-line { height: 10px; border-radius: 5px; background: var(--row-selected); animation: aihot-pulse 1.4s ease infinite; }
+.aihot-skeleton-line { height: 10px; border-radius: 5px; background: var(--row-selected); }
 .aihot-skeleton-line.w40 { width: 40%; }
 .aihot-skeleton-line.w70 { width: 70%; }
 .aihot-skeleton-line.w90 { width: 90%; }
-@keyframes aihot-pulse { 50% { opacity: 0.45; } }
+/* aihot-pulse 透明度脉冲已随 P2-1 拆除（骨架统一走 ::before translateX shimmer），无残留消费 */
 
 /* AI 深读面板 */
 .aihot-deep-title { font-family: var(--font-serif); font-size: 17px; font-weight: 700; line-height: 1.45; margin: 4px 0 14px; }
@@ -2792,7 +2834,7 @@ body.zen .list-top-inset { display: none; }
   content: '▍'; color: var(--accent); animation: digest-caret 1s steps(2) infinite;
 }
 .study-panel-loading { color: var(--text-tertiary); font-size: 12.5px; }
-.study-panel-error { color: #c93b3b; font-size: 12.5px; }
+.study-panel-error { color: var(--danger); font-size: 12.5px; }
 
 /* ==========================================================================
    批注系统：荧光笔高亮 / 划词色条 / 高亮菜单 / 便签笔记 / 批注面板
@@ -2824,14 +2866,23 @@ body.zen .list-top-inset { display: none; }
   text-decoration-thickness: 1.5px;
   text-underline-offset: 0.28em;
 }
-/* 面板跳转定位闪烁 */
-.reader-article .nj-flash,
-.reader-article mark.nj-hl.nj-flash {
+/* 面板跳转定位闪烁（P2-1：光环改伪元素 opacity 合成动画，替代逐帧 box-shadow 重绘；
+   reduced-motion 由全局收敛块覆盖 *::after） */
+.reader-article .nj-flash {
+  position: relative;
+}
+.reader-article .nj-flash::after {
+  content: '';
+  position: absolute; inset: -3px;
+  border-radius: var(--radius-xs);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent);
+  opacity: 0;
+  pointer-events: none;
   animation: annot-flash 1s ease-out 1;
 }
 @keyframes annot-flash {
-  0%, 60% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 55%, transparent); border-radius: var(--radius-xs); }
-  100% { box-shadow: 0 0 0 0 transparent; }
+  0%, 60% { opacity: 1; }
+  100% { opacity: 0; }
 }
 /* 暗色模式：高亮降饱和，保持文字对比 */
 body.dark .reader-article mark.nj-hl[data-color="yellow"] { background: rgba(163, 132, 56, 0.42); }
@@ -3107,7 +3158,7 @@ body.dark .nj-note-marker { color: #d3a952; }
   align-items: center; justify-content: center;
 }
 .annot-row:hover .annot-row-del { display: flex; }
-.annot-row-del:hover { background: rgba(201, 59, 59, 0.12); color: #c93b3b; }
+.annot-row-del:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .annot-row-del svg { width: 12px; height: 12px; }
 .annot-panel-empty {
   padding: 22px 10px 18px;
@@ -3569,7 +3620,7 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
   color: var(--text-secondary);
   white-space: nowrap;
 }
-.later-age.overdue { color: #c93b3b; font-weight: 600; }
+.later-age.overdue { color: var(--danger); font-weight: 600; }
 
 /* 快读 badge（≤2 分钟） */
 .read-min.fast { color: var(--accent); font-weight: 600; }
@@ -3684,7 +3735,7 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
   margin: 24px auto;
   display: block;
 }
-.kb-ask-answer.kb-ask-error { color: #c93b3b; }
+.kb-ask-answer.kb-ask-error { color: var(--danger); }
 .kb-ask-refs { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; }
 .kb-ask-refs:empty { display: none; }
 
@@ -3723,15 +3774,22 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
 }
 .read-min svg { width: 11px; height: 11px; }
 
-/* 杂志封面加载 shimmer（图加载完成前呼吸流光） */
+/* 杂志封面加载 shimmer（图加载完成前呼吸流光）
+   P2-1：光带位移改 ::before translateX（合成器路径），不再逐帧重绘 background-position；
+   .mag-cover 自带 position:relative + overflow:hidden 承接裁剪 */
 .nj-mag-card .mag-cover:has(img:not(.nj-cover-loaded)) {
-  background: linear-gradient(100deg, transparent 32%, rgba(255, 255, 255, 0.28) 50%, transparent 68%), var(--note-background);
-  background-size: 220% 100%;
+  background: var(--note-background);
+}
+.nj-mag-card .mag-cover:has(img:not(.nj-cover-loaded))::before {
+  content: '';
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 32%, rgba(255, 255, 255, 0.28) 50%, transparent 68%);
   animation: kb-shimmer 1.5s linear infinite;
 }
 @keyframes kb-shimmer {
-  from { background-position: 180% 0; }
-  to { background-position: -80% 0; }
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
 }
 
 /* 灯箱图片 scale-in */
@@ -3876,21 +3934,21 @@ body.dark .robin-header-original-actions .nj-later-header-btn.active {
 }
 .nj-later-header-btn svg { width: 11px; height: 11px; }
 
-/* ── 存储治理设置按钮 ── */
+/* ── 存储治理设置按钮 ──
+   P2-3：--border/--surface 全仓库未定义（幻影令牌），归 U6/U2 真实令牌；
+   暗态由令牌自动跟随，删除原 body.dark 白色叠加补丁。 */
 .nj-settings-button {
   padding: 4px 14px;
-  border: 1px solid var(--border, rgba(0,0,0,0.14));
+  border: 1px solid var(--separator);
   border-radius: var(--radius-md);
-  background: var(--surface, #fff);
+  background: var(--surface-1);
   color: inherit;
   font-size: 12px;
   cursor: pointer;
   min-width: 88px;
 }
-.nj-settings-button:hover:not(:disabled) { background: rgba(0,0,0,0.04); }
+.nj-settings-button:hover:not(:disabled) { background: var(--row-hover); }
 .nj-settings-button:disabled { opacity: 0.6; cursor: default; }
-body.dark .nj-settings-button { border-color: rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); }
-body.dark .nj-settings-button:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
 
 /* ── 沉浸杂志视图（借鉴上游 PaperRss v1.4.0 Magazine View）── */
 .nj-mag-grid {
@@ -3906,7 +3964,7 @@ body.dark .nj-settings-button:hover:not(:disabled) { background: rgba(255,255,25
   border: 1px solid rgba(60, 50, 36, 0.12);
   border-radius: var(--radius-xl);
   overflow: hidden;
-  background: var(--surface, #fbf8f1);
+  background: var(--surface-1); /* P2-3：幻影 var(--surface,#fbf8f1) 归表面第一档（暗态自动跟随） */
   cursor: pointer;
   outline: none;
   transition: transform var(--dur-mid) var(--ease-out), box-shadow var(--dur-mid) var(--ease-out), border-color var(--dur-mid) var(--ease-out);
@@ -4038,7 +4096,8 @@ body.dark .reader-article img.nj-invert-art {
   margin-left: auto;
   margin-right: 4px;
   border-radius: 50%;
-  background: #d97a2b;
+  /* P2-7：#d97a2b 配白字仅 3.10:1，压深至 #b35c14（白字 4.71:1）；暗态提亮档不变 */
+  background: #b35c14;
   color: #fff;
   font-size: var(--fs-2xs);
   font-weight: 700;
@@ -4205,13 +4264,14 @@ textarea:focus-visible,
 }
 .kb-tag-bar-num { width: 32px; flex-shrink: 0; font-size: 0.8em; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
-/* ── 文章加载骨架屏（R6，替代 spinner）── */
+/* ── 文章加载骨架屏（R6，替代 spinner）──
+   P2-1：shimmer 光带位移归 ::before translateX（见 U11 统一 shimmer 层），元素只留底色 */
 .nj-skeleton-article { padding: 8% 6%; }
 .nj-sk {
+  position: relative;
+  overflow: hidden;
   border-radius: var(--radius-sm);
-  background: linear-gradient(100deg, var(--row-selected) 35%, var(--row-hover) 50%, var(--row-selected) 65%);
-  background-size: 220% 100%;
-  animation: kb-shimmer 1.4s linear infinite;
+  background: var(--row-selected);
 }
 .nj-sk-title { height: 26px; width: 70%; margin-bottom: 12px; }
 .nj-sk-meta { height: 12px; width: 40%; margin-bottom: 22px; }
@@ -4416,7 +4476,8 @@ body[data-bilingual-style="card"] .reader-article .nj-t {
 .nj-tts-player.is-live .nj-tts-wave i:nth-child(3) { animation-delay: 0.24s; }
 .nj-tts-player.is-live .nj-tts-wave i:nth-child(4) { animation-delay: 0.36s; }
 .nj-tts-player.is-live .nj-tts-wave i:nth-child(5) { animation-delay: 0.48s; }
-@keyframes nj-tts-wave { 0%, 100% { height: 5px; } 50% { height: 15px; } }
+/* P2-1：律动改 scaleY 合成动画（基准高 5px ×1~×3 = 原 5→15px），不再逐帧改 height 触发 layout */
+@keyframes nj-tts-wave { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(3); } }
 @media (prefers-reduced-motion: reduce) {
   .nj-tts-player.is-live .nj-tts-wave i { animation: none; height: 9px; }
 }
@@ -4735,6 +4796,10 @@ body.dark .list-scroll.nj-mag-paper { background: linear-gradient(180deg, #26231
 body.dark .list-scroll.nj-mag-white { background: #1c1c1c; }
 body.dark .list-scroll.nj-mag-book { background: linear-gradient(180deg, #2d281f, #262119); }
 body.dark .list-scroll.nj-mag-kraft { background: linear-gradient(180deg, #352b1d, #2b2318); }
+/* P1-2：暗色刊头品牌墨——上方 #6b5335/#7a5c33 无暗态 counterpart，暗纸底实测 2.03/2.25:1 近乎隐形；
+   补暗色品牌墨 #C9B48A（book 暗纸最亮端 7.23:1、kraft 6.85:1）。 */
+body.dark .list-scroll.nj-mag-book .nj-edition-brand, body.dark .list-scroll.nj-mag-book .nj-edition-date { color: #C9B48A; }
+body.dark .list-scroll.nj-mag-kraft .nj-edition-brand, body.dark .list-scroll.nj-mag-kraft .nj-edition-date { color: #C9B48A; }
 /* 强调色随纸态微调（R17）：列表刊头与阅读器同族 */
 .list-scroll.nj-mag-white { --accent: #50604A; }
 .list-scroll.nj-mag-book { --accent: #5D6B49; }
@@ -4761,7 +4826,9 @@ body.dark .list-scroll.nj-mag-kraft .nj-mag-card { background: rgba(255, 255, 25
    纸张三态 paper/white/book 与列表「纸张质感」共用 robinread.magPaper；
    版面常量见 edition-reader.js（版心1480/页边36/中缝40/页眉76/滑轨52）。 */
 .er-overlay {
-  --erp-paper: #F6F2E7; --erp-ink: #2B2721; --erp-muted: #8B8574; --erp-stage: #E7E0D1; --erp-stage-hi: #F0EBDF;
+  /* P1-4：--erp-muted 承载页眉标题/TOC 页码等真实文本，#8B8574 于纸底仅 3.29:1；
+     压深至 #6F6A5C（paper 4.82:1 / white 5.40:1）。book/kraft 各自的 muted 同步实算校准。 */
+  --erp-paper: #F6F2E7; --erp-ink: #2B2721; --erp-muted: #6F6A5C; --erp-stage: #E7E0D1; --erp-stage-hi: #F0EBDF;
   /* 阅读排版三档（R1）：密度与页边由 dataset 驱动 */
   --er-leading: 1.92; --er-para: 1.15em; --er-inset-x: 36px;
   position: fixed; inset: 0; z-index: 900; overflow: hidden;
@@ -4772,8 +4839,8 @@ body.dark .list-scroll.nj-mag-kraft .nj-mag-card { background: rgba(255, 255, 25
 @keyframes erOverlayIn { from { opacity: 0; } to { opacity: 1; } }
 .er-overlay.er-dark { --erp-paper: #211F1A; --erp-ink: #E6E0D2; --erp-muted: #98917F; --erp-stage: #232120; --erp-stage-hi: #2B2927; }
 .er-overlay[data-paper="white"] { --erp-paper: #FFFFFF; --erp-grain: none; }
-.er-overlay[data-paper="book"] { --erp-paper: #EFE2C8; --erp-muted: #74684E; }
-.er-overlay[data-paper="kraft"] { --erp-paper: #E9DCC0; --erp-ink: #2E281C; --erp-muted: #6E6047; --erp-stage: #E0D0AE; --erp-stage-hi: #EFE4CC; }
+.er-overlay[data-paper="book"] { --erp-paper: #EFE2C8; --erp-muted: #6A5F47; } /* P1-4：原 #74684E 于 book 纸 4.27:1 → 4.90:1 */
+.er-overlay[data-paper="kraft"] { --erp-paper: #E9DCC0; --erp-ink: #2E281C; --erp-muted: #695C42; --erp-stage: #E0D0AE; --erp-stage-hi: #EFE4CC; } /* P1-4：#6E6047 仅 4.51:1 贴线 → 4.82:1 */
 .er-overlay.er-dark[data-paper="white"] { --erp-paper: #1C1C1C; --erp-grain: none; }
 .er-overlay.er-dark[data-paper="book"] { --erp-paper: #2D281F; --erp-muted: #ADA288; }
 .er-overlay.er-dark[data-paper="kraft"] { --erp-paper: #2E2820; --erp-ink: #F0E9D9; --erp-muted: #C9BFA9; --erp-stage: #2C2316; --erp-stage-hi: #3A2F1E; }
@@ -5331,10 +5398,11 @@ body.dark .list-scroll.nj-mag-kraft .nj-mag-card { background: rgba(255, 255, 25
   gap: 1px;
   padding: 2px;
   border-radius: 9px;
-  background: rgba(250, 248, 242, 0.82);
+  /* P2-2：半透明底+backdrop blur 在每个列表行常驻一档滤镜；改表面实底令牌
+     （暗态自动走 --surface-2 暗档，顺带修掉暗色下浅色胶囊浮层） */
+  background: var(--surface-2);
   border: 1px solid var(--separator);
   box-shadow: 0 2px 8px rgba(40, 36, 28, 0.10);
-  backdrop-filter: blur(10px);
   opacity: 0;
   transform: translateY(-2px);
   transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
@@ -5695,7 +5763,7 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 .list-empty-refresh {
   appearance: none;
   border: 1px solid var(--separator);
-  background: var(--surface, #fff);
+  background: var(--surface-1); /* P2-3：幻影 var(--surface,#fff) 暗色下渲染白胶囊，归表面第一档 */
   color: var(--accent);
   font-family: inherit;
   font-size: 12.5px;
@@ -6134,7 +6202,7 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 .nj-topic-input:focus-visible { border-color: var(--accent); outline: none; }
 .nj-topic-lanes { display: flex; flex-wrap: wrap; gap: 14px; }
 .nj-topic-lane { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
-.nj-topic-form-err { font-size: 12px; color: var(--danger, #c93b3b); min-height: 0; }
+.nj-topic-form-err { font-size: 12px; color: var(--danger); min-height: 0; }
 .nj-topic-stream-title { flex: 1; min-width: 0; }
 .nj-topic-stream-title h3 { margin: 0; font-size: 16px; }
 .nj-topic-stream-meta { font-size: var(--fs-lg); color: var(--text-tertiary); margin-top: 2px; }
@@ -6172,8 +6240,8 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 .nj-research-live p { margin: 6px 0; }
 .nj-research-error {
   margin-top: 10px; padding: 9px 12px; font-size: 12.5px; line-height: 1.6;
-  color: var(--danger, #c93b3b);
-  background: color-mix(in srgb, var(--danger, #c93b3b) 8%, transparent);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
   border-radius: var(--radius-sm);
 }
 .nj-research-item {
@@ -6279,7 +6347,7 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
   border: 2px solid var(--row-selected); border-top-color: var(--accent);
   border-radius: 50%; animation: rotate 0.8s linear infinite; margin: 12px auto; display: block;
 }
-.nj-rag-msg-error { border-color: color-mix(in srgb, var(--danger, #c93b3b) 40%, var(--hairline)); }
+.nj-rag-msg-error { border-color: color-mix(in srgb, var(--danger) 40%, var(--hairline)); }
 .nj-rag-cancel-note { margin-top: 8px; font-size: 12px; color: var(--warm-accent); }
 .nj-rag-retrieval-label { margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .nj-rag-materials {
@@ -6558,16 +6626,25 @@ body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24
 .nj-skeleton-list { display: flex; flex-direction: column; }
 .nj-sk-row { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; }
 .nj-sk-row + .nj-sk-row { border-top: 1px solid var(--separator); }
-.nj-sk-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: var(--radius-full); margin-top: 6px; background: var(--row-selected); animation: kb-shimmer 1.4s linear infinite; }
+.nj-sk-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: var(--radius-full); margin-top: 6px; background: var(--row-selected); }
 .nj-sk-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 7px; }
 .nj-sk-lines .nj-sk-line { height: 11px; margin-bottom: 0; }
 .w45 { width: 45%; }
-/* AIHOT 骨架并入统一 shimmer 语言（透明度脉冲 → 渐变位移，与阅读器/列表同语言） */
-.aihot-skeleton-rank, .aihot-skeleton-line {
-  background: linear-gradient(100deg, var(--row-selected) 35%, var(--row-hover) 50%, var(--row-selected) 65%);
-  background-size: 220% 100%;
+/* ── P2-1：shimmer 位移层统一收口为伪元素 translateX（合成器路径，替代 background-position 逐帧重绘）──
+   消费方只保留底色，光带由 ::before 绘制；reduced-motion 由全局收敛块（*::before）覆盖。 */
+.nj-sk, .nj-sk-dot, .aihot-skeleton-rank, .aihot-skeleton-line {
+  position: relative;
+  overflow: hidden;
+}
+.nj-sk::before, .nj-sk-dot::before, .aihot-skeleton-rank::before, .aihot-skeleton-line::before {
+  content: '';
+  position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 35%, var(--row-hover) 50%, transparent 65%);
   animation: kb-shimmer 1.4s linear infinite;
 }
+/* AIHOT 骨架并入统一 shimmer 语言（透明度脉冲已废：2686 区残留的 aihot-pulse 一并拆除） */
+.aihot-skeleton-rank, .aihot-skeleton-line { border-radius: var(--radius-sm); }
 
 /* ── U11 ③ 进度语言：呼吸点 / 不确定进度条（transform+opacity 合成层动画）── */
 .nj-breath {

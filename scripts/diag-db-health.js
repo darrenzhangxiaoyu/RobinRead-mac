@@ -20,6 +20,9 @@
  *  D1 嵌套事务：内层 SAVEPOINT 回滚不炸外层，外层可继续提交
  *  D2 整批单事务原子性：外层回滚 → items/articles/FTS/映射全部消失
  *  E1 性能：500 篇批量灌文（含 FTS）耗时应远小于旧逐篇事务方案
+ *  F1 偏好原子写（P1-1）：flushSync 落盘内容就位且无 .tmp 残留
+ *  F2 偏好损坏留存（P1-1）：截断 JSON → corrupt-<ts> 留存 + 空偏好起步（不再无痕清零）
+ *  F3 偏好非对象 JSON（P1-1）：合法 JSON 但根非对象 → 同样按损坏留存处理
  */
 const path = require('node:path');
 const fs = require('node:fs');
@@ -155,6 +158,44 @@ app.whenReady().then(() => {
   // 搜索冒烟：批量后 MATCH 仍可用
   const found = db.prepare(`SELECT COUNT(*) c FROM articles_fts WHERE articles_fts MATCH '"robinread"'`).get().c;
   ok(found === 500, `E1 批量后搜索命中 500（实际 ${found}）`);
+
+  // ── F. P1-1 偏好存储：原子写 + 损坏留存 ──
+  {
+    const prefsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'robinread-prefs-'));
+    app.setPath('userData', prefsDir); // PreferenceStore 构造时才读 userData，此处隔离探针写放
+    const { PreferenceStore } = require('../src/main/Persistence/LibraryDatabase');
+    const prefsPath = path.join(prefsDir, 'preferences.json');
+
+    // F1 原子写：内容就位、无 .tmp 残留
+    const ps1 = new PreferenceStore();
+    ps1.set('RobinRead.appTheme', 'dark');
+    ps1.set('RobinRead.articleFontSize', 18);
+    ps1.flushSync();
+    ok(JSON.parse(fs.readFileSync(prefsPath, 'utf8'))['RobinRead.appTheme'] === 'dark'
+      && !fs.existsSync(`${prefsPath}.tmp`),
+      'F1 flushSync 原子写内容就位且无 .tmp 残留');
+
+    // F2 截断 JSON（崩溃/断电现场）→ 原文件改名留存 + 空偏好起步
+    fs.writeFileSync(prefsPath, '{"RobinRead.appTheme":"dar', 'utf8');
+    const ps2 = new PreferenceStore();
+    const corrupt1 = fs.readdirSync(prefsDir).filter((f) => f.startsWith('preferences.json.corrupt-'));
+    ok(Object.keys(ps2.values).length === 0 && corrupt1.length === 1,
+      `F2 截断 JSON → corrupt-<ts> 留存 ${corrupt1.length} 份 + 空偏好起步`);
+    // 损坏后写回不吞留存文件
+    ps2.set('RobinRead.appTheme', 'light');
+    ps2.flushSync();
+    ok(JSON.parse(fs.readFileSync(prefsPath, 'utf8'))['RobinRead.appTheme'] === 'light',
+      'F2 损坏恢复后 flushSync 正常写回新值');
+
+    // F3 合法 JSON 但根非对象（数组）→ 同样按损坏留存
+    fs.writeFileSync(prefsPath, '[]', 'utf8');
+    const ps3 = new PreferenceStore();
+    const corrupt2 = fs.readdirSync(prefsDir).filter((f) => f.startsWith('preferences.json.corrupt-'));
+    ok(Object.keys(ps3.values).length === 0 && corrupt2.length === 2,
+      `F3 非对象 JSON → 按损坏留存（累计 ${corrupt2.length} 份）`);
+
+    fs.rmSync(prefsDir, { recursive: true, force: true });
+  }
 
   lib.close();
   fs.rmSync(dir, { recursive: true, force: true });

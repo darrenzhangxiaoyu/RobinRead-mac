@@ -41,6 +41,10 @@ const TTS_PLAY_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"
 const TTS_PAUSE_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><path d="M4.6 3h2.3v10H4.6zM9.1 3h2.3v10H9.1z"/></svg>';
 const TTS_STOP_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"><rect x="3.8" y="3.8" width="8.4" height="8.4" rx="1.2"/></svg>';
 
+// P1-6：链接精读代际计数——在途 extractUrl 期间用户点了列表文章或发起新的链接精读时，
+// 旧落地载荷凭代际失配丢弃，不得顶换当前阅读意图
+let openExternalSeq = 0;
+
 export class ReaderView {
   constructor(scrollEl, refs, handlers) {
     this.scrollEl = scrollEl;
@@ -289,9 +293,14 @@ export class ReaderView {
     let host = '';
     try { host = new URL(url).hostname; } catch (_) { host = url; }
     this.handlers.onFeedback?.(t('正在抓取链接并生成精读…'));
+    // P1-6：进入时记意图——代际 token（更新的链接精读使其过期）+ 当前选中 entryID
+    // （抓取在途点了列表文章即变化）。渲染前两者任一失配即丢弃，不顶换新意图。
+    const gen = ++openExternalSeq;
+    const intentEntryID = this.entryID;
     this._showLoading();
     try {
       const result = await window.robin.extractUrl(url);
+      if (gen !== openExternalSeq || this.entryID !== intentEntryID) return false; // 已被更新的打开动作取代
       if (!result?.ok || !result.data?.html || plainLen(result.data.html) < 40) {
         this.handlers.onFeedback?.(t('链接精读失败（站点限制或需要登录），请稍后重试或在浏览器打开。'));
         return false;
@@ -2356,6 +2365,12 @@ export class ReaderView {
           body.textContent = result.error;
         }
         position();
+      }).catch((err) => {
+        // P2：IPC promise 拒绝（主进程异常/通道失败）不得留永久 loading——呈错误文案并解锁弹层
+        if (this.popover !== popover) return;
+        body.className = 'nj-explanation-body error';
+        body.textContent = String(err?.message || err) || t('请求失败，请稍后重试。');
+        position();
       });
     };
 
@@ -2388,9 +2403,11 @@ export class ReaderView {
       const observer = new MutationObserver(() => {
         if (!body.classList.contains('loading') && body.textContent) {
           observer.disconnect();
+          this._popoverObserver = null;
           this._insertAnnotationIcon(payload, this._lastExplanationText || body.textContent);
         }
       });
+      this._popoverObserver = observer; // P2：弹层先行关闭时由 _dismissPopover 统一 disconnect，防观察器泄漏
       observer.observe(body, { attributes: true, attributeFilter: ['class'] });
     }
 
@@ -2472,6 +2489,10 @@ export class ReaderView {
     if (this._popoverEscHandler) {
       document.removeEventListener('keydown', this._popoverEscHandler, true);
       this._popoverEscHandler = null;
+    }
+    if (this._popoverObserver) {
+      this._popoverObserver.disconnect(); // P2：解释观察器随弹层关闭释放，不挂在已分离节点上泄漏
+      this._popoverObserver = null;
     }
     this._popoverRun = null;
     this._popoverPayload = null;

@@ -8,12 +8,14 @@
  *   MKCOL（建目录）/ MOVE（原子替换）；
  * - 鉴权：Basic Auth（用户名 + CredentialStore DPAPI 密码，本体不落日志）；
  * - 超时：单请求默认 30s（AbortController），超时归类 kind='timeout'；
+ * - 响应护栏：单响应默认 8MB 上限（对齐上传侧快照护栏），超限中断下载并归类
+ *   kind='tooLarge'（P2-6：原先 arrayBuffer() 无上限，异常响应可拖垮主进程内存）；
  * - 错误分类：auth（401/403）/ notFound（404）/ locked（423）/ conflict（412）/
- *   server（5xx 及其余 4xx）/ network（连接层）/ timeout。
+ *   server（5xx 及其余 4xx）/ network（连接层）/ timeout / tooLarge。
  * 单连接顺序请求、无 TLS 会话复用 → 不存在 F6 那类 TLS destroy 竞态，无需 worker。
  */
 
-/** 分类错误：kind ∈ auth|notFound|locked|conflict|server|network|timeout。 */
+/** 分类错误：kind ∈ auth|notFound|locked|conflict|server|network|timeout|tooLarge。 */
 class DAVError extends Error {
   constructor(kind, message, { status = null } = {}) {
     super(message);
@@ -54,6 +56,40 @@ function parseHrefs(xmlText) {
   return out;
 }
 
+/** 单响应字节上限（对齐上传侧快照 8MB 护栏；超限中断下载）。 */
+const RESPONSE_MAX_BYTES = 8 * 1024 * 1024;
+
+/**
+ * 流式读响应体并施加字节上限（P2-6）：超限立即 cancel 连接并抛 tooLarge，
+ * 不再无上限 arrayBuffer() 把异常大响应整吞进主进程内存。
+ * body 流不可用（罕见实现）时退回整体读取后校验。
+ */
+async function readBodyCapped(response, maxBytes, method) {
+  const reader = response.body && typeof response.body.getReader === 'function'
+    ? response.body.getReader()
+    : null;
+  if (!reader) {
+    const buf = Buffer.from(await response.arrayBuffer());
+    if (buf.length > maxBytes) {
+      throw new DAVError('tooLarge', `WebDAV response exceeds limit (${buf.length} > ${maxBytes} bytes) (${method})`);
+    }
+    return buf;
+  }
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value ? value.byteLength : 0;
+    if (total > maxBytes) {
+      try { await reader.cancel(); } catch (_) { /* 连接已中止 */ }
+      throw new DAVError('tooLarge', `WebDAV response exceeds limit (> ${maxBytes} bytes) (${method})`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks);
+}
+
 class WebDAVClient {
   /**
    * @param {object} opts
@@ -84,8 +120,8 @@ class WebDAVClient {
     return headers;
   }
 
-  /** 单请求：超时（AbortController）+ 错误分类。返回 { status, headers, buf }。 */
-  async request(method, url, { headers = {}, body = null, timeoutMs = null } = {}) {
+  /** 单请求：超时（AbortController）+ 响应字节护栏 + 错误分类。返回 { status, headers, buf }。 */
+  async request(method, url, { headers = {}, body = null, timeoutMs = null, maxBytes = RESPONSE_MAX_BYTES } = {}) {
     const budget = Number(timeoutMs) || this.timeoutMs;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), budget);
@@ -106,7 +142,8 @@ class WebDAVClient {
     } finally {
       clearTimeout(timer);
     }
-    const buf = Buffer.from(await response.arrayBuffer());
+    // P2-6：响应体流式读取 + 字节上限（默认 8MB，对齐上传侧护栏）；超限中断连接
+    const buf = await readBodyCapped(response, maxBytes, method);
     const status = response.status;
     // HTTP 层错误分类（2xx/3xx 由调用方按方法语义处理）
     if (status === 401 || status === 403) {
@@ -186,4 +223,4 @@ class WebDAVClient {
   }
 }
 
-module.exports = { WebDAVClient, DAVError, useNetFetch, joinURL, encodeSegment, parseHrefs };
+module.exports = { WebDAVClient, DAVError, useNetFetch, joinURL, encodeSegment, parseHrefs, RESPONSE_MAX_BYTES };

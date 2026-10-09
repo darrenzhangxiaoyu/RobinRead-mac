@@ -3,7 +3,8 @@
  * RobinRead（知更）— WebDAV 多设备同步服务（F7）
  *
  * 本地优先：WebDAV 只是快照交换点（<base>/robinread/sync.json 单文件），
- * 任何设备可离线，重连后合并；合并语义见 Sync/merge.js（幂等，批注/本地独有数据永不删）。
+ * 任何设备可离线，重连后合并；合并语义见 Sync/merge.js（幂等，批注/本地独有数据永不删；
+ * 订阅删除经 deletedFeedIDs 墓碑传播，重订阅按 updatedAt 新者胜复活）。
  *
  * 同步决策：
  * - 远端无快照 → 直接 PUT 本机快照；
@@ -27,6 +28,7 @@ const {
   SNAPSHOT_VERSION,
   ANNOTATION_LIMIT,
   PROGRESS_LIMIT,
+  DELETION_TOMBSTONE_LIMIT,
   SyncError,
   annotationKey,
   serializeSnapshot,
@@ -270,6 +272,17 @@ class SyncService {
       updatedAt: safeNumber(row.updated_at),
     }));
 
+    // 删除墓碑（P2-2）：本机软删订阅随快照上行，其他设备据此删除——杜绝「本机删除被同步复活」。
+    // deletedAt 取软删行的 updated_at（deleteFeed 路径 updateFeed 会打 now 戳）；超出上限截最旧。
+    const deletedFeedIDs = db.prepare(`
+      SELECT feed_url, updated_at FROM feeds
+      WHERE account_id = ? AND is_deleted = 1
+      ORDER BY updated_at DESC LIMIT ?
+    `).all(LOCAL_ACCOUNT_ID, DELETION_TOMBSTONE_LIMIT).map((row) => ({
+      feedURL: row.feed_url,
+      deletedAt: safeNumber(row.updated_at),
+    }));
+
     // 批注：highlights + notes（经 items/articles 拿 entryURL）
     const annotations = [];
     for (const row of db.prepare(`
@@ -329,6 +342,7 @@ class SyncService {
       deviceId: this.deviceId() || '',
       updatedAt: nowSeconds(),
       feeds,
+      deletedFeedIDs,
       prefs: { values: this._prefsValues(), updatedAt: this._prefsDirtyAt() },
       annotations,
       progress,
@@ -343,11 +357,12 @@ class SyncService {
 
   /** 本机同步范围最新变动时间戳（PUT 决策依据；不含未纳入同步的表）。 */
   _localNewestAt() {
-    const q = (sql) => {
-      try { return safeNumber(this.store.database.prepare(sql).get()?.m); } catch (_) { return 0; }
+    const q = (sql, ...params) => {
+      try { return safeNumber(this.store.database.prepare(sql).get(...params)?.m); } catch (_) { return 0; }
     };
     return Math.max(
-      q(`SELECT MAX(updated_at) AS m FROM feeds WHERE account_id = '${LOCAL_ACCOUNT_ID}' AND is_deleted = 0`),
+      // 含软删行（P2-2）：删除订阅也算本机变更，否则墓碑永远等不到上行机会
+      q('SELECT MAX(updated_at) AS m FROM feeds WHERE account_id = ?', LOCAL_ACCOUNT_ID),
       q('SELECT MAX(created_at) AS m FROM highlights'),
       q('SELECT MAX(updated_at) AS m FROM notes'),
       this._progressNewestAt(),
@@ -358,21 +373,56 @@ class SyncService {
   // MARK: 远端应用（合并落库；只写真变化，携带源时间戳防 PUT 循环）
 
   _applySnapshot(snapshot, stats) {
-    if (!this._knownAnnotationKeys) this._knownAnnotationKeys = this._loadLocalAnnotationKeys();
-    const feedApply = this._applyFeeds(snapshot.feeds || []);
-    stats.feedsInserted = feedApply.inserted;
-    stats.feedsUpdated = feedApply.updated;
+    // P2-1：整包单事务落库——原先几十条独立 autocommit，中途崩溃/断电会留下半套快照
+    //（半套订阅/批注），下次同步还可能在这些残缺数据上继续合并。嵌套安全：内层
+    // （feedsRepo 等）再开事务时 LibraryDatabase 自动降级 SAVEPOINT。
+    this.store.database.transaction(() => {
+      if (!this._knownAnnotationKeys) this._knownAnnotationKeys = this._loadLocalAnnotationKeys();
 
-    const annApply = this._applyAnnotations(snapshot.annotations || []);
-    stats.annotationsInserted = annApply.inserted;
-    stats.annotationsPending = annApply.pending;
+      // 删除墓碑（P2-2）先行：被墓碑排除的订阅不在 merged.feeds 里，先删后插无交叉影响
+      stats.feedsTombstoned = this._applyFeedDeletions(snapshot.deletedFeedIDs || []);
 
-    const progressApply = this._applyProgress(snapshot.progress || {});
-    stats.progressApplied = progressApply.applied;
-    this._pushProgressToRenderer(progressApply.updates);
+      const feedApply = this._applyFeeds(snapshot.feeds || []);
+      stats.feedsInserted = feedApply.inserted;
+      stats.feedsUpdated = feedApply.updated;
 
-    stats.tagsApplied = this._applyTags(snapshot.tags || {});
-    stats.prefsApplied = this._applyPrefs(snapshot.prefs || { values: {}, updatedAt: 0 });
+      const annApply = this._applyAnnotations(snapshot.annotations || []);
+      stats.annotationsInserted = annApply.inserted;
+      stats.annotationsPending = annApply.pending;
+
+      const progressApply = this._applyProgress(snapshot.progress || {});
+      stats.progressApplied = progressApply.applied;
+      this._pushProgressToRenderer(progressApply.updates);
+
+      stats.tagsApplied = this._applyTags(snapshot.tags || {});
+      stats.prefsApplied = this._applyPrefs(snapshot.prefs || { values: {}, updatedAt: 0 });
+    });
+  }
+
+  /**
+   * 应用远端删除墓碑（P2-2）：软删本机对应订阅。
+   * 只动 is_deleted = 0 的行；本机行 updated_at 比墓碑新 = 本机重订阅，墓碑失效跳过。
+   * 软删携带墓碑时间戳（不打 now 戳 → 不制造假「本机更新」触发上传循环）；
+   * 软删行随后会被本机 buildLocalSnapshot 记成墓碑，删除得以继续向第三台设备传播。
+   */
+  _applyFeedDeletions(tombstones) {
+    const db = this.store.database;
+    let deleted = 0;
+    for (const tombstone of (Array.isArray(tombstones) ? tombstones : [])) {
+      const feedURL = typeof tombstone === 'string' ? tombstone : String(tombstone && tombstone.feedURL || '');
+      if (!feedURL) continue;
+      const deletedAt = (tombstone && typeof tombstone === 'object') ? safeNumber(tombstone.deletedAt) : 0;
+      const rows = db.prepare(
+        'SELECT id, updated_at FROM feeds WHERE account_id = ? AND feed_url = ? AND is_deleted = 0',
+      ).all(LOCAL_ACCOUNT_ID, feedURL);
+      for (const row of rows) {
+        if (deletedAt && safeNumber(row.updated_at) > deletedAt) continue; // 本机重订阅胜过墓碑
+        db.prepare('UPDATE feeds SET is_deleted = 1, updated_at = ? WHERE id = ?')
+          .run(deletedAt || nowSeconds(), row.id);
+        deleted += 1;
+      }
+    }
+    return deleted;
   }
 
   _applyFeeds(feeds) {
@@ -390,7 +440,27 @@ class SyncService {
       const siteURL = feed.siteURL ?? null;
       const remoteT = safeNumber(feed.updatedAt);
       let feedID = existing?.id ?? null;
+      let skipAsDeleted = false;
       if (!existing) {
+        // 同 URL 软删行（P2-2）：远端订阅记录不旧于软删时间（重订阅胜过墓碑）→ 原行复活，
+        // 不再另插新行（否则同 URL 双行）；软删时间比远端记录新 → 该订阅已删，跳过不插
+        const tombstoned = db.prepare(
+          'SELECT id, updated_at FROM feeds WHERE account_id = ? AND feed_url = ? AND is_deleted = 1',
+        ).get(LOCAL_ACCOUNT_ID, feed.feedURL);
+        if (tombstoned) {
+          if (safeNumber(tombstoned.updated_at) <= remoteT) {
+            db.prepare(`
+              UPDATE feeds SET is_deleted = 0, title = ?, site_url = ?, platform = ?, platform_ref = ?, updated_at = ?
+              WHERE id = ?
+            `).run(title, siteURL, platform, platformRef, remoteT || nowSeconds(), tombstoned.id);
+            feedID = tombstoned.id;
+            inserted += 1;
+          } else {
+            skipAsDeleted = true;
+          }
+        }
+      }
+      if (!feedID && !skipAsDeleted) {
         // 携带远端时间戳落库（不打 now 戳 → 不制造假「本机更新」）
         feedID = uuid();
         db.prepare(`
@@ -398,7 +468,7 @@ class SyncService {
           VALUES (?, ?, NULL, ?, ?, ?, ?, NULL, 0, ?, ?)
         `).run(feedID, LOCAL_ACCOUNT_ID, title, siteURL, feed.feedURL, remoteT || nowSeconds(), platform, platformRef);
         inserted += 1;
-      } else if (remoteT > safeNumber(existing.updated_at)) {
+      } else if (feedID && existing && remoteT > safeNumber(existing.updated_at)) {
         const changed = existing.title !== title || existing.site_url !== siteURL
           || (existing.platform ?? 'web') !== platform || (existing.platform_ref ?? null) !== platformRef;
         if (changed) {
@@ -624,6 +694,7 @@ class SyncService {
         feedsAddedFromRemote: 0,
         feedsInserted: 0,
         feedsUpdated: 0,
+        feedsTombstoned: 0,
         annotationsAddedFromRemote: 0,
         annotationsInserted: 0,
         annotationsPending: 0,
@@ -708,6 +779,7 @@ class SyncService {
       case 'notFound': return i18n.localized('WebDAV 资源不存在。');
       case 'locked': return i18n.localized('WebDAV 资源被锁定（423），请稍后重试。');
       case 'timeout': return i18n.localized('WebDAV 请求超时，请检查网络后重试。');
+      case 'tooLarge': return i18n.localized('WebDAV 响应超过大小上限（8MB），已中止下载：服务器上的同步快照异常庞大，请检查或删除后重试。');
       case 'network': return i18n.localized('WebDAV 网络错误：无法连接服务器。');
       default: return i18n.localizedFormat('WebDAV 服务器错误（HTTP %lld）。', err.status ?? 0);
     }

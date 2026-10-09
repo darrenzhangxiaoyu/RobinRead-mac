@@ -15,7 +15,7 @@
 .fs-brand-mark {
   width: 42px; height: 42px; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--accent); color: #f6f2e7;
+  background: var(--accent); color: var(--accent-ink); /* P2-4：写死墨归令牌（暗态随 body.dark 翻深墨） */
   box-shadow: 0 6px 16px -8px rgba(0, 0, 0, 0.5);
 }
 .fs-brand-mark svg { width: 21px; height: 21px; }
@@ -134,7 +134,7 @@
   width: 27px; height: 27px; border-radius: 8px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
   position: relative; overflow: hidden;
-  color: #f8f6ef; font-weight: 800; font-size: 13px;
+  color: var(--accent-ink); font-weight: 800; font-size: 13px; /* P2-4：写死墨归令牌（monogram 底为固定中亮度 oklch，深墨可读） */
   font-family: var(--font-serif);
 }
 .fs-monogram .fs-favicon {
@@ -144,12 +144,12 @@
 .fs-monogram .fs-mono-letter { position: relative; z-index: 1; }
 .fs-card-name { font-size: 13.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
 .fs-lang { flex: 0 0 auto; font-size: var(--fs-2xs); font-weight: 800; letter-spacing: 0.5px; border-radius: 4px; padding: 1.5px 5px; }
-.fs-lang.zh { background: rgba(163, 87, 61, 0.14); color: #a3573d; }
+.fs-lang.zh { background: rgba(163, 87, 61, 0.14); color: var(--warm-accent); } /* P1-5：写死暖赭归令牌（暗态随 body.dark 提亮，page 上 2.69→6.08:1） */
 .fs-lang.en { background: var(--row-selected); color: var(--accent); }
 .fs-top-badge {
   flex: 0 0 auto;
   font-size: var(--fs-2xs); font-weight: 900; letter-spacing: 0.6px;
-  background: var(--accent); color: #f6f2e7;
+  background: var(--accent); color: var(--accent-ink); /* P2-4：写死墨归令牌 */
   border-radius: 4px; padding: 2px 6px;
 }
 
@@ -165,7 +165,7 @@
 .fs-card-cat { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-sm); color: var(--text-tertiary); flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .fs-card-cat i { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
 .fs-card-status { font-size: var(--fs-sm); color: var(--accent); }
-.fs-card-status.error { color: #c93b3b; }
+.fs-card-status.error { color: var(--danger); } /* P1-5：归 --danger 语义令牌（暗态 body.dark 提亮 #E07A6E，暗面 3.18→5.47:1） */
 .fs-subscribe { padding: 3.5px 13px; font-size: 12px; border-radius: 7px; }
 .fs-subscribe.subscribed { background: transparent; border-color: var(--accent); color: var(--accent); }
 
@@ -207,29 +207,9 @@
 .footer-nav-btn:hover { background: var(--row-selected); color: var(--text-primary); }
 .footer-nav-btn .nav-label { display: none; }
 
-/* ── 列表搜索框 ── */
-.list-search {
-  display: flex; align-items: center; gap: 6px;
-  border: 1px solid var(--separator); border-radius: 7px;
-  background: var(--page-background);
-  height: 26px; padding: 0 8px;
-  color: var(--text-tertiary);
-  flex: 0 1 170px; min-width: 90px;
-}
-.list-search:focus-within { border-color: var(--accent); }
-.list-search svg { width: 11px; height: 11px; flex: 0 0 auto; }
-.list-search input {
-  border: none; outline: none; background: transparent;
-  color: var(--text-primary); font-family: inherit; font-size: 12px; flex: 1; min-width: 0;
-}
-.list-search input::placeholder { color: var(--text-tertiary); }
-.list-search .clear {
-  border: none; background: transparent; color: var(--text-tertiary);
-  width: 24px; height: 24px; margin: 0 -4px; border-radius: 6px;
-  display: none; align-items: center; justify-content: center; cursor: default; padding: 0;
-}
-.list-search.has-value .clear { display: inline-flex; }
-.list-search .clear:hover { color: var(--text-primary); background: var(--row-hover); }
+/* ── 列表搜索框 ──
+   P2-5：.list-search 全家族已并入 robin.css 单点定义（此前与 robin.css:2328 同名分叉、
+   靠加载顺序+!important 决胜负）；store.css 不再重复声明。 */
 
 /* ── 今日简报 ── */
 .digest-btn {
@@ -439,7 +419,7 @@ body[data-list-density="compact"] .entry-summary { display: none; }
 .dg-mode-seg button.on { background:var(--row-selected); color:var(--accent); font-weight:700; }
 .modal.digest-modal.is-full { width:min(1240px, 96vw); height:92vh; max-height:92vh; display:flex; flex-direction:column; }
 .modal.digest-modal.is-full .digest-body { flex:1; max-height:none; }
-.modal.modal.digest-modal.is-full .dg-overview p { font-size:1.05em; }
+.modal.digest-modal.is-full .dg-overview p { font-size:1.05em; } /* P2-5：修 .modal.modal. 重复类手误 */
 .dg-deep-sec { margin-top:18px; }
 .dg-deep-sec .dg-topic-head { margin-bottom:6px; }
 .dg-deep-sec .dg-topic-body { display:flex; flex-direction:column; gap:9px; }
