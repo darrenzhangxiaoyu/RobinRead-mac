@@ -43,6 +43,8 @@ const { ObsidianExportService } = require('./ObsidianExportService');
 const { BooksService } = require('./BooksService');
 const { SimilarService } = require('./SimilarService');
 const { EventClusterService } = require('./EventClusterService'); // 事件聚类去重（F21）：多源同题报道聚合
+const { GardenService } = require('./GardenService'); // 知识花园·知更养成（F23）：完读浇水/批注种子/断读枯萎
+const { PerspectiveService } = require('./PerspectiveService'); // 观点对照镜（F24）：旧文矛盾/互补/呼应判定
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -172,6 +174,8 @@ class AppStore extends EventEmitter {
     this.books = new BooksService(this, userDataPath); // 个人文集自动成书（F12）：文集 CRUD + EPUB 成书 + 自动节流
     this.similar = new SimilarService(this); // 相关文章 + 线索视图（F13）：文末继续读 + 知识中心线索 tab
     this.events = new EventClusterService(this); // 事件聚类去重（F21）：多源同题报道聚合事件卡
+    this.garden = new GardenService(this); // 知识花园·知更养成（F23）：完读浇水/批注种子/断读枯萎（零 AI 纯本地统计）
+    this.perspectives = new PerspectiveService(this); // 观点对照镜（F24）：相似旧文召回 + AI 关系判定（无 Key 降级）
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -1223,9 +1227,12 @@ class AppStore extends EventEmitter {
   // MARK: - 阅读状态
 
   markRead(entryID, read = true) {
+    // F23 花园钩子需要「改前」状态：entry 提前取（原在 setRead 之后取，仅用
+    // accountID/isStarred，行为不变；isRead 改前快照即完读防刷依据）
+    const entry = this.articlesRepo.entry(entryID);
+    const wasRead = entry ? Boolean(entry.isRead) : false;
     this.statesRepo.setRead(entryID, read);
     if (read) this.knowledge.bumpRead();
-    const entry = this.articlesRepo.entry(entryID);
     if (entry && entry.accountID !== LOCAL_ACCOUNT_ID) {
       this.statesRepo.enqueueOutbox(entry.accountID, entryID, 'read', read);
       this._scheduleOutboxDrain(1500);
@@ -1237,6 +1244,10 @@ class AppStore extends EventEmitter {
         const oldest = this._retainedUnreadIDs.values().next().value;
         this._retainedUnreadIDs.delete(oldest);
       }
+    }
+    // F23 完读浇水：仅 未读→已读 计一次（重复完读被 garden_events UNIQUE 吞掉）
+    if (read && entry && !wasRead) {
+      try { this.garden.onComplete({ entryID }); } catch (_) { /* 花园钩子不阻塞阅读 */ }
     }
     if (entry) this.evolution.recordBehavior({ itemID: entryID, feedID: entry.feedID, action: read ? 'read' : 'skip' });
     this._noteEntryChange(entryID, read, entry ? entry.isStarred : false);

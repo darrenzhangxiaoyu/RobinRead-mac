@@ -83,6 +83,10 @@ export const icons = {
   monitorPage: i('<rect x="1.8" y="2.4" width="12.4" height="9.4" rx="1.2"/><path d="M4.4 5.4h7.2M4.4 7.6h7.2M4.4 9.8h4.4"/><circle cx="11.4" cy="12" r="3"/><path d="M11.4 10.6V12l1 .8"/>'),
   // F21 事件聚类：三节点汇聚（多源同题事件）
   events: i('<circle cx="3.6" cy="3.4" r="1.6"/><circle cx="12.4" cy="8" r="1.6"/><circle cx="3.6" cy="12.6" r="1.6"/><path d="M5.1 4.1l5.8 3.2M5.2 11.9l5.7-3.2"/>'),
+  // F23 知识花园：五瓣小花（花园徽章）
+  flower: i('<circle cx="8" cy="8" r="1.8"/><path d="M8 6.2V2.4M9.6 7.1l3.4-2M9.5 9.2l3 2.6M6.5 9.2l-3 2.6M6.4 7.1L3 5.1"/>'),
+  // F24 观点对照镜：圆镜中轴 + 双面弧（旧文对照）
+  mirror: i('<circle cx="8" cy="8" r="6.3"/><path d="M8 1.7v12.6"/><path d="M5.5 6c.9.9.9 3.1 0 4M10.5 6c-.9.9-.9 3.1 0 4"/>'),
 };
 
 export function icon(name, extraClass = '') {

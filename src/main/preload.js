@@ -167,6 +167,17 @@ contextBridge.exposeInMainWorld('robin', {
   threadsList: () => data('threads:list'),
   threadsDetail: (keyword) => data('threads:detail', keyword),
 
+  // 知识花园 · 知更养成（F23：花园状态 / 开花报告 / 阶段变更推送）
+  gardenState: () => data('garden:state'),
+  gardenReport: () => data('garden:report'),
+  onGardenChanged: (listener) => subscribe('garden:changed', listener),
+
+  // 观点对照镜（F24：AI 可用性 / 按需判定 / 取消 / 已判三组）
+  perspectivesAvailable: () => data('perspectives:available').then((r) => Boolean(r && r.ai)),
+  perspectivesMirror: (entryID) => invoke('perspectives:mirror', entryID),
+  perspectivesCancel: (entryID) => invoke('perspectives:cancel', entryID),
+  perspectivesGroups: (entryID) => data('perspectives:groups', entryID),
+
   // AI 自动标签（F15：开关读写（偏好持久化）/ 立即跑一批 / 诊断快照）
   tagsAutoConfig: (patch) => data('tags:autoConfig', patch),
   tagsAutoKick: () => invoke('tags:autoKick'),

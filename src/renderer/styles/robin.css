@@ -7038,3 +7038,126 @@ body.nj-win-drag .nj-snap-edge { opacity: 0.85; }
 .nj-transcript-seg-text { font-size: 13px; color: var(--text-primary); line-height: 1.7; }
 .nj-transcript-plain { margin: 0; font-size: 13px; color: var(--text-primary); line-height: 1.8; white-space: pre-wrap; }
 .nj-transcript-foot { display: flex; justify-content: flex-end; gap: var(--space-3); }
+
+/* ── F23 知识花园 · 知更养成 ── */
+/* 侧栏底部小花园徽章：阶段点（0-4 档渐显花开色；枯萎转暖警示） */
+.footer-garden-btn { position: relative; }
+.nj-garden-dot {
+  position: absolute; top: 6px; right: 6px;
+  width: 6px; height: 6px; border-radius: 999px;
+  background: var(--note-border);
+  transition: background var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+.nj-garden-dot[data-stage="1"] { background: color-mix(in oklch, var(--accent) 45%, var(--note-border)); }
+.nj-garden-dot[data-stage="2"] { background: color-mix(in oklch, var(--accent) 70%, var(--note-border)); }
+.nj-garden-dot[data-stage="3"] { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 22%, transparent); }
+.nj-garden-dot[data-stage="4"] { background: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 34%, transparent), 0 0 8px color-mix(in oklch, var(--accent) 40%, transparent); }
+.nj-garden-dot.wilted { background: var(--warn, #b0813f); }
+
+/* 花园浮层 */
+.nj-garden-modal { width: min(560px, calc(100vw - 72px)); height: auto; max-height: calc(100vh - 88px); flex-direction: column; padding: var(--space-5); gap: var(--space-4); overflow-y: auto; }
+.nj-garden-head { display: flex; align-items: baseline; gap: var(--space-3); }
+.nj-garden-head h3 { margin: 0; font-size: 17px; flex: 0 0 auto; }
+.nj-garden-sub { flex: 1; font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-garden-tabs { display: flex; gap: var(--space-2); }
+.nj-garden-tab {
+  appearance: none; cursor: pointer; border: 1px solid var(--note-border);
+  background: transparent; color: var(--text-secondary);
+  border-radius: 999px; padding: 3px 14px; font-size: var(--fs-sm);
+}
+.nj-garden-tab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.nj-garden-body { display: flex; flex-direction: column; gap: var(--space-3); }
+.nj-garden-scene {
+  border: 1px solid var(--note-border); border-radius: var(--radius-card);
+  background: var(--page-background); overflow: hidden; line-height: 0;
+}
+.nj-garden-scene svg { width: 100%; height: auto; display: block; }
+.nj-garden-stageup svg { animation: garden-grow 900ms cubic-bezier(0.22, 1, 0.36, 1); transform-origin: 50% 92%; }
+@keyframes garden-grow {
+  0% { transform: scale(0.965); opacity: 0.4; }
+  60% { transform: scale(1.008); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nj-garden-stageup svg { animation: none; } /* 直达终态（全局 reduce 规则兜底，此处显式） */
+}
+.nj-garden-plate { display: flex; align-items: baseline; gap: var(--space-3); }
+.nj-garden-stage { font-size: 15px; font-weight: 700; color: var(--accent); font-family: var(--font-serif); letter-spacing: 0.04em; }
+.nj-garden-bird { font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-garden-stats { display: flex; gap: var(--space-4); }
+.nj-garden-stat { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-md); color: var(--text-secondary); }
+.nj-garden-stat svg { width: 14px; height: 14px; color: var(--accent); }
+.nj-garden-stat b { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.nj-garden-stat i { font-style: normal; font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-garden-wilt { font-size: var(--fs-sm); color: var(--warn, #b0813f); }
+.nj-garden-next { font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-garden-empty { padding: var(--space-6); text-align: center; color: var(--text-tertiary); }
+
+/* 开花报告 tab */
+.nj-garden-report { display: flex; flex-direction: column; gap: var(--space-4); }
+.nj-garden-report-totals { display: flex; gap: var(--space-5); }
+.nj-garden-report-totals span { display: inline-flex; flex-direction: column; gap: 2px; }
+.nj-garden-report-totals b { font-size: 20px; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.nj-garden-report-totals i { font-style: normal; font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-garden-chart { display: flex; align-items: flex-end; gap: var(--space-3); height: 72px; padding: var(--space-2); border: 1px solid var(--note-border); border-radius: var(--radius-card); }
+.nj-garden-day { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+.nj-garden-day-bars { flex: 1; display: flex; align-items: flex-end; gap: 3px; width: 100%; justify-content: center; }
+.nj-garden-day-bars span { width: 8px; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); opacity: 0.85; }
+.nj-garden-day-bars span + span { background: color-mix(in oklch, var(--accent) 55%, var(--note-border)); }
+.nj-garden-day i { font-style: normal; font-size: var(--fs-sm); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.nj-garden-report-sec h4 { margin: 0 0 var(--space-2); font-size: var(--fs-md); color: var(--text-secondary); }
+.nj-garden-bloom-row { display: flex; gap: var(--space-3); font-size: var(--fs-md); color: var(--text-primary); padding: 3px 0; }
+.nj-garden-bloom-row.muted { color: var(--text-tertiary); }
+.nj-garden-bloom-day { color: var(--accent); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+
+/* ── F24 观点对照镜 ── */
+.nj-mirror-panel {
+  max-width: var(--reader-page-width, 820px);
+  margin: 0 auto 26px;
+  padding: 18px 22px 14px;
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-card, 14px);
+  background: var(--note-background);
+  box-shadow: var(--shadow-card);
+  animation: materialize var(--dur-mid) ease;
+}
+.nj-mirror-head { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--separator); }
+.nj-mirror-icon { display: inline-flex; color: var(--accent); }
+.nj-mirror-icon svg { width: 15px; height: 15px; }
+.nj-mirror-title { font-size: 14px; font-weight: 700; color: var(--text-primary); font-family: var(--font-serif); }
+.nj-mirror-state { margin-left: auto; font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-mirror-body { display: flex; flex-direction: column; gap: var(--space-4); }
+.nj-mirror-sec { display: flex; flex-direction: column; gap: var(--space-2); }
+.nj-mirror-sec-head { display: flex; align-items: baseline; gap: var(--space-2); }
+.nj-mirror-sec-head b { font-size: 13.5px; color: var(--text-primary); }
+.nj-mirror-sec-head span { font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-mirror-card {
+  appearance: none; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 3px;
+  border: 1px solid var(--note-border); border-radius: var(--radius-card);
+  background: var(--surface-2); padding: 10px 12px;
+  transition: border-color var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+.nj-mirror-card:hover { border-color: var(--accent); background: var(--row-hover); }
+.nj-mirror-card-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); line-height: 1.5; }
+.nj-mirror-card-meta { font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-mirror-card-reason { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.nj-mirror-card-reason::before { content: '「'; color: var(--text-tertiary); }
+.nj-mirror-card-reason::after { content: '」'; color: var(--text-tertiary); }
+.nj-mirror-degraded {
+  font-size: var(--fs-sm); color: var(--text-secondary);
+  background: var(--note-background); border: 1px dashed var(--note-border);
+  border-radius: var(--radius-card); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-3);
+}
+.nj-mirror-empty { padding: var(--space-4); text-align: center; color: var(--text-secondary); }
+.nj-mirror-empty .hint { font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-mirror-loading { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); color: var(--text-secondary); }
+.nj-mirror-spinner {
+  width: 14px; height: 14px; border-radius: 999px; flex: 0 0 auto;
+  border: 2px solid var(--note-border); border-top-color: var(--accent);
+  animation: nj-mirror-spin 0.9s linear infinite;
+}
+@keyframes nj-mirror-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .nj-mirror-spinner { animation-duration: 0.01ms !important; }
+}

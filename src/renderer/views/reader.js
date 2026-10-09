@@ -45,6 +45,21 @@ const TTS_STOP_SVG = '<svg viewBox="0 0 16 16" fill="currentColor" stroke="none"
 // 旧落地载荷凭代际失配丢弃，不得顶换当前阅读意图
 let openExternalSeq = 0;
 
+// F24 观点对照镜：观点词判定（正文含词 = 观点文）。
+// 显隐规则（设计合同）：正文含观点词 或 AI 可用 → 显示按钮；两者皆否隐藏。
+// AI 可用性不缓存（设置页配 Key 后下一篇文章立即生效；本地 IPC 零成本）。
+const OPINION_WORDS = [
+  '我认为', '应该说', '应该', '或许', '也许', '然而', '但是', '反对', '支持', '争议', '观点', '立场',
+  '批评', '质疑', '主张', '呼吁', '判断', '恐怕', '显然', '事实上', '在我看来', '值得注意的是',
+  'argue', 'opinion', 'should', 'believe', 'think', 'however', 'against', 'claim', 'view', 'debate',
+];
+
+function hasOpinionText(text) {
+  const s = String(text || '').toLowerCase();
+  if (!s) return false;
+  return OPINION_WORDS.some((w) => s.includes(w.toLowerCase()));
+}
+
 export class ReaderView {
   constructor(scrollEl, refs, handlers) {
     this.scrollEl = scrollEl;
@@ -612,6 +627,7 @@ export class ReaderView {
 
   _render() {
     this._ttsStop(); // 正文重排（打开新文/原文精读）：段落锚点重建，朗读必须先停
+    this._mirrorToken = null; // F24：换文使在途对照镜回调失效（面板随 scrollEl 重建）
     document.getElementById('nj-translate-progress')?.remove(); // P2-3：换文重排时清掉上一篇的翻译进度浮标
     this.articleSearch?.reset(); // 正文重建：搜索高亮与命中导航一并失效
     this.scrollEl.scrollTop = 0;
@@ -773,12 +789,13 @@ export class ReaderView {
         }
       }).catch(() => {});
     }
-    // 头部操作区：「听」（TTS 朗读，只要有正文就提供）+ 稍后读 + 应用内精读 + 浏览器打开（次）
+    // 头部操作区：「听」（TTS 朗读，只要有正文就提供）+ 稍后读 + 对照镜（F24，观点文/AI 可用才显）+ 应用内精读 + 浏览器打开（次）
     {
       const actions = document.createElement('span');
       actions.className = 'robin-header-original-actions';
       this._ttsAppendHeaderButton(actions);
       this._appendLaterHeaderButton(actions);
+      this._appendMirrorHeaderButton(actions);
       if (entry.url) {
         const readBtn = document.createElement('button');
         readBtn.className = 'btn-text bordered';
@@ -3749,6 +3766,182 @@ export class ReaderView {
     btn.classList.toggle('active', later);
     btn.querySelector('span').textContent = t(later ? '移出稍后读' : '稍后读');
     btn.title = t(later ? '处理完了：移出稍后读队列' : '读着累？先存入稍后读队列');
+  }
+
+  // MARK: - 观点对照镜（F24：从读过的旧文里找矛盾/互补/呼应）
+
+  /**
+   * 头部「对照镜」按钮。显隐规则：正文含观点词 或 AI 可用（按需异步探测，
+   * 会话级缓存）；两者皆否不渲染——纯新闻流水没必要照镜子。
+   */
+  _appendMirrorHeaderButton(actions) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-text bordered nj-mirror-header-btn';
+    btn.dataset.role = 'mirror';
+    btn.innerHTML = `${icon('mirror')}<span style="margin-left:4px"></span>`;
+    btn.querySelector('span').textContent = t('对照镜');
+    btn.title = t('照一照：从你读过的旧文里找矛盾、互补与呼应');
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById('nj-mirror-panel');
+      if (panel && panel.dataset.entryID === String(this.entryID || '')) {
+        this._closeMirrorPanel();
+        return;
+      }
+      this._openMirrorPanel();
+    });
+    const opinion = hasOpinionText(`${this.entry?.title || ''} ${this.entry?.summary || ''} ${plainLen(this.html) > 0 ? this._articleText() : ''}`)
+      || hasOpinionText(this.html || '');
+    btn.hidden = !opinion;
+    actions.appendChild(btn);
+    this._mirrorBtn = btn;
+    if (!opinion) {
+      // 正文无观点词：AI 可用则仍显示（异步探测，不阻塞头部渲染）
+      window.robin.perspectivesAvailable?.().then((ok) => {
+        if (ok && btn.isConnected) btn.hidden = false;
+      }).catch(() => { /* 探测失败保持隐藏 */ });
+    }
+  }
+
+  /** 打开对照镜侧板并按需跑判定（点按钮才发起，不做后台自动）。 */
+  _openMirrorPanel() {
+    const entryID = String(this.entryID || '');
+    if (!entryID) return;
+    let panel = document.getElementById('nj-mirror-panel');
+    if (!panel) {
+      panel = document.createElement('aside');
+      panel.id = 'nj-mirror-panel';
+      panel.className = 'nj-mirror-panel';
+      this.body?.parentElement?.insertBefore(panel, this.body);
+    }
+    panel.dataset.entryID = entryID;
+    this._renderMirrorPanel({ phase: 'loading' });
+    panel.querySelector('.nj-mirror-cancel')?.addEventListener('click', () => {
+      window.robin.perspectivesCancel?.(entryID);
+    });
+    panel.querySelector('.nj-mirror-close')?.addEventListener('click', () => this._closeMirrorPanel());
+    panel.querySelector('.nj-mirror-retry')?.addEventListener('click', () => this._openMirrorPanel());
+
+    const openToken = `${entryID}@${Date.now()}`;
+    this._mirrorToken = openToken;
+    // invoke 信封：{ok, data} —— data 才是 mirror 结果（出错走 catch 显示失败态）
+    window.robin.perspectivesMirror(entryID).then((envelope) => {
+      // 竞态/卸载守卫：文章已切换或面板已脱离 DOM 时丢弃
+      if (this._mirrorToken !== openToken || this.entryID !== entryID || !panel.isConnected) return;
+      const res = envelope && envelope.ok ? envelope.data : null;
+      if (!res) throw new Error((envelope && envelope.error) || 'no result');
+      this._renderMirrorPanel({
+        phase: 'done',
+        groups: res.groups || {},
+        similar: res.similar || [],
+        degraded: Boolean(res.degraded),
+        cancelled: Boolean(res.cancelled),
+        parseFailed: Boolean(res.parseFailed),
+      });
+    }).catch((err) => {
+      if (this._mirrorToken !== openToken || this.entryID !== entryID || !panel.isConnected) return;
+      this._renderMirrorPanel({ phase: 'error', message: String((err && err.message) || err) });
+    });
+  }
+
+  /** 关闭对照镜侧板（取消在途判定，省 token）。 */
+  _closeMirrorPanel() {
+    const panel = document.getElementById('nj-mirror-panel');
+    if (!panel) return;
+    if (panel.dataset.entryID) window.robin.perspectivesCancel?.(panel.dataset.entryID);
+    this._mirrorToken = null;
+    panel.remove();
+  }
+
+  /**
+   * 对照镜侧板渲染：判定中（转圈+取消）/ 三组卡片流（唱反调/相辅相成/遥相呼应）/
+   * 降级（无 Key：相似旧文列表 + 明示未判定）/ 空态 / 失败重试。
+   */
+  _renderMirrorPanel({ phase, groups = {}, similar = [], degraded = false, cancelled = false, parseFailed = false, message = '' }) {
+    const panel = document.getElementById('nj-mirror-panel');
+    if (!panel) return;
+    const head = `
+      <div class="nj-mirror-head">
+        <span class="nj-mirror-icon">${icon('mirror')}</span>
+        <span class="nj-mirror-title">${escapeHTML(t('观点对照镜'))}</span>
+        <span class="nj-mirror-state">${phase === 'loading' ? escapeHTML(t('正在翻你的阅读历史…')) : ''}</span>
+        ${phase === 'loading' ? `<button class="study-panel-btn nj-mirror-cancel" title="${attr(t('取消判定'))}">${icon('close')}</button>` : ''}
+        <button class="study-panel-btn nj-mirror-close" title="${attr(t('关闭'))}">${icon('close')}</button>
+      </div>`;
+
+    if (phase === 'loading') {
+      panel.innerHTML = `${head}<div class="nj-mirror-body"><div class="nj-mirror-loading"><span class="nj-mirror-spinner"></span><p>${escapeHTML(t('正在把这篇和你读过的旧文对照…'))}</p></div></div>`;
+      return;
+    }
+    if (phase === 'error') {
+      panel.innerHTML = `${head}<div class="nj-mirror-body"><div class="nj-mirror-empty">
+        <p>${escapeHTML(t('对照镜这次没照成。'))}</p>
+        <p class="hint">${escapeHTML(message).slice(0, 200)}</p>
+        <button class="btn-text bordered nj-mirror-retry">${escapeHTML(t('重试'))}</button>
+      </div></div>`;
+      return;
+    }
+
+    const sectionDefs = [
+      ['contradict', t('唱反调'), t('和你手里的这篇观点相反')],
+      ['complement', t('相辅相成'), t('补上了这篇没讲的另一面')],
+      ['echo', t('遥相呼应'), t('隔着时间互相印证')],
+    ];
+    let sections = '';
+    let totalShown = 0;
+    for (const [key, title, hint] of sectionDefs) {
+      const items = groups[key] || [];
+      if (!items.length) continue;
+      totalShown += items.length;
+      const cards = items.map((item) => `
+        <button type="button" class="nj-mirror-card" data-entry-id="${attr(item.id)}">
+          <span class="nj-mirror-card-title">${escapeHTML(item.title || t('未命名文章'))}</span>
+          <span class="nj-mirror-card-meta">${escapeHTML([item.sourceTitle, item.publishedAt ? formatFullDate(item.publishedAt) : ''].filter(Boolean).join(' · '))}</span>
+          ${item.reason ? `<span class="nj-mirror-card-reason">${escapeHTML(item.reason)}</span>` : ''}
+        </button>`).join('');
+      sections += `<div class="nj-mirror-sec" data-relation="${key}">
+        <div class="nj-mirror-sec-head"><b>${escapeHTML(title)}</b><span>${escapeHTML(hint)}</span></div>
+        ${cards}</div>`;
+    }
+
+    let extra = '';
+    if (degraded) {
+      extra = `<div class="nj-mirror-degraded">${escapeHTML(t('未配置 AI——先给你相似的旧文（未判定关系）。在设置中配好 API Key 后可自动判出矛盾与呼应。'))}</div>`;
+    } else if (parseFailed) {
+      extra = `<div class="nj-mirror-degraded">${escapeHTML(t('AI 这次没能给出可用的判定，稍后再点一次对照镜即可重试。'))}</div>`;
+    } else if (cancelled) {
+      extra = `<div class="nj-mirror-degraded">${escapeHTML(t('判定已取消。'))}</div>`;
+    }
+    if (totalShown === 0) {
+      const fallback = degraded && similar.length
+        ? `<div class="nj-mirror-sec" data-relation="similar">
+            <div class="nj-mirror-sec-head"><b>${escapeHTML(t('相似的旧文'))}</b><span>${escapeHTML(t('按相似度召回，关系未判定'))}</span></div>
+            ${similar.map((item) => `
+              <button type="button" class="nj-mirror-card" data-entry-id="${attr(item.id)}">
+                <span class="nj-mirror-card-title">${escapeHTML(item.title || t('未命名文章'))}</span>
+                <span class="nj-mirror-card-meta">${escapeHTML([item.sourceTitle, item.publishedAt ? formatFullDate(item.publishedAt) : ''].filter(Boolean).join(' · '))}</span>
+              </button>`).join('')}
+          </div>`
+        : '';
+      panel.innerHTML = `${head}${extra}<div class="nj-mirror-body">
+        <div class="nj-mirror-empty">
+          <p>${escapeHTML(t('这次没照出对照的旧文。'))}</p>
+          <p class="hint">${escapeHTML(t('读得越多，镜子越准——观点文记得常来照一照。'))}</p>
+        </div>${fallback}</div>`;
+      this._bindMirrorCards(panel);
+      return;
+    }
+    panel.innerHTML = `${head}${extra}<div class="nj-mirror-body">${sections}</div>`;
+    this._bindMirrorCards(panel);
+  }
+
+  /** 卡片点击跳转：旧文经阅读器句柄打开（同文末「继续读」通路）。 */
+  _bindMirrorCards(panel) {
+    panel.querySelectorAll('.nj-mirror-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.entryId;
+        if (id) window.__robinReaderOpen?.(id);
+      });
+    });
   }
 
   focus() {

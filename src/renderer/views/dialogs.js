@@ -1987,8 +1987,8 @@ export class SettingsView {
       row(t('转写端点'), t('OpenAI 兼容 /v1/audio/transcriptions 完整地址（本地 whisper.cpp server / faster-whisper-server 等）。'), textControl(
         cfg.url, 'http://127.0.0.1:8080/v1/audio/transcriptions', (v) => save({ url: v }),
       )),
-      row(t('转写 API Key（可选）'), t('本地服务通常留空；仅端点要求鉴权时填写。经系统加密保存，不随文字稿外发。'), textControl(
-        cfg.apiKey, '', (v) => save({ apiKey: v }), true,
+      row(t('转写 API Key（可选）'), t('本地服务通常留空；仅端点要求鉴权时填写。经系统加密（DPAPI）保存，不随文字稿外发；留空提交不改动已存 Key。'), textControl(
+        '', cfg.hasKey ? t('已保存——输入新值可替换') : '', (v) => { if (v) save({ apiKey: v }); }, true,
       )),
       row(t('转写模型名'), t('请求体 model 字段（whisper-1 / large-v3 等，按你的服务填写）。'), textControl(
         cfg.model && cfg.model !== 'whisper-1' ? cfg.model : '', 'whisper-1', (v) => save({ model: v }),

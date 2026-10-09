@@ -437,6 +437,17 @@ export class SidebarView {
     evoBtn.addEventListener('click', () => this.handlers.onOpenEvolution());
     nav.appendChild(evoBtn);
 
+    // 知识花园徽章（F23）：小花园 + 成长阶段点，点击开花园浮层
+    const gardenBtn = document.createElement('button');
+    gardenBtn.className = 'footer-nav-btn footer-garden-btn';
+    gardenBtn.title = t('知识花园');
+    gardenBtn.innerHTML = `${icon('flower')}<span class="nav-label"></span><span class="nj-garden-dot" data-stage="0"></span>`;
+    gardenBtn.querySelector('.nav-label').textContent = t('花园');
+    gardenBtn.addEventListener('click', () => this.handlers.onOpenGarden?.());
+    nav.appendChild(gardenBtn);
+    this.gardenBtn = gardenBtn;
+    this._refreshGardenBadge();
+
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
     settingsBtn.title = t('设置');
@@ -448,6 +459,28 @@ export class SidebarView {
     this.footerEl.appendChild(nav);
     this.updateBadgeHost = document.createElement('span');
     this.footerEl.appendChild(this.updateBadgeHost);
+  }
+
+  /**
+   * 花园徽章刷新（F23）：阶段点 + title 摘要；garden:changed 推送在场即热更。
+   * 懒订阅（首次构建后），通道缺失（旧 preload）静默。
+   */
+  _refreshGardenBadge() {
+    const btn = this.gardenBtn;
+    if (!btn) return;
+    window.robin.gardenState?.().then((state) => {
+      if (!state || !btn.isConnected) return;
+      const dot = btn.querySelector('.nj-garden-dot');
+      if (dot) {
+        dot.dataset.stage = String(state.stage);
+        dot.classList.toggle('wilted', (state.wiltLevel || 0) > 0);
+      }
+      btn.title = t('知识花园');
+    }).catch(() => { /* 花园状态不可得：徽章保持静默 */ });
+    if (!this._gardenSubscribed && window.robin.onGardenChanged) {
+      this._gardenSubscribed = true;
+      window.robin.onGardenChanged(() => this._refreshGardenBadge());
+    }
   }
 
   /** 账号入口按钮：未登录=人形图标；已登录=头像（会员加金圈）。昵称与状态放 title。 */

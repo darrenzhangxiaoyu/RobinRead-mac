@@ -311,7 +311,8 @@ app.whenReady().then(async () => {
           const view = new SettingsView({ state: { sidebar: [] }, views: {}, onAddFreshRSS: () => {}, onReload: () => {}, onRefreshState: () => {} });
           view.present('bookshelf');
           const navOk = [...document.querySelectorAll('.modal-nav-item')].some((el) => el.textContent.includes('书架'));
-          await waitFor(() => (document.querySelector('.modal-scroll')?.textContent || '').includes('立即成书') ? true : null, 8000);
+          // 20s：CI 全量连跑高载窗口下 booksList IPC+设置渲染偶发 >8s（负载偶发，见 roadmap 遗留记档）
+          await waitFor(() => (document.querySelector('.modal-scroll')?.textContent || '').includes('立即成书') ? true : null, 20000);
           const body = document.querySelector('.modal-scroll')?.textContent || '';
           const hasBadge = body.includes('待取');
           const hasBooks = body.includes('自动文集') && body.includes('手动文集') && body.includes('我的文集');

@@ -32,6 +32,7 @@ import { KnowledgeCenter } from './views/knowledge.js';
 import { EvolutionView } from './views/evolution-view.js';
 import { AihotView } from './views/aihot-view.js';
 import { MediaView } from './views/media-view.js';
+import { GardenView } from './views/garden-view.js';
 import { MediaMiniPlayer } from './views/media-player.js';
 import { PicksTTSPlayer } from './views/picks-tts.js';
 import { RadioPlayer } from './views/radio-player.js';
@@ -122,6 +123,7 @@ async function bootstrap() {
     onOpenAihot: () => openAihotView(),
     onOpenMedia: () => openMediaView(),
     onOpenTopics: () => openTopicsView(),
+    onOpenGarden: () => openGardenView(),
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -2289,6 +2291,12 @@ function openAihotView() {
     onFeedback: showToast,
   });
   ah.present();
+}
+
+/** 知识花园（F23）：花园浮层（确定性 SVG 花园 + 开花报告）。 */
+function openGardenView() {
+  const gv = new GardenView({ toast: showToast });
+  gv.present();
 }
 
 /** 媒体中心（F3）：媒体条目浮层（音频→迷你播放器 / 视频→打开阅读器内嵌播放）。 */

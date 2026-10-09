@@ -774,6 +774,17 @@ function registerIPCHandlers(store, window) {
   handle('threads:list', () => SIM().threadsList());
   handle('threads:detail', (keyword) => SIM().threadsDetail(String(keyword || '')));
 
+  // MARK: 知识花园 · 知更养成（F23：状态 / 开花报告 / 阶段变更推送）
+  handle('garden:state', () => store.garden.state());
+  handle('garden:report', () => store.garden.weeklyReport());
+  store.on('garden:changed', (payload) => send('garden:changed', payload));
+
+  // MARK: 观点对照镜（F24：按需判定（点按钮才跑）/ 取消 / 已判三组）
+  handle('perspectives:available', () => ({ ai: store.hasAIAPIKey() }));
+  handle('perspectives:mirror', async (entryID) => store.perspectives.mirror(String(entryID || '')));
+  handle('perspectives:cancel', (entryID) => store.cancelAI(`perspectives:${String(entryID || '')}`));
+  handle('perspectives:groups', (entryID) => store.perspectives.groups(String(entryID || '')));
+
   // MARK: AI 自动标签（F15：开关（偏好持久化）/ 立即跑一批 / 诊断快照）
   handle('tags:autoConfig', (patch) => {
     if (patch && typeof patch === 'object' && 'enabled' in patch) store.tagAuto.setEnabled(patch.enabled === true);

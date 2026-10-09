@@ -106,6 +106,8 @@ const OFFLINE = [
   { file: 'scripts/diag-f20-goals.js', runner: 'electron', desc: 'F20 阅读目标与专注会话：目标持久化(日/周/0=关/越界钳制)/进度环3篇5目标60%/达标恭喜一次性同日跨重启不重复/周进度条聚合/专注面板倒计时注入时间加速/会话小结计数与剪贴板/中途退出确认/目标关闭进度环隐藏（离线）' },
   { file: 'scripts/diag-f21-events.js', runner: 'electron', desc: 'F21 事件聚类去重：v22迁移与老库无损/多源相似标题聚成一簇/不相似不聚/增量入库并簇与代表迁移/7天窗口外不聚/阈值边界0.55/幂等与rebuild补跑零重复/summaries载荷(N源/成员/死簇回收)/事件模式渲染(工具栏切换/分组卡/收合态代表/N源徽标/展开成员/作用域过滤)/入库钩子不阻塞灌文/500条聚类<2s（离线）' },
   { file: 'scripts/diag-f22-transcribe.js', runner: 'electron', desc: 'F22 播客转文字稿：v22迁移/mock ASR端点(multipart+模型+鉴权头+segments)/默认关闭未配置报错与非法URL拒绝/状态机queued→running→done/进度推送含转写中%/失败HTTP500落error列与重试恢复/单飞排队maxActive=1/本地优先零远端请求/临时文件即删/幂等/FTS关键字过滤(含<3字符LIKE回退与kind叠加)/AI摘要无Key拒绝与mock生成落库/UI转写按钮未配置灰置与稿徽标与文字稿面板时间戳与复制与摘要置顶与Esc让位/配置与文字稿跨重启持久化（离线）' },
+  { file: 'scripts/diag-f23-garden.js', runner: 'electron', desc: 'F23 知识花园·知更养成：v23迁移与老库无损/数值模型(完读浇水/批注种子N字门槛/断读枯萎一级不掉回零/长假封顶两级/回读复活/连击重计/防刷UNIQUE单次)/五阶段跃迁纯函数与服务级/知更羽毛五档升级/开花报告(7天窗口/阶段跃迁/新开花投影)/markRead与批注钩子接线/gardenArt确定性SVG逐字节同输出/浮层花园+报告双tab/阶段跃迁入场动画/reduced-motion豁免/侧栏花园徽章/Esc关浮层（离线）' },
+  { file: 'scripts/diag-f24-mirror.js', runner: 'electron', desc: 'F24 观点对照镜：v23迁移perspectives/召回(相似引擎复用/时间差≥14天同文异龄优先/不同源加分/噪声过滤/不含自身)/mock LLM批量判定(一次prompt/JSON解析/围栏容错/非法relation兜底none/坏输出parseFailed不落库)/持久化防重(同对二次mirror零调用/唯一约束)/单飞锁与cancelAI取消零落库canceller清理/无Key降级(相似旧文明示未判定零调用)/UI按钮显隐(观点词/AI可用/两者皆否)/判定中转圈与取消/侧板三组卡片流(标题+日期+理由)/卡片点击跳转/降级侧板/空态/换文无残留（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

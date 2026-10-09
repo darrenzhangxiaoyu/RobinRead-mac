@@ -877,6 +877,66 @@ const MIGRATIONS = [
       } catch (_) { /* FTS 不可用：转写搜索走 LIKE */ }
     },
   },
+  {
+    id: 'v23-garden-perspectives',
+    up: (db) => {
+      // ── F23 知识花园 · 知更养成 ──
+      // garden_state：花园单行状态（阳光=连续阅读天数 / 水滴=完读 / 养分=批注 /
+      // 成长阶段 / 知更羽毛档 / 枯萎档 / 最近活跃日）。单行语义由 PK CHECK(id=1) 锁定。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS garden_state (
+            id              INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+            stage           INTEGER NOT NULL DEFAULT 0,
+            sun_streak      INTEGER NOT NULL DEFAULT 0,
+            water_total     INTEGER NOT NULL DEFAULT 0,
+            seed_total      INTEGER NOT NULL DEFAULT 0,
+            wilt_level      INTEGER NOT NULL DEFAULT 0,
+            last_active_day TEXT,
+            created_at      REAL NOT NULL,
+            updated_at      REAL NOT NULL
+        );
+      `);
+      // garden_events：花园事件流水（water=浇水 / seed=种子 / wilt=枯萎 / revive=复活 /
+      // stage=阶段跃迁 / feather=羽毛升级）。UNIQUE(kind, ref) 是防刷地基：
+      // 同一篇文章完读只浇一次水（ref=entryID）、同一条批注只结一颗种子（ref=批注 id）、
+      // 同一天的枯萎/复活只记一次（ref=日期）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS garden_events (
+            id           TEXT PRIMARY KEY NOT NULL,
+            kind         TEXT NOT NULL CHECK (kind IN ('water','seed','wilt','revive','stage','feather')),
+            ref          TEXT NOT NULL,
+            day          TEXT NOT NULL,
+            points       INTEGER NOT NULL DEFAULT 0,
+            payload_json TEXT,
+            created_at   REAL NOT NULL,
+            UNIQUE(kind, ref)
+        );
+        CREATE INDEX IF NOT EXISTS idx_garden_events_day ON garden_events(day);
+      `);
+
+      // ── F24 观点对照镜 ──
+      // perspectives：当前文章 ↔ 历史旧文的观点关系判定结果（AI 产物持久化）。
+      // - relation：contradict（唱反调）/ complement（相辅相成）/ echo（遥相呼应）/
+      //   none（无关）。none 一并入库是省 token 的关键决策：同一对文章判定过「无关」
+      //   后不再重复送 LLM（唯一约束防重 + 读取侧只投影前三类）。
+      // - PRIMARY KEY(entry_id, related_entry_id) 即「同一对文章不重复判」。
+      // - 无外键：相关条目可能先于本表行被清理（淘汰墓碑/同步删除），关系随条目
+      //   消失属可接受损耗，读取侧 JOIN 自然过滤，避免级联误删判定历史。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS perspectives (
+            entry_id           TEXT NOT NULL,
+            related_entry_id   TEXT NOT NULL,
+            relation           TEXT NOT NULL
+                CHECK (relation IN ('contradict','complement','echo','none')),
+            reason             TEXT NOT NULL DEFAULT '',
+            model              TEXT,
+            created_at         REAL NOT NULL,
+            PRIMARY KEY (entry_id, related_entry_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_perspectives_entry ON perspectives(entry_id, created_at DESC);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

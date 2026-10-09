@@ -38,7 +38,16 @@ class KnowledgeEngine {
     ).run(id, itemID, text, color, note, paragraphID, startOffset, endOffset, anchor ? JSON.stringify(anchor) : null, Date.now() / 1000);
     this._bumpStat('highlights_made');
     this._recordAction(itemID, 'highlight');
+    // F23 知识花园：带批注文字（≥N 字）的高亮才算一颗种子（纯划线不算）
+    this._gardenSeed(`hl:${id}`, note);
     return this.getHighlight(id);
+  }
+
+  /** F23 花园种子钩子（失败静默：花园永不阻塞批注主路径）。 */
+  _gardenSeed(ref, text) {
+    const content = String(text || '');
+    if (!content.trim()) return;
+    try { this.store.garden?.onSeed({ ref, chars: content.length }); } catch (_) { /* 忽略 */ }
   }
 
   /** 记录知识动作到自进化引擎（喂给兴趣画像），失败静默。 */
@@ -83,6 +92,8 @@ class KnowledgeEngine {
       .run(id, itemID, content, JSON.stringify(tags), '[]', anchor ? JSON.stringify(anchor) : null, now, now);
     this._bumpStat('notes_created');
     this._recordAction(itemID, 'note');
+    // F23 知识花园：文章笔记（≥N 字）结一颗种子
+    this._gardenSeed(`note:${id}`, content);
     return this.getNote(id);
   }
   getNote(id) {
