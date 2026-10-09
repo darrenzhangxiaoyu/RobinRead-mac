@@ -811,6 +811,72 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v22-events-transcripts',
+    up: (db) => {
+      // ── F21 事件聚类去重 ──
+      // event_clusters：同一新闻多源重复报道聚成的「事件」簇。
+      // - id = 簇身份（uuid）；representative_item_id = 代表条目（最早发布成员，
+      //   事件卡收合态展示其标题）；title 冗余存代表标题（免 JOIN 读卡面）；
+      // - 成员关系落 items.cluster_id（加列 + 索引）：列表投影一条 LEFT JOIN 即可带出
+      //   归属，作用域过滤天然生效；条目删除随 items 级联消失，簇行由服务惰性回收。
+      // 加列走幂等 try/catch（v6/v10/v15 同款：列已存在时重入跳过）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS event_clusters (
+            id                     TEXT PRIMARY KEY NOT NULL,
+            representative_item_id TEXT NOT NULL,
+            title                  TEXT NOT NULL DEFAULT '',
+            member_count           INTEGER NOT NULL DEFAULT 0,
+            created_at             REAL NOT NULL,
+            updated_at             REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_event_clusters_updated
+        ON event_clusters(updated_at DESC);
+      `);
+      try { db.exec('ALTER TABLE items ADD COLUMN cluster_id TEXT'); }
+      catch (_) { /* 列已存在：幂等重入 */ }
+      db.exec('CREATE INDEX IF NOT EXISTS idx_items_cluster ON items(cluster_id);');
+
+      // ── F22 播客转文字稿 ──
+      // media_transcripts：媒体条目 ↔ 本地 ASR 转写产物（一条媒体至多一份，PK 即防重）。
+      // - status 状态机 queued → running → done | error（失败保留 error 与原因，可重试）；
+      // - segments_json：端点返回分段时间戳时原样存（[{start,end,text}]），面板渲染时间戳；
+      // - summary：转写完成后可选的 AI 摘要（无 Key 灰置，生成后随行回读）；
+      // - FK 级联：媒体条目删除（随文章删除）时文字稿一并消失。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS media_transcripts (
+            item_id          TEXT PRIMARY KEY NOT NULL,
+            status           TEXT NOT NULL DEFAULT 'queued'
+                CHECK (status IN ('queued','running','done','error')),
+            text             TEXT NOT NULL DEFAULT '',
+            language         TEXT,
+            duration_seconds REAL,
+            segments_json    TEXT,
+            summary          TEXT,
+            error            TEXT,
+            created_at       REAL NOT NULL,
+            updated_at       REAL NOT NULL,
+
+            FOREIGN KEY(item_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_transcripts_status
+        ON media_transcripts(status, updated_at DESC);
+      `);
+      // 文字稿全文检索（F22）：独立 FTS5 trigram 虚表（旁路 articles_fts，互不干扰）。
+      // FTS5 不可用的环境静默跳过，搜索层探测不到表即回退 LIKE（v4 同款口径）。
+      try {
+        db.exec(`
+          CREATE VIRTUAL TABLE IF NOT EXISTS media_transcripts_fts USING fts5(
+              item_id UNINDEXED,
+              text,
+              tokenize='trigram'
+          );
+        `);
+      } catch (_) { /* FTS 不可用：转写搜索走 LIKE */ }
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

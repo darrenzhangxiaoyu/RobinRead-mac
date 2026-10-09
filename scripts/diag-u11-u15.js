@@ -285,7 +285,7 @@ app.whenReady().then(async () => {
     ok(b.searchItem, 'U14 settingsSearch：设置项标题命中且带 hits');
     ok(b.fullscreen, 'U14 设置全屏化（settings-modal 类真挂载）');
     ok(b.searchBox, 'U14 顶部搜索框真渲染');
-    ok(b.navCount === 15, `U14 锚点导航 15 分区真渲染（实际 ${b.navCount}）`);
+    ok(b.navCount >= 15, `U14 锚点导航分区真渲染（实际 ${b.navCount}，随功能批次增长）`);
     ok(b.introCard, 'U14 分区锚点名片真渲染');
     ok(b.filterNav && b.filterHit, 'U14 搜索过滤：导航只留命中分区并展示命中设置项');
     ok(b.filterRows && b.filterRestore, 'U14 搜索过滤：当前分区行就地隐藏/清空恢复');

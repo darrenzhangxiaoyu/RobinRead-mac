@@ -6937,3 +6937,104 @@ body.nj-win-drag .nj-snap-edge { opacity: 0.85; }
 .wc-btn + .wc-btn { border-left: 1px solid color-mix(in srgb, var(--separator) 60%, transparent); }
 
 
+
+/* ── F21 事件聚类（列表事件模式事件卡）────────────────────────── */
+.nj-event-card {
+  border-bottom: 1px solid var(--hairline);
+  padding: var(--space-2) 14px;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.nj-event-card:hover { background: var(--row-hover); }
+.nj-event-card.expanded { background: color-mix(in srgb, var(--row-selected) 55%, transparent); }
+.nj-event-head {
+  display: flex; align-items: baseline; gap: var(--space-3);
+  cursor: pointer; min-height: 30px;
+  border-radius: var(--radius-md);
+}
+.nj-event-head:focus-visible { outline: var(--focus-w, 2px) solid var(--accent); outline-offset: 2px; }
+.nj-event-title {
+  flex: 1; min-width: 0;
+  font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nj-event-meta { display: flex; align-items: baseline; gap: var(--space-2); flex: 0 0 auto; }
+.nj-event-sources {
+  font-size: var(--fs-xs); font-weight: 600; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: var(--radius-xs); padding: 0 5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.nj-event-chevron { color: var(--text-tertiary); display: inline-flex; transition: transform var(--dur-fast) var(--ease-out); }
+.nj-event-chevron svg { transform: rotate(-90deg); }
+.nj-event-card.expanded .nj-event-chevron svg { transform: rotate(0deg); }
+.nj-event-members { display: flex; flex-direction: column; padding: var(--space-1) 0 var(--space-2) var(--space-5); }
+.nj-event-member {
+  appearance: none; border: none; background: transparent; font: inherit; text-align: left;
+  display: flex; align-items: baseline; gap: var(--space-2);
+  padding: 3px var(--space-2); border-radius: var(--radius-md); cursor: pointer;
+  color: var(--text-secondary); font-size: 12.5px;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.nj-event-member:hover { background: var(--row-hover); color: var(--text-primary); }
+.nj-event-member-src {
+  flex: 0 0 auto; max-width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-tertiary); font-size: var(--fs-sm);
+}
+.nj-event-member-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── F22 播客转文字稿（媒体视图转写按钮/徽标/文字稿面板）────────── */
+.nj-media-search {
+  display: flex; align-items: center; gap: var(--space-2);
+  border: 1px solid var(--hairline); border-radius: var(--radius-full);
+  padding: 3px 10px; color: var(--text-tertiary); flex: 0 0 auto;
+}
+.nj-media-search input {
+  border: none; outline: none; background: transparent; font: inherit;
+  font-size: 12.5px; color: var(--text-primary); width: 150px;
+}
+.nj-media-transcript-badge {
+  flex: 0 0 auto; font-size: var(--fs-2xs); font-weight: 600; color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  border-radius: var(--radius-xs); padding: 0 4px;
+}
+.nj-media-tx-status {
+  flex: 0 0 auto; font-size: var(--fs-sm); color: var(--text-tertiary); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.nj-media-tx-status.failed { color: var(--danger); font-weight: 600; }
+.nj-media-tx[disabled] { opacity: 0.45; cursor: not-allowed; }
+.nj-transcript-overlay { z-index: 860; }
+.nj-transcript-modal {
+  width: min(680px, calc(100vw - 96px));
+  max-height: calc(100vh - 120px);
+  display: flex; flex-direction: column;
+  padding: var(--space-5); gap: var(--space-4);
+}
+.nj-transcript-head { display: flex; align-items: baseline; gap: var(--space-3); }
+.nj-transcript-head h3 { margin: 0; font-size: 17px; flex: 0 0 auto; }
+.nj-transcript-sub { flex: 1; font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-transcript-body {
+  overflow-y: auto; min-height: 160px; max-height: 56vh;
+  border-top: 1px solid var(--hairline); border-bottom: 1px solid var(--hairline);
+  padding: var(--space-3) 0;
+  display: flex; flex-direction: column; gap: var(--space-3);
+}
+.nj-transcript-summary {
+  background: var(--note-background); border: 1px solid var(--note-border);
+  border-radius: var(--radius-card); padding: var(--space-3) var(--space-4);
+  display: flex; flex-direction: column; gap: var(--space-2);
+}
+.nj-transcript-summary-title {
+  font-size: var(--fs-sm); font-weight: 700; color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.nj-transcript-summary-text { font-size: 13px; color: var(--text-primary); line-height: 1.7; white-space: pre-wrap; }
+.nj-transcript-content { display: flex; flex-direction: column; gap: 6px; }
+.nj-transcript-seg { display: flex; gap: var(--space-3); align-items: baseline; }
+.nj-transcript-ts {
+  flex: 0 0 auto; font-size: var(--fs-sm); color: var(--accent);
+  font-variant-numeric: tabular-nums; opacity: 0.85;
+}
+.nj-transcript-seg-text { font-size: 13px; color: var(--text-primary); line-height: 1.7; }
+.nj-transcript-plain { margin: 0; font-size: 13px; color: var(--text-primary); line-height: 1.8; white-space: pre-wrap; }
+.nj-transcript-foot { display: flex; justify-content: flex-end; gap: var(--space-3); }

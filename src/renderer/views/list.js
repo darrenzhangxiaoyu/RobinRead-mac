@@ -43,6 +43,14 @@ function fulltextPending(item) {
   return mode === 'on' || mode === 'newOnly';
 }
 
+/** 事件卡（F21）小件工厂：tag + class + textContent（不可信回显一律 textContent）。 */
+function eventEl(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
 export class ListView {
   constructor(scrollEl, handlers) {
     this.scrollEl = scrollEl;
@@ -53,6 +61,11 @@ export class ListView {
     // F10 智能精选：视图载荷与播报态（app 层经 setPicks / setPicksBroadcastState 驱动）
     this.picksData = null;
     this.picksBroadcastState = 'idle';
+    // F21 事件模式：渲染层按事件簇分组（scope 照常生效，非新 scope）；
+    // eventsData = Map(clusterID → summaries 载荷)（app 层经 setEvents 驱动）
+    this.eventsMode = false;
+    this.eventsData = new Map();
+    this._expandedEvents = new Set();
     // R23 批量多选：选中集合 + 区间锚点（视图层状态，随重渲染清空）
     this.picked = new Set();
     this.pickAnchor = -1;
@@ -140,11 +153,15 @@ export class ListView {
         <button class="digest-btn" id="list-sort-btn" title="${escapeHTML(t('切换排序方式'))}"><span></span></button>
         <button class="digest-btn" id="digest-btn" title="${escapeHTML(t('AI 汇总今日全部文章'))}">${icon('spark')}<span></span></button>
         <button class="digest-btn" id="picks-btn" title="${escapeHTML(t('按你的阅读兴趣重排的今日精选（本地画像，零 AI）'))}">${icon('wand')}<span></span></button>
+        <button class="digest-btn" id="events-btn" title="${escapeHTML(t('把多源同题报道聚合成事件卡，一眼看全事件全景'))}">${icon('events')}<span></span></button>
         <button class="digest-btn" id="later-clean-btn" title="${escapeHTML(t('把入队超过 14 天的稍后读标记已读并移出队列'))}" style="display:none"></button>
       </div>`;
     this.topInset.querySelector('#digest-btn span').textContent = t('今日简报');
     this.topInset.querySelector('#picks-btn span').textContent = t('精选');
     this.topInset.querySelector('#picks-btn').addEventListener('click', () => this.handlers.onTogglePicks?.());
+    this.eventsBtn = this.topInset.querySelector('#events-btn');
+    this.topInset.querySelector('#events-btn span').textContent = t('事件');
+    this.eventsBtn.addEventListener('click', () => this.handlers.onToggleEvents?.());
     const cleanBtn = this.topInset.querySelector('#later-clean-btn');
     cleanBtn.addEventListener('click', () => this.handlers.onCleanupLater?.(this._overdueIDs || []));
     this.sortBtn = this.topInset.querySelector('#list-sort-btn');
@@ -208,7 +225,7 @@ export class ListView {
       ? [scope.kind || '', scope.id || '', scope.name || '', scope.folderName || '', scope.tag || '', scope.feedID || '',
         (scope.feedIDs || []).join(','), scope.accountID || ''].join('\u0002')
       : '';
-    let h = `${scopeKey}|${selectedID || ''}|${hasUnread ? 1 : 0}|${this.viewMode}`;
+    let h = `${scopeKey}|${selectedID || ''}|${hasUnread ? 1 : 0}|${this.viewMode}|${this.eventsMode ? 1 : 0}`;
     for (const it of items) h += `|${it.id}:${it.isRead ? 1 : 0}${it.isStarred ? 1 : 0}${it.isLater ? 1 : 0}`;
     return h;
   }
@@ -232,6 +249,131 @@ export class ListView {
     wrap.setAttribute('aria-hidden', 'true');
     for (let i = 0; i < 8; i += 1) wrap.appendChild(skeletonRow());
     this.rowsHost.appendChild(wrap);
+  }
+
+  // MARK: - 事件模式（F21：多源同题报道聚合事件卡；渲染层分组，scope 照常生效）
+
+  /**
+   * 切换事件模式（工具栏/命令面板共用）。开启后 render 走事件卡分组；
+   * 同一签名的另一形态必须真重绘（_sigBust），与 setViewMode 同惯例。
+   */
+  setEventsMode(on) {
+    this.eventsMode = on === true;
+    if (!this.eventsMode) this._expandedEvents.clear();
+    this.eventsBtn.classList.toggle('active', this.eventsMode);
+    this._sigBust = true;
+  }
+
+  /** 写入事件卡摘要载荷（app 层在 reloadList 时按当页 clusterID 批量拉取）；null 清空。 */
+  setEvents(summaries) {
+    this.eventsData = new Map();
+    for (const s of (Array.isArray(summaries) ? summaries : [])) {
+      if (s && s.id) this.eventsData.set(s.id, s);
+    }
+  }
+
+  /**
+   * 事件视图：当页条目按 clusterID 分组——每簇一张事件卡（代表条目标题 + N 源徽标 +
+   * 时间），收合态默认只看代表；点卡展开簇内全部条目（来源名+标题，点行进阅读器）。
+   * 独报（无 clusterID）保持普通行渲染；顺序沿用时间线。
+   */
+  _renderEvents(items, selectedID) {
+    this.rowsHost.innerHTML = '';
+    this._renderGen = (this._renderGen || 0) + 1;
+    this._renderingPages = false;
+    const emitted = new Set(); // 已被事件卡收编的条目
+    const frag = document.createDocumentFragment();
+    for (const item of items) {
+      if (!item.clusterID || emitted.has(item.id)) {
+        if (!item.clusterID) frag.appendChild(this.rowFor(item));
+        continue;
+      }
+      const members = items.filter((it) => it.clusterID === item.clusterID);
+      for (const m of members) emitted.add(m.id);
+      frag.appendChild(this._eventCard(item.clusterID, members));
+    }
+    this.rowsHost.appendChild(frag);
+    this.markSelected(selectedID);
+    this._observeReveal();
+    this._knownIds = new Set(items.map((it) => it.id));
+    this._markNew = false;
+  }
+
+  /** 单张事件卡：收合 = 代表条目一行；点击展开/收起成员清单（N 源徽标直读摘要）。 */
+  _eventCard(clusterID, members) {
+    const summary = this.eventsData.get(clusterID) || null;
+    const first = members[0];
+    const repTitle = stripHtml(summary?.title || first.title) || t('未命名文章');
+    const sourceCount = summary?.sourceCount
+      || new Set(members.map((m) => m.sourceTitle || m.id)).size;
+    const card = document.createElement('article');
+    card.className = 'nj-event-card';
+    card.dataset.clusterId = clusterID;
+    card.classList.toggle('expanded', this._expandedEvents.has(clusterID));
+
+    const head = document.createElement('div');
+    head.className = 'nj-event-head';
+    head.setAttribute('role', 'button');
+    head.tabIndex = 0;
+    const titleEl = eventEl('div', 'nj-event-title');
+    titleEl.textContent = repTitle;
+    titleEl.title = repTitle;
+    const meta = eventEl('div', 'nj-event-meta');
+    const badge = eventEl('span', 'nj-event-sources', tf('%lld 源', sourceCount));
+    badge.title = t('聚合了多家来源的同题报道');
+    meta.appendChild(badge);
+    const time = document.createElement('span');
+    time.className = 'entry-time';
+    time.textContent = formatTime(first.publishedAt);
+    time.title = fullTime(first.publishedAt);
+    meta.appendChild(time);
+    const chev = eventEl('span', 'nj-event-chevron');
+    chev.innerHTML = icon('chevronDown');
+    head.append(titleEl, meta, chev);
+    card.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'nj-event-members';
+    const fill = () => {
+      body.innerHTML = '';
+      // 全景成员：优先摘要载荷（跨页全簇），当页成员兜底（摘要在途/缺失时）
+      const rows = (summary?.members?.length ? summary.members : members.map((m) => ({
+        itemID: m.id, title: m.title, sourceTitle: m.sourceTitle, publishedAt: m.publishedAt,
+      })));
+      for (const m of rows) {
+        const row = eventEl('button', 'nj-event-member');
+        row.type = 'button';
+        const src = eventEl('span', 'nj-event-member-src', m.sourceTitle || '');
+        src.title = m.sourceTitle || '';
+        const tt = eventEl('span', 'nj-event-member-title', stripHtml(m.title) || t('未命名文章'));
+        row.append(src, tt);
+        row.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.handlers.onSelect(m.itemID, this.items.find((it) => it.id === m.itemID) || null);
+        });
+        body.appendChild(row);
+      }
+    };
+    card.appendChild(body);
+    const syncOpen = () => {
+      const open = this._expandedEvents.has(clusterID);
+      card.classList.toggle('expanded', open);
+      if (open) fill();
+      else body.innerHTML = '';
+    };
+    head.addEventListener('click', () => {
+      if (this._expandedEvents.has(clusterID)) this._expandedEvents.delete(clusterID);
+      else this._expandedEvents.add(clusterID);
+      syncOpen();
+    });
+    head.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        head.click();
+      }
+    });
+    if (this._expandedEvents.has(clusterID)) fill();
+    return card;
   }
 
   render(items, scope, selectedID, hasUnread) {
@@ -305,6 +447,13 @@ export class ListView {
       this.rowsHost.appendChild(empty);
       this._knownIds = new Set();
       this._markNew = false;
+      return;
+    }
+
+    // F21 事件模式：按事件簇分组渲染（优先于杂志/普通聚类；scope 已由数据面过滤）
+    if (this.eventsMode) {
+      this.rowsHost.closest('.list-scroll')?.classList.remove('nj-mag-paper', 'nj-mag-white', 'nj-mag-book');
+      this._renderEvents(items, selectedID);
       return;
     }
 

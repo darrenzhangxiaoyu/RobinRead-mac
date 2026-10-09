@@ -37,6 +37,17 @@ function fmtDuration(seconds) {
   return tf('%lld 秒', s);
 }
 
+/** 文字稿时间戳（F22）：秒 → mm:ss（超 1 小时 h:mm:ss）。 */
+function fmtTimestamp(seconds) {
+  const s = Math.max(0, Math.floor(Number(seconds) || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(sec).padStart(2, '0');
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
 export class MediaView {
   /**
    * @param deps.onOpenArticle(itemID) 行内视频条目 → 打开阅读器（内嵌 <video controls>）
@@ -53,6 +64,11 @@ export class MediaView {
     this.items = [];
     this._downloadProgress = new Map(); // itemID -> {received, total, state}（IPC 推送直连）
     this._unsubscribeProgress = null;
+    // 转写（F22）：端点就绪态 + 转写进度推送缓存 + 文字稿关键字过滤词
+    this._transcribeReady = false;
+    this._transcribeProgress = new Map(); // itemID -> {state, phase, pct, error}
+    this._unsubscribeTranscribe = null;
+    this._query = '';
   }
 
   present() {
@@ -69,6 +85,21 @@ export class MediaView {
     close.title = t('关闭');
     close.addEventListener('click', () => this.dismiss());
     head.append(title, close);
+
+    // 文字稿关键字过滤（F22）：媒体视图内按转写全文检索过滤行（主进程 FTS/LIKE 旁路）
+    const search = el('div', 'nj-media-search');
+    search.innerHTML = `${icon('search')}<input type="text" spellcheck="false"/>`;
+    this._searchInput = search.querySelector('input');
+    this._searchInput.placeholder = t('搜索文字稿…');
+    let searchTimer = null;
+    this._searchInput.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => {
+        this._query = this._searchInput.value.trim();
+        this._load();
+      }, 260);
+    });
+    head.appendChild(search);
 
     const filters = el('div', 'nj-media-filters');
     this._filterButtons = {};
@@ -123,8 +154,12 @@ export class MediaView {
       this._spaceToggle();
     };
     document.addEventListener('keydown', this._space, true);
-    // Esc 关闭（与知识中心等浮层一致）
-    this._esc = (event) => { if (event.key === 'Escape' && !event.defaultPrevented) this.dismiss(); };
+    // Esc 关闭（与知识中心等浮层一致）；文字稿面板在场时让位（面板自带 Esc 自关）
+    this._esc = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('.nj-transcript-overlay')) return;
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._esc);
     // 下载进度推送（主进程 → 渲染层）：单行补丁 + 终态轻刷新
     this._unsubscribeProgress = window.robin.onMediaDownloadProgress((p) => {
@@ -133,6 +168,17 @@ export class MediaView {
       this._patchRow(p.itemID);
       if (p.state === 'done' || p.state === 'failed') this._load({ silent: true });
     });
+    // 转写进度推送（F22）：排队/转写中%/完成/失败 → 单行补丁；终态轻刷新行集（徽标）
+    this._unsubscribeTranscribe = window.robin.onTranscribeProgress((p) => {
+      if (!p || !p.itemID) return;
+      this._transcribeProgress.set(p.itemID, p);
+      this._patchRow(p.itemID);
+      if (p.state === 'done' || p.state === 'error') this._load({ silent: true });
+    });
+    window.robin.transcribeReady().then((ready) => {
+      this._transcribeReady = ready === true;
+      if (this.overlay) for (const item of this.items) this._patchRow(item.itemID);
+    }).catch(() => {});
     this._syncFilterButtons();
     this._load();
   }
@@ -144,6 +190,10 @@ export class MediaView {
     if (this._unsubscribeProgress) {
       this._unsubscribeProgress();
       this._unsubscribeProgress = null;
+    }
+    if (this._unsubscribeTranscribe) {
+      this._unsubscribeTranscribe();
+      this._unsubscribeTranscribe = null;
     }
     this.overlay.remove();
     this.overlay = null;
@@ -173,7 +223,7 @@ export class MediaView {
 
   async _load({ silent = false } = {}) {
     if (!this.overlay) return;
-    const result = await window.robin.mediaList(this.filter, { limit: PAGE_SIZE, offset: 0 });
+    const result = await window.robin.mediaList(this.filter, { limit: PAGE_SIZE, offset: 0, query: this._query || null });
     if (!this.overlay) return;
     this.items = Array.isArray(result) ? result : [];
     await this._syncQueueSet();
@@ -221,6 +271,169 @@ export class MediaView {
     });
     sync();
     stateWrap.appendChild(queueBtn);
+  }
+
+  /**
+   * 转写按钮/状态徽标（F22，仅音频行）：
+   * running → 「转写中 N%」/「转写中…」；queued → 「排队中」；error → 「失败」+「重试转写」；
+   * done → 「文字稿」开面板按钮；未转写 → 「转写」按钮（端点未配置灰置 + tooltip 指路设置）。
+   */
+  _appendTranscribeBtn(stateWrap, item) {
+    if (item.kind !== 'audio') return;
+    const live = this._transcribeProgress.get(item.itemID);
+    const state = live?.state || item.transcriptStatus || 'none';
+    const start = (btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const tx = await window.robin.transcribeMedia(item.itemID);
+          this._transcribeProgress.set(item.itemID, { itemID: item.itemID, state: tx?.status || 'queued' });
+        } catch (e) {
+          this.deps.toast?.(String(e && e.message || e) || t('转写失败'));
+        }
+        this._patchRow(item.itemID); // 整行动作区重建：徽标随最新状态切换（排队中/转写中）
+      });
+    };
+    const refreshStateTx = () => {
+      stateWrap.querySelectorAll('.nj-media-tx, .nj-media-tx-status, .nj-media-tx-open, .nj-media-tx-retry').forEach((n) => n.remove());
+      const fresh = this.items.find((x) => x.itemID === item.itemID) || item;
+      const wrap = document.createDocumentFragment();
+      if (state === 'running' || state === 'queued') {
+        const pct = state === 'running' && live && live.pct != null ? Math.max(1, Math.min(99, live.pct)) : null;
+        wrap.appendChild(el('span', 'nj-media-tx-status',
+          state === 'queued' ? t('排队中') : (pct != null ? tf('转写中 %lld%', pct) : t('转写中…'))));
+      } else if (state === 'error') {
+        const badge = el('span', 'nj-media-tx-status failed', t('失败'));
+        badge.title = String(live?.error || fresh.transcriptError || t('转写失败'));
+        const retry = el('button', 'btn-text nj-media-tx-retry', t('重试转写'));
+        retry.type = 'button';
+        retry.title = badge.title;
+        start(retry);
+        wrap.append(badge, retry);
+      } else if (fresh.hasTranscript || state === 'done') {
+        const open = el('button', 'btn-text nj-media-tx-open', t('文字稿'));
+        open.type = 'button';
+        open.title = t('查看文字稿');
+        open.addEventListener('click', () => this._openTranscript(item.itemID));
+        wrap.appendChild(open);
+      } else {
+        const btn = el('button', 'btn-text nj-media-tx', t('转写'));
+        btn.type = 'button';
+        if (!this._transcribeReady) {
+          btn.disabled = true;
+          btn.title = t('未配置转写端点：在 设置 → 转写 中开启并填写本地 ASR 服务地址');
+        } else {
+          btn.title = t('用本地 ASR 服务把音频转成可搜索的文字稿');
+          start(btn);
+        }
+        wrap.appendChild(btn);
+      }
+      stateWrap.appendChild(wrap);
+    };
+    refreshStateTx();
+  }
+
+  /**
+   * 文字稿面板（F22）：AI 摘要（若有）置顶 + 可滚动全文（segments 在场渲染时间戳，
+   * 否则纯文本）+ 一键复制 + AI 摘要按钮（无 Key 灰置）。
+   */
+  async _openTranscript(itemID) {
+    const tx = await window.robin.mediaTranscript(itemID);
+    if (!tx || tx.status !== 'done') {
+      this.deps.toast?.(t('文字稿还没有完成'));
+      return;
+    }
+    document.querySelector('.nj-transcript-overlay')?.remove();
+    const overlay = el('div', 'modal-overlay nj-transcript-overlay');
+    const panel = el('div', 'modal nj-transcript-modal');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-label', t('文字稿'));
+    const head = el('div', 'nj-transcript-head');
+    const title = el('h3', null, t('文字稿'));
+    const metaBits = [];
+    if (tx.language) metaBits.push(tx.language);
+    if (tx.durationSeconds > 0) metaBits.push(fmtDuration(tx.durationSeconds));
+    const sub = el('span', 'nj-transcript-sub', metaBits.join(' · '));
+    const closeBtn = el('button', 'btn icon-only nj-transcript-close');
+    closeBtn.type = 'button';
+    closeBtn.innerHTML = icon('close');
+    closeBtn.title = t('关闭');
+    head.append(title, sub, closeBtn);
+    panel.appendChild(head);
+
+    const body = el('div', 'nj-transcript-body');
+    // 摘要置顶（已生成时）
+    if (tx.summary) {
+      const sumBox = el('div', 'nj-transcript-summary');
+      sumBox.appendChild(el('div', 'nj-transcript-summary-title', t('AI 摘要')));
+      sumBox.appendChild(el('div', 'nj-transcript-summary-text', tx.summary));
+      body.appendChild(sumBox);
+    }
+    const content = el('div', 'nj-transcript-content');
+    if (Array.isArray(tx.segments) && tx.segments.length) {
+      for (const seg of tx.segments) {
+        const row = el('div', 'nj-transcript-seg');
+        const ts = el('span', 'nj-transcript-ts', fmtTimestamp(seg.start));
+        const text = el('span', 'nj-transcript-seg-text', seg.text || '');
+        row.append(ts, text);
+        content.appendChild(row);
+      }
+    } else {
+      content.appendChild(el('p', 'nj-transcript-plain', tx.text || t('（空文字稿）')));
+    }
+    body.appendChild(content);
+    panel.appendChild(body);
+
+    const foot = el('div', 'nj-transcript-foot');
+    const copyBtn = el('button', 'btn-text bordered', t('复制文字稿'));
+    copyBtn.type = 'button';
+    copyBtn.addEventListener('click', async () => {
+      const plain = Array.isArray(tx.segments) && tx.segments.length
+        ? tx.segments.map((s) => `[${fmtTimestamp(s.start)}] ${s.text || ''}`).join('\n')
+        : tx.text;
+      try { await window.robin.copyText(plain); this.deps.toast?.(t('已复制文字稿')); }
+      catch (_) { this.deps.toast?.(t('复制失败')); }
+    });
+    const aiBtn = el('button', 'btn-text primary', tx.summary ? t('重新生成 AI 摘要') : t('AI 摘要'));
+    aiBtn.type = 'button';
+    if (window.__robinLLM?.__hasKey === false) {
+      aiBtn.disabled = true;
+      aiBtn.title = t('尚未配置 AI API Key：在 设置 → AI 功能 中配置后可用');
+    }
+    aiBtn.addEventListener('click', async () => {
+      aiBtn.disabled = true;
+      aiBtn.textContent = t('正在生成摘要…');
+      try {
+        const res = await window.robin.transcriptSummary(itemID);
+        const sumBox = body.querySelector('.nj-transcript-summary');
+        if (sumBox) sumBox.querySelector('.nj-transcript-summary-text').textContent = res.summary || '';
+        else {
+          const box = el('div', 'nj-transcript-summary');
+          box.appendChild(el('div', 'nj-transcript-summary-title', t('AI 摘要')));
+          box.appendChild(el('div', 'nj-transcript-summary-text', res.summary || ''));
+          body.insertBefore(box, body.firstChild);
+        }
+        this.deps.toast?.(t('摘要已生成'));
+        aiBtn.textContent = t('重新生成 AI 摘要');
+      } catch (e) {
+        this.deps.toast?.(String(e && e.message || e) || t('摘要生成失败'));
+        aiBtn.textContent = tx.summary ? t('重新生成 AI 摘要') : t('AI 摘要');
+      }
+      aiBtn.disabled = window.__robinLLM?.__hasKey === false;
+    });
+    foot.append(copyBtn, aiBtn);
+    panel.appendChild(foot);
+
+    overlay.appendChild(panel);
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) closePanel(); });
+    const closePanel = () => {
+      document.removeEventListener('keydown', escClose);
+      overlay.remove();
+    };
+    const escClose = (event) => { if (event.key === 'Escape' && !event.defaultPrevented) closePanel(); };
+    document.addEventListener('keydown', escClose);
+    closeBtn.addEventListener('click', () => closePanel());
+    document.body.appendChild(overlay);
   }
 
   async _loadMore() {
@@ -292,6 +505,12 @@ export class MediaView {
     const duration = fmtDuration(item.durationSeconds);
     if (duration) meta.appendChild(el('span', 'nj-media-duration', duration));
     if (item.playedAt) meta.appendChild(el('span', 'nj-media-played', t('听过')));
+    if (item.hasTranscript) {
+      // 「稿」徽标（F22）：该条目已有完成文字稿（可搜索/可看）
+      const badge = el('span', 'nj-media-transcript-badge', t('稿'));
+      badge.title = t('已有文字稿，点右侧「文字稿」查看');
+      meta.appendChild(badge);
+    }
     body.append(titleEl, meta);
 
     // 进度条：播放过且未播完时显示（position/duration）
@@ -356,6 +575,7 @@ export class MediaView {
           stateWrap.appendChild(dlBtn);
         }
         this._appendQueueBtn(stateWrap, item);
+        this._appendTranscribeBtn(stateWrap, item); // 转写按钮（F22：仅音频行）
       }
     };
     row.__refreshState = refreshState;

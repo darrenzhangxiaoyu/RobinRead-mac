@@ -42,6 +42,7 @@ const { SmartPicksService, scoreArticle, SORT_WEIGHTS } = require('./SmartPicksS
 const { ObsidianExportService } = require('./ObsidianExportService');
 const { BooksService } = require('./BooksService');
 const { SimilarService } = require('./SimilarService');
+const { EventClusterService } = require('./EventClusterService'); // 事件聚类去重（F21）：多源同题报道聚合
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -170,6 +171,7 @@ class AppStore extends EventEmitter {
     this.obsidian = new ObsidianExportService(this); // Obsidian 知识库导出（F11）：Markdown 库 + 增量游标（目录授权仅内存态）
     this.books = new BooksService(this, userDataPath); // 个人文集自动成书（F12）：文集 CRUD + EPUB 成书 + 自动节流
     this.similar = new SimilarService(this); // 相关文章 + 线索视图（F13）：文末继续读 + 知识中心线索 tab
+    this.events = new EventClusterService(this); // 事件聚类去重（F21）：多源同题报道聚合事件卡
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -1058,6 +1060,11 @@ class AppStore extends EventEmitter {
     // （零 AI 确定性，纯 SQL 单事务；异常静默不外抛，不影响入库主流程）
     if (newUnread.length) {
       try { this.tagAuto.inheritFor(feed.id, newUnread); } catch (_) { /* 打标失败不外抛 */ }
+    }
+    // 事件聚类去重（F21）：灌文事务提交后只登记 ID，增量聚类由服务后台合批异步接力
+    // （bigram Jaccard 精排在 setTimeout 之后执行，绝不阻塞灌文主路径）
+    if (newUnread.length) {
+      try { this.events.noteNewEntries(newUnread); } catch (_) { /* 聚类登记失败不外抛 */ }
     }
     if (newUnread.length > 200) newUnread = newUnread.slice(0, 200);
     if (newUnread.length) this._bumpListSet();

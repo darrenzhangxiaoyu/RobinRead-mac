@@ -65,6 +65,12 @@ const views = {};
 let navConfirmation = null;     // { key, entryID, expiresAt, timer }
 // F10 智能精选：开启态 + 请求序号（快速切换时过期返回丢弃）
 const picksState = { on: false, seq: 0 };
+// F21 事件模式：开启态（本地持久化）；事件卡摘要随列表页拉取（渲染层分组，非新 scope）
+const eventsState = {
+  on: false,
+  restore() { try { this.on = localStorage.getItem('robinread.eventsMode') === '1'; } catch (_) { this.on = false; } },
+  save() { try { localStorage.setItem('robinread.eventsMode', this.on ? '1' : '0'); } catch (_) { /* 隐私模式放弃 */ } },
+};
 // P1-8：列表请求序号——reloadList 与 onStateChanged 全量重拉并发竞争时，
 // 只有最新请求的返回才允许落地（视野切换乱序的根源修复）
 let listReqSeq = 0;
@@ -168,6 +174,7 @@ async function bootstrap() {
     onSearch: runSearch,
     onDigest: showTodayDigest,
     onTogglePicks: () => toggleSmartPicks(),
+    onToggleEvents: () => toggleEventsMode(),
     onBroadcastPicks: () => broadcastSmartPicks(),
     onPicksDismiss: (entryID) => dismissSmartPick(entryID),
     onPicksLimit: (n) => {
@@ -226,6 +233,9 @@ async function bootstrap() {
   );
   window.__robinReader = views.reader; // E2E 测试句柄
   window.__robinList = views.list; // E2E 测试句柄（F10 探针观测精选视图态）
+  // F21 事件模式：恢复上次会话的开启态（按钮高亮 + 首次 render 走事件卡分组）
+  eventsState.restore();
+  views.list.setEventsMode(eventsState.on);
   window.__robinReaderOpen = (entryID) => handleEntrySelect(entryID, { isRead: true }); // F13：文末继续读打开相关文章
 
   buildToolbar();
@@ -712,6 +722,7 @@ function buildPaletteCommands() {
     { label: t('播放今日电台'), keywords: 'radio 电台 播报 简报 听 audio play', icon: 'radioDot', action: () => playTodayRadio() },
     { label: t('专注会话'), keywords: 'focus session 专注 番茄 计时', icon: 'clock', action: () => views.focus?.open() },
     { label: t('智能精选'), keywords: 'smart picks 精选 推荐 画像 兴趣 interest', icon: 'wand', action: () => toggleSmartPicks() },
+    { label: t('切换事件模式'), keywords: 'events 事件 聚合 同题 全景 cluster 去重', icon: 'events', desc: t('把多源同题报道聚合成事件卡，一眼看全事件全景。'), action: () => toggleEventsMode() },
     { label: t('媒体中心'), keywords: 'media podcast 播客 媒体 音频 视频 open', icon: 'playCircle', action: () => openMediaView() },
     { label: t('话题盯梢…'), keywords: 'topic track 盯梢 话题 关键词 订阅 open', icon: 'search', action: () => openTopicsView() },
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
@@ -842,6 +853,17 @@ async function reloadList({ resetScroll = false } = {}) {
   }
   if (seq !== listReqSeq) return; // 已有更新请求在途/落地：本次结果过期
   state.listItems = result.data;
+  // F21 事件模式：按当页 clusterID 批量拉取事件卡摘要（代表条目/N 源/全簇成员）
+  if (eventsState.on) {
+    const clusterIDs = [...new Set(state.listItems.map((it) => it.clusterID).filter(Boolean))];
+    let summaries = [];
+    if (clusterIDs.length) {
+      try { summaries = await window.robin.eventSummaries(clusterIDs) || []; }
+      catch (_) { summaries = []; }
+    }
+    if (seq !== listReqSeq) return; // 摘要在途时列表又被刷新：丢弃过期载荷
+    views.list.setEvents(summaries);
+  }
   // F10 智能精选：开启态只适用于 today/unread 视野——切到其他视野自动收起
   if (picksState.on && !ListView.picksEligible(state.scope)) {
     picksState.on = false;
@@ -861,6 +883,16 @@ async function reloadList({ resetScroll = false } = {}) {
   views.list.setResume(state.scope?.kind === 'today' ? views.reader?.resumeCandidate?.() || null : null);
   updateToolbarState();
   if (resetScroll) views.list.scrollTop();
+}
+
+// MARK: - 事件模式（F21：工具栏「事件」切换 / 命令面板「切换事件模式」）
+
+/** 事件模式开关：开 = 列表按事件簇分组渲染（渲染层分组，scope 照常生效）；关 = 回普通列表。 */
+async function toggleEventsMode() {
+  eventsState.on = !eventsState.on;
+  eventsState.save();
+  views.list.setEventsMode(eventsState.on);
+  await reloadList();
 }
 
 // MARK: - 智能每日精选（F10：工具栏「精选」切换 / 播报 / 不感兴趣）

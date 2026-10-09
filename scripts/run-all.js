@@ -104,6 +104,8 @@ const OFFLINE = [
   { file: 'scripts/diag-f18-monitor.js', runner: 'electron', desc: 'F18 网页追更：v21迁移与级联与幂等/首抓只存基线零文章/变化合成文章含ins高亮与缓存通路/段落删除折叠N段已移除/无变化零文章/追更源列表侧栏正常/更改选择器重建hash与重抓基线/停止追更不再抓取/30min节流注入时间与force跳过/500KB提取diff<1s（离线）' },
   { file: 'scripts/diag-f19-radio.js', runner: 'electron', desc: 'F19 简报电台：模板文稿降级(无AI Top10含日期开场)/AI改写mock与失败静默降级/分句合成链mock逐句预取/上一句下一句暂停停止/位置记忆跨重启续听hash失效/四方互斥(开电台停媒体朗读精选反向亦然)/合成缓存同hash零重合成/简报浮层+命令面板入口/胶囊句序第X/Y句（离线）' },
   { file: 'scripts/diag-f20-goals.js', runner: 'electron', desc: 'F20 阅读目标与专注会话：目标持久化(日/周/0=关/越界钳制)/进度环3篇5目标60%/达标恭喜一次性同日跨重启不重复/周进度条聚合/专注面板倒计时注入时间加速/会话小结计数与剪贴板/中途退出确认/目标关闭进度环隐藏（离线）' },
+  { file: 'scripts/diag-f21-events.js', runner: 'electron', desc: 'F21 事件聚类去重：v22迁移与老库无损/多源相似标题聚成一簇/不相似不聚/增量入库并簇与代表迁移/7天窗口外不聚/阈值边界0.55/幂等与rebuild补跑零重复/summaries载荷(N源/成员/死簇回收)/事件模式渲染(工具栏切换/分组卡/收合态代表/N源徽标/展开成员/作用域过滤)/入库钩子不阻塞灌文/500条聚类<2s（离线）' },
+  { file: 'scripts/diag-f22-transcribe.js', runner: 'electron', desc: 'F22 播客转文字稿：v22迁移/mock ASR端点(multipart+模型+鉴权头+segments)/默认关闭未配置报错与非法URL拒绝/状态机queued→running→done/进度推送含转写中%/失败HTTP500落error列与重试恢复/单飞排队maxActive=1/本地优先零远端请求/临时文件即删/幂等/FTS关键字过滤(含<3字符LIKE回退与kind叠加)/AI摘要无Key拒绝与mock生成落库/UI转写按钮未配置灰置与稿徽标与文字稿面板时间戳与复制与摘要置顶与Esc让位/配置与文字稿跨重启持久化（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];

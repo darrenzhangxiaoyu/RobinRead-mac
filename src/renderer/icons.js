@@ -81,6 +81,8 @@ export const icons = {
   popout: i('<rect x="1.8" y="4.4" width="9" height="9" rx="1.2"/><path d="M8.4 7.6L14 2M10.2 1.8H14v3.8"/>'),
   // F18 网页追更：页面 + 时钟盯梢
   monitorPage: i('<rect x="1.8" y="2.4" width="12.4" height="9.4" rx="1.2"/><path d="M4.4 5.4h7.2M4.4 7.6h7.2M4.4 9.8h4.4"/><circle cx="11.4" cy="12" r="3"/><path d="M11.4 10.6V12l1 .8"/>'),
+  // F21 事件聚类：三节点汇聚（多源同题事件）
+  events: i('<circle cx="3.6" cy="3.4" r="1.6"/><circle cx="12.4" cy="8" r="1.6"/><circle cx="3.6" cy="12.6" r="1.6"/><path d="M5.1 4.1l5.8 3.2M5.2 11.9l5.7-3.2"/>'),
 };
 
 export function icon(name, extraClass = '') {

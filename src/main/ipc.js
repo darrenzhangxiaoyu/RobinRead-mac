@@ -667,6 +667,18 @@ function registerIPCHandlers(store, window) {
   handle('media:download', (entryID) => M().download(entryID));
   handle('media:download:delete', (entryID) => M().deleteDownload(entryID));
 
+  // MARK: 事件聚类去重（F21：事件卡摘要——代表条目/N 源/成员清单；簇行惰性回收）
+  handle('events:summaries', (ids) => store.events.summaries(ids));
+
+  // MARK: 播客转文字稿（F22：发起/读回/配置/AI 摘要；进度走推送）
+  if (store.media) store.media.onTranscribeProgress((payload) => send('media:transcribe-progress', payload));
+  handle('media:transcribe', (itemID) => M().transcribe(itemID));
+  handle('media:transcript', (itemID) => M().transcript(itemID));
+  handle('media:transcribeConfig:get', () => M().transcribeConfig());
+  handle('media:transcribeConfig:set', (patch) => M().transcribeSetConfig(patch || {}));
+  handle('media:transcribeReady', () => M().transcribeReady());
+  handle('media:transcript:summary', (itemID) => M().transcriptSummary(itemID));
+
   // MARK: 话题盯梢（F4：CRUD / 聚合 / 信息流）
   const TP = () => store.topics;
   handle('topics:list', () => TP().listTopics());

@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: 'rules', title: '过滤规则', icon: 'funnel' },
   { id: 'language', title: '语言', icon: 'globe' },
   { id: 'sync', title: '同步', icon: 'cloud' },
+  { id: 'transcribe', title: '转写', icon: 'docText' },
   { id: 'obsidian', title: 'Obsidian', icon: 'bookOpen' },
   { id: 'bookshelf', title: '书架', icon: 'books' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
@@ -47,6 +48,7 @@ const SECTION_INTRO = {
   rules: '按条件自动处理新文章的规则。',
   language: '界面语言与区域偏好。',
   sync: 'WebDAV 多设备同步与冲突策略。',
+  transcribe: '把播客音频转成本地文字稿：可读、可搜、可 AI 摘要。',
   obsidian: '把文章与高亮导出成 Obsidian 知识库。',
   bookshelf: '把文集成书（EPUB）并管理书目。',
   feedback: '喜欢知更的话，这里可以帮到我们。',
@@ -66,6 +68,7 @@ const SECTION_SEARCH_INDEX = {
   rules: ['过滤规则'],
   language: ['界面语言', '语言选择'],
   sync: ['服务器地址', '用户名', '密码 / 授权码', '测试连接', '自动同步', '立即同步'], /* 用既有 i18n 键（审查 P3：'密码' 是无键裸中文，英文 UI 命中 chip 会回显中文） */
+  transcribe: ['开启音频转写', '转写端点', '转写 API Key（可选）', '转写模型名'],
   obsidian: ['导出目录', '导出文章', '导出高亮与批注', '立即导出', '全量重导'],
   bookshelf: ['新建文集'],
   feedback: ['前往官网'],
@@ -249,6 +252,7 @@ export class SettingsView {
       case 'rules': this._rules(scroll); break;
       case 'language': this._language(scroll, prefs); break;
       case 'sync': this._sync(scroll); break;
+      case 'transcribe': this._transcribe(scroll); break;
       case 'obsidian': this._obsidian(scroll); break;
       case 'bookshelf': this._bookshelf(scroll); break;
       case 'feedback': this._feedback(scroll); break;
@@ -1957,6 +1961,44 @@ export class SettingsView {
   }
 
   // MARK: Obsidian 知识库导出（F11）
+
+  /**
+   * 转写（F22）分区：本地优先 ASR 端点配置（OpenAI 兼容 /v1/audio/transcriptions）。
+   * 默认关闭且未配置不可用；不内置任何云端默认——URL/Key/模型全部用户自填。
+   */
+  async _transcribe(container) {
+    const cfg = await window.robin.transcribeGetConfig().catch(() => null) || {};
+    const textControl = (value, placeholder, onChange, password = false) => {
+      const input = document.createElement('input');
+      input.className = 'control';
+      input.type = password ? 'password' : 'text';
+      input.value = String(value || '');
+      input.placeholder = placeholder || '';
+      input.spellcheck = false;
+      input.addEventListener('change', () => onChange(input.value.trim()));
+      return input;
+    };
+    const save = (patch) => {
+      window.robin.transcribeSetConfig(patch).catch((e) => showToast?.(String(e && e.message || e)));
+    };
+    container.appendChild(group(t('音频转写'), t('在媒体中心为音频条目生成文字稿：可滚动阅读、按关键字全文检索、一键复制，并可用 AI 生成摘要。'), [
+      toggleRow(t('开启音频转写'), t('默认关闭：开启后才会在媒体视图显示「转写」按钮。'), cfg.enabled === true,
+        (v) => save({ enabled: v === true })),
+      row(t('转写端点'), t('OpenAI 兼容 /v1/audio/transcriptions 完整地址（本地 whisper.cpp server / faster-whisper-server 等）。'), textControl(
+        cfg.url, 'http://127.0.0.1:8080/v1/audio/transcriptions', (v) => save({ url: v }),
+      )),
+      row(t('转写 API Key（可选）'), t('本地服务通常留空；仅端点要求鉴权时填写。经系统加密保存，不随文字稿外发。'), textControl(
+        cfg.apiKey, '', (v) => save({ apiKey: v }), true,
+      )),
+      row(t('转写模型名'), t('请求体 model 字段（whisper-1 / large-v3 等，按你的服务填写）。'), textControl(
+        cfg.model && cfg.model !== 'whisper-1' ? cfg.model : '', 'whisper-1', (v) => save({ model: v }),
+      )),
+    ]));
+    container.appendChild(group(t('工作方式'), null, [
+      row(t('离线优先'), t('已离线下载的音频直接读本地文件；未离线的按需临时下载（≤500MB），转写完即删。')),
+      row(t('单飞排队'), t('同一时刻只跑一个转写任务，其余自动排队；失败可一键重试。')),
+    ]));
+  }
 
   async _obsidian(container) {
     const cfg = (await window.robin.obsidianConfig?.().catch(() => null)) || {};

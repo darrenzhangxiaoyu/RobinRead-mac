@@ -32,6 +32,11 @@ const LIST_PAGE_MAX = 200;                     // 单页上限（视图分页 10
 const QUEUE_MAX = 100;                         // 队列上限
 const FINISHED_RATIO = 0.95;                   // >95% 视为播完（归零）
 const APP_UA = 'RobinRead/2.0 (+personal RSS reader)';
+// ── 转写（F22）──
+const TRANSCRIBE_PREF_KEY = 'RobinRead.media.transcribe'; // 配置（JSON：enabled/url/apiKey/model）
+const TRANSCRIBE_TIMEOUT_MS = 30 * 60 * 1000;  // 单次转写总看门狗（本地 whisper 长音频可到数十分钟）
+const TRANSCRIBE_HEADERS_MS = 30000;           // 建连/出响应头超时（照下载看门狗 30s 口径）
+const TRANSCRIBE_TEXT_CAP = 2 * 1024 * 1024;   // 文字稿落库上限（2MB，超出截断）
 
 /** 本地文件扩展名（按 mime 优先，URL 扩展名兜底）。 */
 function downloadExtension(mime, url) {
@@ -71,6 +76,10 @@ function rowToMediaItem(row) {
     downloadState: row.download_state || 'none',
     downloadError: row.download_error ?? null,
     createdAt: row.created_at,
+    // 转写（F22）：状态徽标（queued/running/done/error）与「稿」徽标数据面
+    transcriptStatus: row.transcript_status ?? null,
+    hasTranscript: Number(row.has_transcript ?? 0) === 1,
+    transcriptLanguage: row.transcript_language ?? null,
     // JOIN 投影（媒体视图行）
     title: row.title ?? '',
     sourceTitle: row.feed_title ?? '',
@@ -98,6 +107,12 @@ class MediaService {
     this._countsDirty = true;
     this._countsCache = null;
     this._queueCache = null;          // itemID 数组缓存（写时失效）
+    // 转写（F22）：单飞队列 + 进度订阅 + FTS 可用性缓存
+    this._transcribeListeners = new Set();
+    this._transcribeQueue = [];       // 排队 itemID（单飞：同时仅 1 个 running）
+    this._transcribeRunning = null;   // 在途 itemID
+    this._ftsReady = null;            // null = 未探测；boolean 缓存
+    this._llmComplete = null;         // 注入缝：AI 摘要 LLM 调用（探针 mock；缺省走 store.llm）
   }
 
   // MARK: - 进度推送（渲染层订阅）
@@ -145,11 +160,15 @@ class MediaService {
     const row = this.store.database.prepare(`
       SELECT m.*, a.title AS title, f.title AS feed_title,
              f.stored_icon_url AS stored_icon_url, f.site_url AS site_url, f.feed_url AS feed_url,
-             a.published_at AS published_at, i.created_at AS item_created_at
+             a.published_at AS published_at, i.created_at AS item_created_at,
+             tr.status AS transcript_status,
+             CASE WHEN tr.status = 'done' AND IFNULL(tr.text, '') != '' THEN 1 ELSE 0 END AS has_transcript,
+             tr.language AS transcript_language
       FROM media_items m
       LEFT JOIN articles a ON a.item_id = m.item_id
       LEFT JOIN items i ON i.id = m.item_id
       LEFT JOIN feeds f ON f.id = i.feed_id
+      LEFT JOIN media_transcripts tr ON tr.item_id = m.item_id
       WHERE m.item_id = ?
     `).get(itemID);
     return row ? rowToMediaItem(row) : null;
@@ -165,8 +184,10 @@ class MediaService {
   /**
    * filter: all | unfinished | finished；kind: null | audio | video。
    * 已播完 = played_at 非空且 position_seconds 为 0/空；未播完 = 其余（含从未播放）。
+   * query（F22）：文字稿关键字过滤——非空时仅返回文字稿命中该词的媒体行
+   * （FTS trigram 命中；<3 字符或 FTS 不可用回退 LIKE，与 SearchIndex 同口径）。
    */
-  list({ filter = 'all', kind = null, limit = 100, offset = 0 } = {}) {
+  list({ filter = 'all', kind = null, query = null, limit = 100, offset = 0 } = {}) {
     const cappedLimit = Math.max(1, Math.min(Number(limit) || 100, LIST_PAGE_MAX));
     const cappedOffset = Math.max(0, Number(offset) || 0);
     const where = [];
@@ -180,14 +201,30 @@ class MediaService {
       where.push('m.kind = ?');
       params.push(kind);
     }
+    const needle = String(query || '').trim();
+    if (needle) {
+      const fts = this._ftsAvailable();
+      if (fts && [...needle].length >= 3) {
+        // FTS5 短语查询：双引号包裹防语法注入（内嵌双引号翻倍转义）
+        where.push(`m.item_id IN (SELECT item_id FROM media_transcripts_fts WHERE media_transcripts_fts MATCH ?)`);
+        params.push(`"${needle.replace(/"/g, '""')}"`);
+      } else {
+        where.push(`m.item_id IN (SELECT item_id FROM media_transcripts WHERE text LIKE ? ESCAPE '\\')`);
+        params.push(`%${needle.replace(/([%_\\])/g, '\\$1')}%`);
+      }
+    }
     const rows = this.store.database.prepare(`
       SELECT m.*, a.title AS title, f.title AS feed_title,
              f.stored_icon_url AS stored_icon_url, f.site_url AS site_url, f.feed_url AS feed_url,
-             a.published_at AS published_at, i.created_at AS item_created_at
+             a.published_at AS published_at, i.created_at AS item_created_at,
+             tr.status AS transcript_status,
+             CASE WHEN tr.status = 'done' AND IFNULL(tr.text, '') != '' THEN 1 ELSE 0 END AS has_transcript,
+             tr.language AS transcript_language
       FROM media_items m
       LEFT JOIN articles a ON a.item_id = m.item_id
       LEFT JOIN items i ON i.id = m.item_id
       LEFT JOIN feeds f ON f.id = i.feed_id
+      LEFT JOIN media_transcripts tr ON tr.item_id = m.item_id
       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
       ORDER BY COALESCE(a.published_at, i.created_at, m.created_at) DESC
       LIMIT ${cappedLimit} OFFSET ${cappedOffset}
@@ -305,11 +342,15 @@ class MediaService {
     const byID = new Map(this.store.database.prepare(`
       SELECT m.*, a.title AS title, f.title AS feed_title,
              f.stored_icon_url AS stored_icon_url, f.site_url AS site_url, f.feed_url AS feed_url,
-             a.published_at AS published_at, i.created_at AS item_created_at
+             a.published_at AS published_at, i.created_at AS item_created_at,
+             tr.status AS transcript_status,
+             CASE WHEN tr.status = 'done' AND IFNULL(tr.text, '') != '' THEN 1 ELSE 0 END AS has_transcript,
+             tr.language AS transcript_language
       FROM media_items m
       LEFT JOIN articles a ON a.item_id = m.item_id
       LEFT JOIN items i ON i.id = m.item_id
       LEFT JOIN feeds f ON f.id = i.feed_id
+      LEFT JOIN media_transcripts tr ON tr.item_id = m.item_id
       WHERE m.item_id IN (${ph})
     `).all(...ids).map((row) => [row.item_id, rowToMediaItem(row)]));
     return ids.map((id) => byID.get(id)).filter(Boolean); // 保持队列顺序，孤儿 id 剔除
@@ -416,7 +457,7 @@ class MediaService {
     }
   }
 
-  async _downloadToFile(media, filePath, controller) {
+  async _downloadToFile(media, filePath, controller, { onProgress = null } = {}) {
     const signal = controller.signal;
     const STALL_MS = 45000; // inactivity 看门狗：45s 无新字节视为流停摆（对照 fetchFeed 30s 超时口径）
     const attempt = async () => {
@@ -466,6 +507,7 @@ class MediaService {
           if (now - lastPushAt > 250) { // 4 次/秒封顶的进度推送（IPC 频率护栏）
             lastPushAt = now;
             this._emitProgress({ itemID: media.itemID, state: 'downloading', received, total });
+            if (onProgress) onProgress(received, total); // 转写取源进度（F22：媒体视图「转写中 %」徽标）
           }
         });
         await pipeline(nodeStream, fileStream);
@@ -512,12 +554,291 @@ class MediaService {
     }
   }
 
+  // MARK: - 转写（F22：媒体音频 → 本地 ASR → 可搜索/可看/可 AI 摘要）
+
+  onTranscribeProgress(listener) {
+    this._transcribeListeners.add(listener);
+    return () => this._transcribeListeners.delete(listener);
+  }
+
+  _emitTranscribe(payload) {
+    for (const listener of this._transcribeListeners) {
+      try { listener(payload); } catch (_) { /* 单监听异常不外溢 */ }
+    }
+  }
+
+  /** FTS 虚表可用性（v22 建，FTS5 缺失环境静默跳过；结果缓存）。 */
+  _ftsAvailable() {
+    if (this._ftsReady != null) return this._ftsReady;
+    try {
+      this._ftsReady = !!this.store.database.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='media_transcripts_fts'"
+      ).get();
+    } catch (_) {
+      this._ftsReady = false;
+    }
+    return this._ftsReady;
+  }
+
+  /** 转写端点配置（偏好持久化；默认关闭且未配置——不内置任何云端默认）。 */
+  transcribeConfig() {
+    let raw = {};
+    try { raw = JSON.parse(this.store.preferences.get(TRANSCRIBE_PREF_KEY, '{}') || '{}') || {}; }
+    catch (_) { raw = {}; }
+    return {
+      enabled: raw.enabled === true,
+      url: String(raw.url || '').trim(),
+      apiKey: String(raw.apiKey || ''),
+      model: String(raw.model || '').trim() || 'whisper-1',
+    };
+  }
+
+  /** 写回配置（URL 必须是 http(s)；返回归一化后的配置）。 */
+  transcribeSetConfig(patch) {
+    const next = { ...this.transcribeConfig(), ...(patch || {}) };
+    next.enabled = next.enabled === true;
+    next.url = String(next.url || '').trim();
+    next.apiKey = String(next.apiKey || '');
+    next.model = String(next.model || '').trim() || 'whisper-1';
+    if (next.url && !/^https?:\/\//i.test(next.url)) {
+      throw new Error(i18n.localized('转写端点必须是 http(s) 地址。'));
+    }
+    this.store.preferences.set(TRANSCRIBE_PREF_KEY, JSON.stringify(next));
+    return this.transcribeConfig();
+  }
+
+  /** 单条转写是否可用（配置开启且端点已填）→ UI 灰置依据。 */
+  transcribeReady() {
+    const cfg = this.transcribeConfig();
+    return Boolean(cfg.enabled && cfg.url);
+  }
+
+  /** 转写产物读回（面板载荷；segments_json 解析失败按纯文本降级）。 */
+  transcript(itemID) {
+    const row = this.store.database.prepare(
+      'SELECT * FROM media_transcripts WHERE item_id = ?'
+    ).get(String(itemID || ''));
+    if (!row) {
+      return { itemID: String(itemID || ''), status: 'none', text: '', language: null,
+        durationSeconds: null, segments: null, summary: null, error: null };
+    }
+    let segments = null;
+    try {
+      const parsed = JSON.parse(row.segments_json || 'null');
+      if (Array.isArray(parsed) && parsed.length) segments = parsed;
+    } catch (_) { /* 坏 JSON：按纯文本降级 */ }
+    return {
+      itemID: row.item_id,
+      status: row.status,
+      text: row.text || '',
+      language: row.language ?? null,
+      durationSeconds: row.duration_seconds == null ? null : Number(row.duration_seconds),
+      segments,
+      summary: row.summary ?? null,
+      error: row.error ?? null,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
+   * 发起转写：状态机 queued →（单飞）running → done | error。
+   * 已 done 幂等返回现状；在途去重；error/none 入队（失败重试 = 再次调用本方法）。
+   * 未配置端点 / 非音频条目 → 明确报错（渲染层按钮灰置前置拦截）。
+   */
+  transcribe(itemID) {
+    const id = String(itemID || '');
+    const media = this.forItem(id);
+    if (!media) throw new Error(i18n.localized('媒体不存在或已被删除。'));
+    if (media.kind !== 'audio') throw new Error(i18n.localized('仅支持为音频条目转写文字稿。'));
+    if (!this.transcribeReady()) {
+      throw new Error(i18n.localized('尚未配置转写端点：请在设置 → 转写中开启并填写 OpenAI 兼容端点。'));
+    }
+    const current = this.transcript(id);
+    if (current.status === 'done') return current;
+    if (current.status === 'running') return current;
+    const now = nowSeconds();
+    this.store.database.prepare(`
+      INSERT INTO media_transcripts (item_id, status, text, created_at, updated_at)
+      VALUES (?, 'queued', '', ?, ?)
+      ON CONFLICT(item_id) DO UPDATE SET status = 'queued', error = NULL, updated_at = excluded.updated_at
+    `).run(id, now, now);
+    this._emitTranscribe({ itemID: id, state: 'queued' });
+    if (!this._transcribeQueue.includes(id) && this._transcribeRunning !== id) {
+      this._transcribeQueue.push(id);
+      while (this._transcribeQueue.length > QUEUE_MAX) this._transcribeQueue.shift();
+    }
+    this._pumpTranscribe();
+    return this.transcript(id);
+  }
+
+  _pumpTranscribe() {
+    if (this._transcribeRunning || !this._transcribeQueue.length) return;
+    const id = this._transcribeQueue.shift();
+    this._transcribeRunning = id;
+    this._runTranscribe(id)
+      .catch(() => { /* _runTranscribe 内部落库收尾，异常不再外溢 */ })
+      .finally(() => {
+        this._transcribeRunning = null;
+        this._pumpTranscribe(); // 队列接力（单飞）
+      });
+  }
+
+  isTranscribing(itemID) {
+    return this._transcribeRunning === String(itemID) || this._transcribeQueue.includes(String(itemID));
+  }
+
+  /** 单飞执行体：取音频（本地缓存优先，否则整文件临时下载 ≤500MB）→ multipart 上传 → 落库。 */
+  async _runTranscribe(itemID) {
+    const db = this.store.database;
+    const now = () => nowSeconds();
+    const fail = (message) => {
+      db.prepare("UPDATE media_transcripts SET status = 'error', error = ?, updated_at = ? WHERE item_id = ?")
+        .run(String(message || ''), now(), itemID);
+      this._emitTranscribe({ itemID, state: 'error', error: String(message || '') });
+    };
+    const cfg = this.transcribeConfig();
+    if (!cfg.enabled || !cfg.url) {
+      this._transcribeRunning = null; // 配置中途被清：不占单飞槽
+      fail(i18n.localized('尚未配置转写端点：请在设置 → 转写中开启并填写 OpenAI 兼容端点。'));
+      return;
+    }
+    db.prepare("UPDATE media_transcripts SET status = 'running', error = NULL, updated_at = ? WHERE item_id = ?")
+      .run(now(), itemID);
+    this._emitTranscribe({ itemID, state: 'running', phase: 'prepare', pct: null });
+    const controller = new AbortController();
+    const watchdog = setTimeout(() => {
+      try { controller.abort(); } catch (_) { /* 已中止 */ }
+    }, TRANSCRIBE_TIMEOUT_MS);
+    let tempPath = null;
+    try {
+      const media = this.forItem(itemID);
+      if (!media) throw Object.assign(new Error(i18n.localized('媒体不存在或已被删除。')), { permanent: true });
+      let audioBuffer = null;
+      if (media.hasLocal && media.localPath && fs.existsSync(media.localPath)) {
+        // 本地缓存优先：离线下载过的直接读盘（零网络）
+        const stat = fs.statSync(media.localPath);
+        if (stat.size > MAX_DOWNLOAD_BYTES) {
+          throw Object.assign(new Error(i18n.localized('文件超过 500MB 上限，已取消转写。')), { permanent: true });
+        }
+        audioBuffer = fs.readFileSync(media.localPath);
+      } else {
+        // 远端源：整文件临时下载（复用下载护栏与重试；进度照推送）
+        if (!/^https?:\/\//i.test(String(media.url || ''))) {
+          throw Object.assign(new Error(i18n.localized('仅支持转写 http(s) 链接的媒体。')), { permanent: true });
+        }
+        fs.mkdirSync(this.mediaDir, { recursive: true });
+        tempPath = path.join(this.mediaDir, `${stableDigest(itemID)}.asr-tmp${downloadExtension(media.mime, media.url)}`);
+        await this._downloadToFile({ ...media, itemID }, tempPath, controller, {
+          onProgress: (received, total) => {
+            const pct = total > 0 ? Math.min(99, Math.round((received / total) * 100)) : null;
+            this._emitTranscribe({ itemID, state: 'running', phase: 'fetch', pct });
+          },
+        });
+        const stat = fs.statSync(tempPath);
+        if (stat.size <= 0) throw new Error(i18n.localized('下载内容为空。'));
+        audioBuffer = fs.readFileSync(tempPath);
+      }
+      // multipart 上传（OpenAI 兼容 /v1/audio/transcriptions）
+      this._emitTranscribe({ itemID, state: 'running', phase: 'asr', pct: null });
+      const form = new FormData();
+      form.append('file', new Blob([audioBuffer], { type: media.mime || 'audio/mpeg' }),
+        `audio${downloadExtension(media.mime, media.url)}`);
+      form.append('model', cfg.model);
+      form.append('response_format', 'verbose_json');
+      const headers = { Accept: 'application/json' };
+      if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+      // 建连/响应头看门狗：30s 拿不到响应头即中止（与下载同口径）
+      let headerTimer = null;
+      const response = await Promise.race([
+        fetch(cfg.url, { method: 'POST', headers, body: form, signal: controller.signal }),
+        new Promise((_, reject) => {
+          headerTimer = setTimeout(() => {
+            try { controller.abort(); } catch (_) { /* 已中止 */ }
+            reject(Object.assign(new Error(i18n.localized('转写端点连接超时。')), { permanent: false }));
+          }, TRANSCRIBE_HEADERS_MS);
+        }),
+      ]).finally(() => headerTimer && clearTimeout(headerTimer));
+      if (!response.ok) {
+        // 4xx（配置/鉴权错）与 5xx 同为终态：重试只会再打一次服务器
+        throw Object.assign(new Error(`HTTP ${response.status}`), { permanent: true });
+      }
+      const payload = await response.json().catch(() => null);
+      if (!payload || typeof payload.text !== 'string') {
+        throw Object.assign(new Error(i18n.localized('转写端点返回的内容无法识别。')), { permanent: true });
+      }
+      const text = payload.text.slice(0, TRANSCRIBE_TEXT_CAP);
+      const segments = Array.isArray(payload.segments) && payload.segments.length
+        ? payload.segments.slice(0, 5000).map((s) => ({
+          start: Number(s?.start) || 0, end: Number(s?.end) || 0, text: String(s?.text || ''),
+        })) : null;
+      db.prepare(`
+        UPDATE media_transcripts SET status = 'done', text = ?, language = ?, duration_seconds = ?,
+          segments_json = ?, error = NULL, updated_at = ?
+        WHERE item_id = ?
+      `).run(
+        text, payload.language ? String(payload.language).slice(0, 16) : null,
+        Number(payload.duration) > 0 ? Number(payload.duration) : media.durationSeconds ?? null,
+        segments ? JSON.stringify(segments) : null, now(), itemID,
+      );
+      this._indexTranscript(itemID, text);
+      this._emitTranscribe({ itemID, state: 'done' });
+    } catch (err) {
+      if (controller.signal.aborted && !err?.permanent) {
+        fail(i18n.localized('转写超时或被中止，可重试。'));
+      } else {
+        fail(err?.message || err);
+      }
+    } finally {
+      clearTimeout(watchdog);
+      if (tempPath) {
+        try { fs.rmSync(tempPath, { force: true }); } catch (_) { /* 临时文件清理失败可忽略 */ }
+      }
+    }
+  }
+
+  /** 文字稿进 FTS（旁路 articles_fts；FTS 不可用静默跳过——搜索回退 LIKE）。 */
+  _indexTranscript(itemID, text) {
+    try {
+      if (!this._ftsAvailable()) return;
+      const db = this.store.database;
+      db.prepare('DELETE FROM media_transcripts_fts WHERE item_id = ?').run(itemID);
+      db.prepare('INSERT INTO media_transcripts_fts (item_id, text) VALUES (?, ?)').run(itemID, String(text || ''));
+    } catch (_) { /* 索引失败不阻塞转写主流程 */ }
+  }
+
+  /**
+   * 转写 AI 摘要（走 LLMService；无 Key 由 store._requireAIReady 抛 missingAPIKey → UI 灰置）。
+   * 摘要随行落库（media_transcripts.summary），面板顶部展示。
+   */
+  async transcriptSummary(itemID) {
+    const id = String(itemID || '');
+    const row = this.transcript(id);
+    if (row.status !== 'done' || !row.text) {
+      throw new Error(i18n.localized('该条目还没有完成的文字稿，无法生成摘要。'));
+    }
+    const { config, apiKey } = this.store._requireAIReady();
+    const complete = this._llmComplete
+      ? (payload) => this._llmComplete(payload)
+      : (payload) => this.store.llm.complete(payload);
+    const summary = String(await complete({
+      prompt: `Podcast transcript:\n\n${String(row.text).slice(0, 28000)}`,
+      system: `Summarize this podcast transcript in ${config.targetLanguage}. Start with one concise conclusion, then 3 to 6 factual bullets. Do not invent facts.`,
+      configuration: config,
+      apiKey,
+    }) || '').trim();
+    if (!summary) throw new Error(i18n.localized('模型没有返回摘要内容。'));
+    this.store.database.prepare('UPDATE media_transcripts SET summary = ?, updated_at = ? WHERE item_id = ?')
+      .run(summary.slice(0, 20000), nowSeconds(), id);
+    return { itemID: id, summary };
+  }
+
   /** 应用退出：中止在途下载（.part 由 attempt 的 catch 清理）。 */
   dispose() {
     for (const controller of this._downloads.values()) {
       try { controller.abort(); } catch (_) { /* 已中止 */ }
     }
     this._downloads.clear();
+    this._transcribeQueue.length = 0; // 在途任务自然收尾；排队任务丢弃
   }
 }
 
@@ -526,5 +847,6 @@ module.exports = {
   enclosureExtension: downloadExtension,
   LIMITS: {
     MAX_DOWNLOAD_BYTES, DOWNLOAD_RETRY, LIST_PAGE_MAX, QUEUE_MAX, FINISHED_RATIO,
+    TRANSCRIBE_TIMEOUT_MS, TRANSCRIBE_HEADERS_MS, TRANSCRIBE_TEXT_CAP,
   },
 };

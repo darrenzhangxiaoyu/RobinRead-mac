@@ -105,6 +105,18 @@ contextBridge.exposeInMainWorld('robin', {
   mediaDownloadDelete: (entryID) => data('media:download:delete', entryID),
   onMediaDownloadProgress: (listener) => subscribe('media:download-progress', listener),
 
+  // 事件聚类去重（F21：事件模式按簇分组的事件卡摘要）
+  eventSummaries: (ids) => data('events:summaries', ids),
+
+  // 播客转文字稿（F22：发起/读回/端点配置/AI 摘要；onTranscribeProgress 收转写进度推送）
+  transcribeMedia: (itemID) => data('media:transcribe', itemID),
+  mediaTranscript: (itemID) => data('media:transcript', itemID),
+  transcribeGetConfig: () => data('media:transcribeConfig:get'),
+  transcribeSetConfig: (patch) => data('media:transcribeConfig:set', patch),
+  transcribeReady: () => data('media:transcribeReady'),
+  transcriptSummary: (itemID) => data('media:transcript:summary', itemID),
+  onTranscribeProgress: (listener) => subscribe('media:transcribe-progress', listener),
+
   // 话题盯梢（F4：CRUD / 聚合 / 信息流）——写通道走 invoke（失败 reject，渲染层可回显错误）
   topicsList: () => data('topics:list'),
   topicsSave: (payload) => invoke('topics:save', payload),
