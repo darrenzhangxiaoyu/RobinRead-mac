@@ -620,6 +620,9 @@ function registerIPCHandlers(store, window) {
   handle('prefs:readerCustomCSS', () => store.readerCustomCSS());
   handle('prefs:setFeedTypography', ({ feedID, patch } = {}) => store.setFeedTypography(feedID, patch));
   handle('prefs:setFilterRules', (patch) => store.setFilterRules(patch));
+  // 命令面板自学习（U30）：频次 JSON map 持久化
+  handle('prefs:paletteFrequency', () => store.paletteFrequency());
+  handle('prefs:recordPaletteUse', (label) => store.recordCommandUse(label));
 
   // MARK: 阅读状态
   handle('read:mark', (entryID, read) => store.markRead(entryID, read));
@@ -1623,10 +1626,11 @@ function registerIPCHandlers(store, window) {
     }
   }
 
-  // MARK: 桌面通用偏好（关闭到托盘 / 新文章通知）
+  // MARK: 桌面通用偏好（关闭到托盘 / 新文章通知 / 微交互音效）
   handle('prefs:getGeneral', () => ({
     closeToTray: store.preferences.get('RobinRead.closeToTray', false) === true,
     newArticleNotify: store.preferences.get('RobinRead.newArticleNotify', true) !== false,
+    sfxEnabled: store.preferences.get('RobinRead.sfx.enabled', false) === true, // U27：默认关
   }));
   // 批量导出：当前卡片一次渲染全部模板，打包 ZIP
   handle('card:renderAllTemplates', async ({ data, options, zoom, ratio }) => {
@@ -1644,9 +1648,11 @@ function registerIPCHandlers(store, window) {
     const p = patch || {};
     if (typeof p.closeToTray === 'boolean') store.preferences.set('RobinRead.closeToTray', p.closeToTray);
     if (typeof p.newArticleNotify === 'boolean') store.preferences.set('RobinRead.newArticleNotify', p.newArticleNotify);
+    if (typeof p.sfxEnabled === 'boolean') store.preferences.set('RobinRead.sfx.enabled', p.sfxEnabled); // U27
     return {
       closeToTray: store.preferences.get('RobinRead.closeToTray', false) === true,
       newArticleNotify: store.preferences.get('RobinRead.newArticleNotify', true) !== false,
+      sfxEnabled: store.preferences.get('RobinRead.sfx.enabled', false) === true,
     };
   });
 

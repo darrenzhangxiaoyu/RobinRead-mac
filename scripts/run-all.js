@@ -82,6 +82,7 @@ const OFFLINE = [
   { file: 'scripts/diag-u11-u15.js', runner: 'electron', desc: 'U11–U15 视觉轮：插画空态与骨架屏/进度语言+按压开关悬停微交互+Toast 栈三态与进度通知+设置全屏化导航搜索+期刊封面确定性版画（离线）' },
   { file: 'scripts/diag-u16-u20.js', runner: 'electron', desc: 'U16–U20 收官视觉轮：chart-kit 图表 dpr/令牌色/入场动画（折线生长/柱条升起/reduced-motion 终态）+命令面板 2.0（模糊高亮/图标行/预览窗格）+焦点环三档与设置/自进化导航 ↑↓+标题栏拖拽态与 snap 提示层+字号阶梯归簇与跨视图漂移合并（离线）' },
   { file: 'scripts/diag-u21-25a.js', runner: 'electron', timeout: 480000, desc: '视觉批 1：U21 字体族套装（四套版式皮肤+自定义字体+设置选择器/输入/即时预览+持久化+reader 双变量链）+U22 共享元素转场（FLIP 快照/幽灵飞入/reduced-motion 直达）+U23 主题切换渐变（过渡类 300ms 摘除/启动不渐变）+U24 触控板手势（捏合字号/滚动语义保持/触屏长按右键）+U25 阅读年报（年度聚合/四数据卡 countup/关键词云/确定性 SVG 分享卡）（离线）' },
+  { file: 'scripts/diag-u26-30.js', runner: 'electron', timeout: 480000, desc: '视觉批 2：U26 高 DPI 走查（125/150/175% 缩放仿真三档——三栏不塌视口钳制/列表行高一致/阅读器版心/底栏 6×2 不折行/设置分区零横向溢出）+U27 微交互音效（WebAudio 三枚合成音振荡器+增益包络 ≤0.3s+设置→通用开关默认关+能力不可达静默）+U28 拖拽体系（列表行拖入收藏/稍后读批量加入+放置高亮+订阅源树同组拖拽排序插入位指示持久化 feeds.sort_order）+U29 打印排版（@media print 浮层家族隐退/标题防孤行/正文单栏全宽+阅读器一键打印按钮+CDP 打印媒体仿真）+U30 命令面板自学习（执行频次 preferences JSON map 200 条上限+相关度+频次对数排名提升+最近使用保留）（离线）' },
   { file: 'scripts/diag-r45-details.js', runner: 'electron', desc: 'R45 细节三连：chips 卫生/清除键 aria/批量条 toolbar（离线）' },
   { file: 'scripts/diag-r39-details.js', runner: 'electron', desc: 'R39 细节三连：时间/来源悬停全量+清除键命中区（离线）' },
   { file: 'scripts/diag-r40-details.js', runner: 'electron', desc: 'R40 细节三连：chips 换行/历史键盘导航/工具条 aria（离线）' },

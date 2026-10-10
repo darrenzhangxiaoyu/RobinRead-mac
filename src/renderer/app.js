@@ -20,6 +20,7 @@ import { SettingsView, showAddFeed, showAddFolder, showRenameFolder, showFreshRS
 import { ShortcutsView } from './views/shortcuts.js';
 import { ContextMenu } from './views/context-menu.js';
 import { CommandPalette } from './views/command-palette.js';
+import { initSfx, playSfx } from './views/sfx.js'; /* U27 微交互音效 */
 import { ReadingControls } from './views/reading-controls.js';
 import { TYPOGRAPHY_PRESETS } from './data/typography-presets.js';
 import { resolveReaderFontStack } from './data/font-family-presets.js';
@@ -116,12 +117,26 @@ async function bootstrap() {
   window.__robinFulltextModes = snapshot?.preferences?.fulltextFeedModes || {};
   applyReaderLayout(snapshot.preferences?.readerLayout);
   restoreSidebarCollapsed();
+  // U27 微交互音效：开关读快照（sfxEnabled，默认关）；合成与能力静默在 sfx.js 内部
+  initSfx({ enabled: () => state.snapshot?.preferences?.sfxEnabled === true });
 
   views.sidebar = new SidebarView(document.getElementById('sidebar-scroll'), document.getElementById('sidebar-footer'), {
     onSelect: handleScopeSelect,
     onFeedContext,
     onFolderContext,
     onMoveFeeds: (feedIDs, folder) => window.robin.setFeedFolder(feedIDs, folder),
+    // U28 拖拽体系：列表行拖到「收藏 / 稍后读」= 批量加入（数据类型与订阅源拖拽分离）
+    onDropEntries: (kind, entryIDs) => {
+      const ids = (Array.isArray(entryIDs) ? entryIDs : []).map(String).filter(Boolean).slice(0, 500);
+      if (!ids.length) return;
+      const apply = kind === 'later' ? window.robin.laterMany(ids, true) : window.robin.starMany(ids, true);
+      Promise.resolve(apply).then(() => {
+        showToast(kind === 'later' ? tf('已把 %lld 篇加入稍后读', ids.length) : tf('已把 %lld 篇加入收藏', ids.length));
+        playSfx('save'); // U27：入列成功一枚轻音（开关关/能力缺省静默）
+      }).catch(() => { /* 静默 */ });
+    },
+    // U28 订阅源树内拖拽排序：同组重排 → 持久化到 feeds.sort_order 既有列
+    onReorderFeeds: (orderedIDs) => { try { window.robin.reorderFeeds?.(orderedIDs); } catch (_) { /* 静默 */ } },
     onDeleteFeeds: confirmDeleteFeeds,
     onOpenSettings: () => showSettings(),
     onOpenStore: () => openFeedStore(),
@@ -815,9 +830,19 @@ function buildPaletteCommands() {
   return commands;
 }
 
-function openCommandPalette() {
+async function openCommandPalette() {
   commandPalette = commandPalette || new CommandPalette();
-  commandPalette.present(buildPaletteCommands());
+  // U30 自学习：打开时读频次表（主进程 preferences JSON map），执行即经 onUse 记账；
+  // 通道缺失/读取失败 → 空表零加权，面板照常。
+  let freq = {};
+  try {
+    const stored = await window.robin.paletteFrequency?.();
+    if (stored && typeof stored === 'object' && !Array.isArray(stored)) freq = stored;
+  } catch (_) { /* 频次不可得：零加权照常 */ }
+  commandPalette.present(buildPaletteCommands(), {
+    freq,
+    onUse: (label) => { try { window.robin.recordPaletteUse?.(label); } catch (_) { /* 静默 */ } },
+  });
 }
 
 function toggleSidebarCollapsed() {

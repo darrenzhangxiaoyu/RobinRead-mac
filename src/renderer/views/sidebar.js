@@ -28,6 +28,7 @@ export class SidebarView {
     this.lastCounts = null;
     this.lastScope = null;
     this.healthByURL = {}; // 源健康（reloadSidebar 注入）：失败源显示警示徽标
+    this._draggingFeedIDs = null; // U28：本次拖拽的订阅源 ID（组内排序判定用；dragend 清）
     this._buildFooter();
   }
 
@@ -123,8 +124,9 @@ export class SidebarView {
     if (this.collapsedAccounts.has(account.id)) group.style.display = 'none';
 
     // 根订阅（在文件夹之前，对应 store.rootFeeds + onMove）
+    const rootSiblingIDs = (accountGroup.rootFeeds || []).map((f) => f.id);
     for (const feed of accountGroup.rootFeeds || []) {
-      group.appendChild(this.feedRow(feed, account, counts, scope, { inFolder: false }));
+      group.appendChild(this.feedRow(feed, account, counts, scope, { inFolder: false, siblingIDs: rootSiblingIDs }));
     }
 
     // 文件夹
@@ -145,6 +147,8 @@ export class SidebarView {
     row.querySelector('.sidebar-label').textContent = label;
     this._bindCount(row, count);
     row.addEventListener('click', () => this.handlers.onSelect({ kind }));
+    // U28 拖拽体系：收藏/稍后读两个智能行是文章放置目标（列表行拖入=批量加入）
+    if (kind === 'starred' || kind === 'later') this._bindEntryDrop(row, kind);
     return row;
   }
 
@@ -236,8 +240,9 @@ export class SidebarView {
     children.className = 'sidebar-folder-children';
     const inner = document.createElement('div');
     inner.className = 'sidebar-folder-inner';
+    const folderSiblingIDs = (folder.feeds || []).map((f) => f.id);
     for (const feed of folder.feeds || []) {
-      inner.appendChild(this.feedRow(feed, account, counts, scope, { inFolder: true }));
+      inner.appendChild(this.feedRow(feed, account, counts, scope, { inFolder: true, siblingIDs: folderSiblingIDs }));
     }
     children.appendChild(inner);
     wrapper.appendChild(children);
@@ -256,7 +261,7 @@ export class SidebarView {
     this._persist('robinread.collapsedFolders', this.collapsedFolders);
   }
 
-  feedRow(feed, account, counts, scope, { inFolder }) {
+  feedRow(feed, account, counts, scope, { inFolder, siblingIDs }) {
     const row = document.createElement('div');
     row.className = 'sidebar-row';
     row.dataset.feedId = feed.id;
@@ -281,6 +286,8 @@ export class SidebarView {
       warn.title = parts.join('\n');
       row.appendChild(warn);
     }
+
+    const siblingIDList = (siblingIDs || []).map(String);
 
     row.addEventListener('click', (event) => {
       if (event.ctrlKey || event.metaKey) {
@@ -311,11 +318,55 @@ export class SidebarView {
         ? [...this.selectedFeedIDs] : [feed.id];
       event.dataTransfer.setData('application/x-robinread-feeds', JSON.stringify(ids));
       event.dataTransfer.effectAllowed = 'move';
+      this._draggingFeedIDs = ids.map(String); // U28：组内排序判定（同窗口拖拽可读，受保护模式不影响）
+    });
+    row.addEventListener('dragend', () => {
+      this._draggingFeedIDs = null; // U28：drop/dragend 收尾清（dragend 在 drop 后必发）
+      this.scrollEl?.querySelectorAll('.sidebar-row.drop-before, .sidebar-row.drop-after')
+        .forEach((el) => el.classList.remove('drop-before', 'drop-after'));
     });
 
-    // 根区行作为「移出文件夹」目标（对应根 Section 的 dropDestination）
+    // U28 订阅源树内拖拽排序：同组内拖到某行=把被拖源插到该行前/后
+    //（持久化到 feeds.sort_order 既有列；跨组拖放不接——组间移动走文件夹行/根行既有目标）
+    row.addEventListener('dragover', (event) => {
+      if (!event.dataTransfer.types.includes('application/x-robinread-feeds')) return;
+      if (!this._sameGroupDragging(siblingIDList)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      const rect = row.getBoundingClientRect();
+      const before = event.clientY < rect.top + rect.height / 2;
+      row.classList.toggle('drop-before', before);
+      row.classList.toggle('drop-after', !before);
+    });
+    row.addEventListener('dragleave', () => row.classList.remove('drop-before', 'drop-after'));
+    row.addEventListener('drop', (event) => {
+      row.classList.remove('drop-before', 'drop-after');
+      if (!this._sameGroupDragging(siblingIDList)) return;
+      const raw = event.dataTransfer.getData('application/x-robinread-feeds');
+      if (!raw) return;
+      event.preventDefault();
+      event.stopPropagation();
+      let dragged = [];
+      try { dragged = JSON.parse(raw); } catch (_) { return; }
+      const members = (Array.isArray(dragged) ? dragged : []).map(String).filter((id) => siblingIDList.includes(id));
+      if (!members.length) return;
+      const rest = siblingIDList.filter((id) => !members.includes(id));
+      const rect = row.getBoundingClientRect();
+      const before = event.clientY < rect.top + rect.height / 2;
+      let at = rest.indexOf(String(feed.id));
+      if (at < 0) at = rest.length;
+      if (!before) at += 1;
+      rest.splice(at, 0, ...members);
+      if (rest.join('\u0000') !== siblingIDList.join('\u0000')) {
+        this.handlers.onReorderFeeds?.(rest); // app 层转 window.robin.reorderFeeds → feeds.sort_order
+      }
+    });
+
+    // 根区行作为「移出文件夹」目标（对应根 Section 的 dropDestination）；
+    // U28：同组排序拖放时让位（插入指示由上方 dragover 接管，避免双重高亮+双语义）
     if (!inFolder) {
-      this._bindDrop(row, (feedIDs) => this.handlers.onMoveFeeds(feedIDs, null));
+      this._bindDrop(row, (feedIDs) => this.handlers.onMoveFeeds(feedIDs, null), null,
+        () => !this._sameGroupDragging(siblingIDList));
     }
     return row;
   }
@@ -336,12 +387,12 @@ export class SidebarView {
     }
   }
 
-  _bindDrop(element, onDrop, onDropSuccess) {
+  _bindDrop(element, onDrop, onDropSuccess, canDrop) {
     element.addEventListener('dragover', (event) => {
-      if (event.dataTransfer.types.includes('application/x-robinread-feeds')) {
-        event.preventDefault();
-        element.classList.add('drop-target');
-      }
+      if (!event.dataTransfer.types.includes('application/x-robinread-feeds')) return;
+      if (canDrop && !canDrop()) return; // U28：同组排序拖放由订阅行自身的插入指示接管
+      event.preventDefault();
+      element.classList.add('drop-target');
     });
     element.addEventListener('dragleave', () => element.classList.remove('drop-target'));
     element.addEventListener('drop', (event) => {
@@ -357,6 +408,40 @@ export class SidebarView {
         }
       } catch (_) { /* 忽略非法数据 */ }
     });
+  }
+
+  /**
+   * U28 拖拽体系：文章放置目标（收藏/稍后读）。
+   * 数据类型 application/x-robinread-entries 与订阅源拖拽（x-robinread-feeds）分离，互不误伤。
+   */
+  _bindEntryDrop(element, kind) {
+    element.dataset.dropKind = kind;
+    element.addEventListener('dragover', (event) => {
+      if (!event.dataTransfer.types.includes('application/x-robinread-entries')) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      element.classList.add('entry-drop');
+    });
+    element.addEventListener('dragleave', () => element.classList.remove('entry-drop'));
+    element.addEventListener('drop', (event) => {
+      element.classList.remove('entry-drop');
+      const raw = event.dataTransfer.getData('application/x-robinread-entries');
+      if (!raw) return;
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        const ids = JSON.parse(raw);
+        if (Array.isArray(ids) && ids.length) this.handlers.onDropEntries?.(kind, ids);
+      } catch (_) { /* 非法数据忽略 */ }
+    });
+  }
+
+  /** U28：本次拖拽的订阅源是否全部属于 siblingIDs 同组（组内才做插入排序，跨组交给移动目标）。 */
+  _sameGroupDragging(siblingIDs) {
+    const dragging = this._draggingFeedIDs;
+    if (!Array.isArray(dragging) || !dragging.length) return false;
+    const set = new Set((siblingIDs || []).map(String));
+    return dragging.every((id) => set.has(String(id)));
   }
 
   _toggleSet(set, key, storageKey, force) {

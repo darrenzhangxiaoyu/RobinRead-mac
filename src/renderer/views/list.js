@@ -11,6 +11,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { snapshotEntryTitle, setSharedSnapshot } from './shared-transition.js'; /* U22 共享元素转场（FLIP First 快照） */
+import { playSfx } from './sfx.js'; /* U27 微交互音效：收藏成功轻音 */
 import { EditionReader } from './edition-reader.js';
 import { paperPref, setPaperPref } from './paper-pref.js';
 import { feedIconURL } from './sidebar.js';
@@ -601,8 +602,23 @@ export class ListView {
       event.preventDefault();
       this.handlers.onContext(event, item);
     });
+    this._bindEntryDragSource(row, item); // U28 拖拽体系：行可拖入侧栏收藏/稍后读
     row.appendChild(this._quickActions(item));
     return row;
+  }
+
+  /**
+   * U28 拖拽源：列表行拖入侧栏「收藏 / 稍后读」= 批量加入。
+   * 拖动数据 = 选中集合（本行在选中集合且 >1 行时）或单行；数据类型
+   * application/x-robinread-entries 与订阅源拖拽（x-robinread-feeds）分离。
+   */
+  _bindEntryDragSource(row, item) {
+    row.draggable = true;
+    row.addEventListener('dragstart', (event) => {
+      const ids = this.picked.has(item.id) && this.picked.size > 1 ? [...this.picked] : [item.id];
+      event.dataTransfer.setData('application/x-robinread-entries', JSON.stringify(ids));
+      event.dataTransfer.effectAllowed = 'copyMove';
+    });
   }
 
   /**
@@ -767,7 +783,11 @@ export class ListView {
     bar.appendChild(mk('q-read', item.isRead ? 'envelopeOpen' : 'checkAll',
       t(item.isRead ? '标为未读' : '标为已读'), () => window.robin.markRead(item.id, !item.isRead)));
     bar.appendChild(mk('q-star', item.isStarred ? 'starFilled' : 'star',
-      t(item.isStarred ? '取消收藏' : '收藏'), () => window.robin.toggleStar(item.id)));
+      t(item.isStarred ? '取消收藏' : '收藏'), () => {
+        const wasStarred = item.isStarred;
+        window.robin.toggleStar(item.id);
+        if (!wasStarred) playSfx('save'); // U27：收藏成功一枚轻音（取消收藏无音）
+      }));
     bar.appendChild(mk('q-later', 'clock',
       t(item.isLater ? '移出稍后读' : '稍后读'), () => window.robin.toggleLater(item.id, !item.isLater)));
     return bar;
@@ -1137,6 +1157,7 @@ export class ListView {
       event.preventDefault();
       this.handlers.onContext(event, item);
     });
+    this._bindEntryDragSource(card, item); // U28 拖拽体系：杂志卡同样可拖入收藏/稍后读
     return card;
   }
 

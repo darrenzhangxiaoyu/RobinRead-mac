@@ -8256,3 +8256,67 @@ html.theme-transition * {
   .wrapped-card { transition: none; }
   .wrapped-cloud-word { transition: none; }
 }
+
+/* ==========================================================================
+   U26 高 DPI 走查：125%/150%/175% 缩放下 CSS 视口等比变窄（1280 物理宽 →
+   1024/853/731 CSS px），三栏固定最小宽（240+280+400=930px）会相互挤出横向
+   溢出。改为视口比例钳制 + 允许列收缩：列宽下限随视口走，窄视口零溢出；
+   100% 缩放的小窗口（≤1020px CSS 视口）同样受益。宽视口行为不变。
+   ========================================================================== */
+@media (max-width: 1020px) {
+  .column-sidebar { flex: 0 1 auto; min-width: min(240px, 24vw); }
+  .column-list { flex: 0 1 auto; min-width: min(280px, 26vw); }
+  .column-reader { min-width: min(400px, 30vw); }
+  /* 版心内边距随视口收紧（1280@175% 时固定 40px 内边距吃掉近四成版心） */
+  .reader-article { padding: 32px min(40px, 5vw) 0; }
+  /* 头部操作区（听/稍后读/导出/打印…）随版心换行，不再横向挤出滚动区 */
+  .robin-header-original-actions { flex-wrap: wrap; }
+}
+
+/* ==========================================================================
+   U28 拖拽体系：文章行拖到侧栏「收藏 / 稍后读」的放置高亮
+   （收藏=暖赭 / 稍后读=枝绿，与订阅源 .drop-target 的实底高亮区分）
+   ========================================================================== */
+.sidebar-row.entry-drop {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+.sidebar-row.entry-drop .sidebar-icon { color: var(--accent); }
+.sidebar-row[data-drop-kind="starred"].entry-drop { background: color-mix(in srgb, var(--warm-accent) 18%, transparent); outline-color: var(--warm-accent); }
+.sidebar-row[data-drop-kind="starred"].entry-drop .sidebar-icon { color: var(--warm-accent); }
+/* U28 订阅源树内排序：插入位指示（行上半=插到该行之前 / 下半=之后） */
+.sidebar-row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.sidebar-row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+
+/* ==========================================================================
+   U29 打印排版（阅读器「打印」按钮一键直达）：正文单栏全宽、浮层家族全面
+   隐退、标题防孤行。方向 19 纸刊打印精排（@page 页边距 + 回墨 + 两端对齐）
+   之上做补充；本块不另设 @page——页边距交由浏览器/用户打印设置接管
+   （方向 19 已有 @page 的场合以其为准）。
+   ========================================================================== */
+@media print {
+  /* U29 后起的浮层家族兜底隐退（命令面板/批量条/浮球/共享幽灵/弹窗/速查/通知/搜索历史） */
+  .cmd-palette-overlay,
+  .list-batch-bar,
+  #nj-voice-orb,
+  .nj-shared-ghost,
+  .modal-overlay,
+  .list-keys-panel,
+  #nj-toast-stack,
+  .search-history {
+    display: none !important;
+  }
+  /* 标题组防孤行：眉题与标题都不作为页尾孤行（page-break-after: avoid 双写兼容） */
+  .robin-header-kicker,
+  .robin-header-title {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+  /* 正文单栏全宽：解除居中版心的水平约束，左右交给纸边距 */
+  .reader-article {
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}

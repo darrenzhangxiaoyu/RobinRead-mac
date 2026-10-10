@@ -63,6 +63,7 @@ export const icons = {
   clock: i('<circle cx="8" cy="8" r="6.3"/><path d="M8 4.6V8l2.4 1.6"/>'),
   bookOpen: i('<path d="M8 3.6C6.7 2.6 5 2.3 2.2 2.3v9.5c2.8 0 4.5.3 5.8 1.3 1.3-1 3-1.3 5.8-1.3V2.3C11 2.3 9.3 2.6 8 3.6z"/><path d="M8 3.6v9.5"/>'),
   docText: i('<path d="M3.4 1.9h5.9l3.1 3.1v9.1c0 .6-.4 1-1 1H3.4c-.6 0-1-.4-1-1V2.9c0-.6.4-1 1-1z"/><path d="M9.2 1.9v3.1h3.1"/><path d="M4.7 7.5h6M4.7 9.7h6M4.7 11.9h4"/>'),
+  printer: i('<path d="M4.6 5.4V2.2h6.8v3.2"/><path d="M4.6 11.2H2.9a1.1 1.1 0 0 1-1.1-1.1V6.5a1.1 1.1 0 0 1 1.1-1.1h10.2a1.1 1.1 0 0 1 1.1 1.1v3.6a1.1 1.1 0 0 1-1.1 1.1h-1.7"/><path d="M4.6 9.2h6.8v4.6H4.6z"/>'), /* U29 打印排版 */
   textSmaller: i('<path d="M2.4 5.5h5M4.4 3v5" /><path d="M9 11h4.6"/>'),
   textLarger: i('<path d="M2.4 5.5h5M4.9 3v5"/><path d="M8.6 11h5M11.1 8.5v5"/>'),
   chevronMenuRight: `<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.8L7.2 6 3 10.2"/></svg>`,

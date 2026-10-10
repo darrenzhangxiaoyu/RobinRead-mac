@@ -14,6 +14,7 @@ import { syncResultText } from './sync-command.js';
 import { bookMetaLine, showCreateBookDialog } from './bookshelf.js';
 import { Toast } from './toast.js';
 import { focusArrowSiblings } from './kbd-nav.js'; /* U18：设置分区导航 ↑↓ */
+import { playSfx } from './sfx.js'; /* U27 微交互音效：开关开启瞬间试听 */
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -67,7 +68,7 @@ const SECTION_INTRO = {
 // 搜索索引：分区 → 代表性设置项标题（全部为既有 i18n 键，只读检索用途）
 const SECTION_SEARCH_INDEX = {
   appearance: ['外观模式', '主题设计器', '预设字号', '正文字体', '页面宽度', '行距', '段落风格', '文字对齐', '列表密度', '首字下沉', '中文微排版', '自定义样式', '最低信噪分', '标题自动译中文', '版式预设'],
-  general: ['自动备份', '导出备份', '导入备份', '关闭窗口时最小化到托盘', '刷新发现新文章时系统通知', '开机自启'],
+  general: ['自动备份', '导出备份', '导入备份', '关闭窗口时最小化到托盘', '刷新发现新文章时系统通知', '开机自启', '微交互音效', '音效'],
   accounts: ['昵称', 'UID', '会员'],
   mail: ['邮箱接入'],
   ai: ['精读人格', '朗读引擎', '神经音色', 'API Key', '翻译目标语言'],
@@ -747,6 +748,21 @@ export class SettingsView {
         this.render();
       }),
     ]));
+
+    // ── 微交互音效（U27）：三枚 WebAudio 合成轻音，零资源文件，默认关 ──
+    const sfxGroup = group(t('微交互音效'), t('振荡器现场合成的极轻提示音（零音频文件、零网络请求）：开关切换、收藏成功、挑战完成各一枚。'), [
+      toggleRow(t('音效'), t('默认关闭。开启后本机立即生效；开启瞬间播一枚试听，关闭即静。'), g.sfxEnabled === true, async (v) => {
+        await window.robin.setGeneral({ sfxEnabled: v === true });
+        if (v) playSfx('toggle'); // U27：开启即试听（关闭无音，反馈就是「静下来」）
+        this.handlers.onRefreshState?.();
+      }),
+    ]);
+    const sfxRowEl = sfxGroup.querySelector('.group-rows')?.lastElementChild;
+    if (sfxRowEl) {
+      sfxRowEl.dataset.role = 'sfx-row'; // 探针定位（设置搜索索引同键）
+      sfxRowEl.querySelector('.toggle')?.setAttribute('data-role', 'sfx-toggle');
+    }
+    container.appendChild(sfxGroup);
 
     // ── 阅读生物钟（F36）：24 桶热力条 + 高峰标注 + 对齐动作开关 ──
     await this._clockGroup(container);

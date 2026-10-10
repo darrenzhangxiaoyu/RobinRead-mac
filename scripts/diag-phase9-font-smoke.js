@@ -159,7 +159,12 @@ const run = (js) => win.webContents.executeJavaScript(`(async () => { try { ${js
     // 5. 命令面板（方向 22）：真实键事件唤起/关闭
     const opened = await run(`
       document.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', key: 'P', ctrlKey: true, shiftKey: true, bubbles: true }));
-      return !!document.querySelector('.cmd-palette');
+      // U30 起 openCommandPalette 为 async（先读频次表再 present）——轮询等待而非同步断言
+      for (let i = 0; i < 50; i++) {
+        if (document.querySelector('.cmd-palette')) return true;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return false;
     `);
     if (opened !== true) throw new Error(`Ctrl+Shift+P 未唤起命令面板: ${JSON.stringify(opened)}`);
     const inputCount = await run(`return document.querySelectorAll('.cmd-item').length;`);

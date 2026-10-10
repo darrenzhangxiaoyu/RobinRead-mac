@@ -518,6 +518,8 @@ class AppStore extends EventEmitter {
       listWidth: this.preferences.get(PreferenceKey.listWidth, 340),
       // 语音指挥舱（F35）：开关（识别能力探测与浮球在渲染层）
       voiceEnabled: this.preferences.get('RobinRead.voice.enabled', false) === true,
+      // 微交互音效（U27）：三枚 WebAudio 合成轻音的总开关（合成与静默判定在渲染层）
+      sfxEnabled: this.preferences.get('RobinRead.sfx.enabled', false) === true,
       // 阅读生物钟（F36）：对齐动作三开关（热力条数据走 clock:status 通道）
       clock: this.clock.getConfig(),
       // 外文源自动译（F33）：订阅级「自动翻译」开关（设置页按源开关 + 列表徽标）
@@ -3543,6 +3545,34 @@ class AppStore extends EventEmitter {
       this.database.prepare('UPDATE feeds SET sort_order = ? WHERE id = ?').run(index, feedID);
     });
     this._emitState();
+  }
+
+  // MARK: - 命令面板自学习（U30）
+
+  /** 命令执行频次（preferences JSON map：label → count）；脏数据回空表不致抛。 */
+  paletteFrequency() {
+    try {
+      const parsed = JSON.parse(this.preferences.get('RobinRead.palette.freq', '{}'));
+      return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+    } catch (_) { return {}; }
+  }
+
+  /**
+   * 记一次命令执行（U30）：计数封顶 9999 防溢出装饰；条目上限 200（超出按频次
+   * 保Top 淘汰尾部），偏好体积恒定有界。
+   */
+  recordCommandUse(label) {
+    const key = String(label ?? '').slice(0, 80);
+    if (!key) return this.paletteFrequency();
+    const map = this.paletteFrequency();
+    map[key] = Math.min(9999, (Number(map[key]) || 0) + 1);
+    const keys = Object.keys(map);
+    if (keys.length > 200) {
+      keys.sort((a, b) => (Number(map[b]) || 0) - (Number(map[a]) || 0));
+      for (const k of keys.slice(200)) delete map[k];
+    }
+    this.preferences.set('RobinRead.palette.freq', JSON.stringify(map));
+    return map;
   }
 
   /** 账户同步状态表（设置页展示）。 */

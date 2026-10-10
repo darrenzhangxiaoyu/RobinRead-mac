@@ -396,6 +396,9 @@ contextBridge.exposeInMainWorld('robin', {
   setThemeTokens: (tokens) => invoke('prefs:setThemeTokens', tokens),
   setReaderLayout: (patch) => invoke('prefs:setReaderLayout', patch),
   setFilterRules: (patch) => invoke('prefs:setFilterRules', patch),
+  // 命令面板自学习（U30）：频次读 / 记一笔
+  paletteFrequency: () => data('prefs:paletteFrequency'),
+  recordPaletteUse: (label) => invoke('prefs:recordPaletteUse', String(label ?? '').slice(0, 80)),
   clearThemeTokens: () => invoke('prefs:clearThemeTokens'),
 
   // 账号与会员（账号密码登录 / 会员状态 / AI 额度 / 订单）

@@ -920,6 +920,18 @@ export class ReaderView {
         actions.appendChild(readBtn);
         actions.appendChild(browserBtn);
       }
+      // U29 打印排版：正文打印一键直达（window.print()；打印时的单栏全宽/隐藏 UI
+      // 由 @media print 块接管）。仅文章打开时随头部渲染（无文无头部自然不显）。
+      if (this.entryID) {
+        const printBtn = document.createElement('button');
+        printBtn.className = 'btn-text bordered nj-print-btn';
+        printBtn.dataset.role = 'print-article';
+        printBtn.innerHTML = `${icon('printer')}<span style="margin-left:4px"></span>`;
+        printBtn.querySelector('span').textContent = t('打印');
+        printBtn.title = t('打印本文（页眉页脚与页边距由浏览器接管）');
+        printBtn.addEventListener('click', () => window.print());
+        actions.appendChild(printBtn);
+      }
       if (actions.childNodes.length > 0) meta.appendChild(actions);
     }
     header.appendChild(meta);

@@ -7,6 +7,8 @@
  * 预览窗格（右侧：说明 / 快捷键 / 影响范围 / 关键词）。既有命令注册数据结构只扩不破
  * （新增可选 desc；label/keywords/icon/hint/group/action 语义不变）。
  * 子串过滤（标签+关键词，大小写不敏感），↑↓ 选择、Enter 执行、Esc 关闭，鼠标点选可用。
+ * U30 自学习：命令执行频次经主进程 preferences 持久化（JSON map），查询排序权重 =
+ * 既有相关度 + 频次对数（freqBoost）——常用命令越用越靠前；「最近使用」既有逻辑保留。
  * 零业务依赖：命令注册表由 app 层注入。
  */
 import { icon } from '../icons.js';
@@ -15,6 +17,15 @@ import { t } from '../i18n.js';
 const RECENT_KEY = 'robinread.palette.recent';
 /** 图标缺省回退（U17 图标行：每条命令都有图标，无注册图标时用通用形）。 */
 const FALLBACK_ICON = 'general';
+
+/**
+ * U30 频次对数加权（纯函数，探针可单测）：count=0 → 0（不加权），
+ * 1 → 1，3 → 2，7 → 3——对数刻度让「常用」稳步上浮而不至于霸屏。
+ */
+export function freqBoost(count) {
+  const n = Math.max(0, Number(count) || 0);
+  return Math.log2(1 + n);
+}
 
 /**
  * U17 模糊命中标记：在 label 中定位 query 命中的字符下标（升序）。
@@ -50,13 +61,23 @@ export class CommandPalette {
     this.filtered = [];
     this.activeIndex = 0;
     this.overlay = null;
+    // U30：执行频次（label → count）与持久化回调（app 层经 IPC 注入）
+    this.freq = {};
+    this.onUse = null;
   }
 
-  present(commands) {
+  /**
+   * @param {Array} commands 命令注册表（结构只扩不破）
+   * @param {{freq?:Object,onUse?:Function}} [opts] U30：频次表（主进程 preferences 读出）
+   *   与执行回调（每次 _run 上报一条计数）。
+   */
+  present(commands, opts = {}) {
     if (this.overlay) this.dismiss();
     this.items = commands || [];
     this.filtered = this.items;
     this.activeIndex = 0;
+    this.freq = (opts && opts.freq && typeof opts.freq === 'object' && !Array.isArray(opts.freq)) ? opts.freq : {};
+    this.onUse = (opts && typeof opts.onUse === 'function') ? opts.onUse : null;
     try { this.recent = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch (_) { this.recent = []; }
 
     const overlay = document.createElement('div');
@@ -145,6 +166,7 @@ export class CommandPalette {
       return;
     }
     // 记分：前缀命中(3) > 标签包含(2) > 关键词包含(1) > 组名包含(0.5)；同分保持注册序
+    // U30：排序权重 = 既有相关度 + 频次对数（freqBoost）——同相关度下常用者胜出
     const scored = [];
     this.items.forEach((cmd, order) => {
       const label = cmd.label.toLowerCase();
@@ -158,7 +180,7 @@ export class CommandPalette {
       // 搜组名意为整组导航（R21 验收附注）：label 顺带含组名的命令降权到组名命中之后，
       // 避免「退出期刊」这类敏感命令在输入「期刊」时被默认聚焦
       if (score === 2 && group && group.includes(q)) score = 0.4;
-      if (score > 0) scored.push({ cmd, score, order });
+      if (score > 0) scored.push({ cmd, score: score + freqBoost(this.freq?.[cmd.label]), order });
     });
     scored.sort((a, b) => b.score - a.score || a.order - b.order);
     this.filtered = scored.map((x) => x.cmd);
@@ -193,8 +215,20 @@ export class CommandPalette {
   _run(cmd) {
     if (!cmd) return;
     this._rememberRecent(cmd);
+    this._recordUse(cmd); // U30：执行即计频
     this.dismiss();
     try { cmd.action?.(); } catch (_) { /* 单条命令失败不破坏面板生命周期 */ }
+  }
+
+  /**
+   * U30 自学习：执行即计频——内存表即时生效（本会话后续排序马上受益），
+   * 持久化走 onUse 回调（app 层转主进程 preferences JSON map），通道缺失静默。
+   */
+  _recordUse(cmd) {
+    if (!cmd?.label) return;
+    this.freq = this.freq || {};
+    this.freq[cmd.label] = Math.min(9999, (Number(this.freq[cmd.label]) || 0) + 1);
+    try { this.onUse?.(cmd.label); } catch (_) { /* 持久化失败不破坏执行 */ }
   }
 
   /** U17：命中字符高亮——label 按模糊命中下标切片，命中段包 <mark>（HTML 转义安全）。

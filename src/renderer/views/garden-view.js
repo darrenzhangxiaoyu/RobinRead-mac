@@ -16,6 +16,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { gardenArt } from './garden-art.js';
+import { playSfx } from './sfx.js'; /* U27 微交互音效：挑战完成琶音 */
 
 const LAST_STAGE_KEY = 'robinread.garden.lastStage';
 
@@ -116,8 +117,10 @@ export class GardenView {
       if (!this.overlay) return;
       this._load(true);
     });
-    // F40 挑战变更推送（完成/放弃/新建）：在场时热刷新挑战 tab
-    this._unsubscribeChallenge = window.robin.onChallengeChanged?.(() => {
+    // F40 挑战变更推送（完成/放弃/新建）：在场时热刷新挑战 tab；
+    // U27：挑战完成（status=done 推送）播一枚合成琶音（开关关/能力缺省静默）
+    this._unsubscribeChallenge = window.robin.onChallengeChanged?.((payload) => {
+      if (payload && payload.status === 'done') playSfx('done');
       if (!this.overlay || this.tab !== 'challenge') return;
       this.challenges = null;
       this._renderBody();
