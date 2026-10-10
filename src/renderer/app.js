@@ -371,7 +371,9 @@ function applyReaderLayout(layout) {
   document.body.dataset.readerAlign = layout?.textAlign === 'justify' ? 'justify' : 'left';
   document.body.classList.toggle('rp-micro-off', layout?.microTypography === 'off');
   document.body.classList.toggle('rp-dropcap', layout?.dropCap === 'on');
-  // U34 边注模式：开关变化时通知阅读器在已打开文章上就地重排边注列（不整篇重建）
+  window.__robinReaderLayout = layout || {};
+  // U34 边注模式：开关变化时通知阅读器在已打开文章上就地重排边注列（不整篇重建）。
+  // 必须在 __robinReaderLayout 更新之后再派发——阅读器 _marginNotesOn 读的是这份全局。
   {
     const mn = layout?.marginNotes === 'on' ? 'on' : 'off';
     if (applyReaderLayout._lastMarginNotes !== undefined && mn !== applyReaderLayout._lastMarginNotes) {
@@ -379,7 +381,6 @@ function applyReaderLayout(layout) {
     }
     applyReaderLayout._lastMarginNotes = mn;
   }
-  window.__robinReaderLayout = layout || {};
   // 微排版是 DOM 结构性的（spacer 增删）：设置变化时通知阅读器在已打开的文章上重建。
   // 必须在 __robinReaderLayout 更新之后再派发——阅读器按新值重建
   const micro = layout?.microTypography === 'off' ? 'off' : 'on';

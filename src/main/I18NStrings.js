@@ -2684,6 +2684,23 @@ const STRINGS = {
   "脚本沙箱无响应，请重试。": { zh: "脚本沙箱无响应，请重试。", en: "The script sandbox is not responding — please try again." },
   "脚本执行失败": { zh: "脚本执行失败", en: "Script failed" },
   "脚本已执行": { zh: "脚本已执行", en: "Script finished" },
+  // U31 空态二期
+  "花园还在整理土壤": { zh: "花园还在整理土壤", en: "The garden is still settling its soil" },
+  "稍后再来看看。": { zh: "稍后再来看看。", en: "Come back a little later." },
+  "分析常读的订阅源后，它们会按立场排成一条光谱。": { zh: "分析常读的订阅源后，它们会按立场排成一条光谱。", en: "After analyzing the feeds you read most, they line up on a spectrum by stance." },
+  // U32 统一进度语言
+  "与 WebDAV 交换快照": { zh: "与 WebDAV 交换快照", en: "Exchanging snapshots with WebDAV" },
+  "转写中": { zh: "转写中", en: "Transcribing" },
+  // U33 侧栏 2.0 / U35 浮条
+  "更多": { zh: "更多", en: "More" },
+  // U34 边注模式
+  "批注呈现": { zh: "批注呈现", en: "Annotations" },
+  "边注模式": { zh: "边注模式", en: "Margin Notes" },
+  "边注把高亮批注的笔记摆在正文页边，随锚点段落对齐；窄窗口自动回到正文内联。": { zh: "边注把高亮批注的笔记摆在正文页边，随锚点段落对齐；窄窗口自动回到正文内联。", en: "Margin notes place annotation notes beside the article, aligned to their anchor paragraph; narrow windows fall back to inline." },
+  "点击查看笔记": { zh: "点击查看笔记", en: "Click to view note" },
+  // U35 划词浮条 2.0
+  "复制所选文字": { zh: "复制所选文字", en: "Copy Selected Text" },
+  "已复制所选文字": { zh: "已复制所选文字", en: "Selected text copied" },
 };
 
 module.exports = { STRINGS };
