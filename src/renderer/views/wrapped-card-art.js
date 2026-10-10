@@ -118,7 +118,7 @@ export function wrappedCardArt({
   parts.push(`<line x1="${cx}" y1="${rowY - 26}" x2="${cx}" y2="${rowY + 18}" stroke="${frameInk}" stroke-width="0.6"/>`);
   cell(cx - 70, d, 'READ');
   cell(cx + 70, anno, 'NOTES');
-  parts.push(`<text x="${cx}" y="316" text-anchor="middle" font-family="Georgia, serif" font-size="12" fill="${mix(ink, paper, 0.25)}">${esc(String(stk))}d streak${themeText ? ` · #${themeText}` : ''}</text>`);
+  parts.push(`<text x="${cx}" y="316" text-anchor="middle" font-family="Georgia, serif" font-size="12" fill="${mix(ink, paper, 0.25)}">${esc(`${stk}d streak${themeText ? ` · #${themeText}` : ''}`)}</text>`);
 
   // ⑤ 落款（dateText 由调用方传入；不内部取时钟，保确定性合同）
   if (dateText) {

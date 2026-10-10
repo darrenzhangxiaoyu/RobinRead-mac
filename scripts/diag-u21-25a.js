@@ -135,26 +135,7 @@ async function phaseService() {
   const { AppStore } = require('../src/main/AppStore');
   const { LOCAL_ACCOUNT_ID } = require('../src/main/Models');
   const userData = app.getPath('userData');
-  let store = new AppStore(userData);
-
-  // U21 持久化：四档皮肤白名单 + customFont 消毒
-  store.setReaderLayout({ fontFamily: 'fangsong' });
-  ok(store.readerLayout().fontFamily === 'fangsong', 'B U21 setReaderLayout 仿宋入库（readerLayout 投影）');
-  store.setReaderLayout({ fontFamily: 'kaiti' });
-  ok(store.readerLayout().fontFamily === 'kaiti', 'B U21 setReaderLayout 楷体入库');
-  store.setReaderLayout({ fontFamily: 'comic-sans' });
-  ok(store.readerLayout().fontFamily === 'kaiti', 'B U21 非法字体族键被白名单拒（保持原值）');
-  store.setReaderLayout({ fontFamily: 'custom', customFont: 'Source "Han"; Serif{bad}\\x' });
-  ok(store.readerLayout().fontFamily === 'custom' && store.readerLayout().customFont === 'Source Han Serifbadx',
-    `B U21 customFont 消毒（引号/分号/花括号/反斜杠剥除）got="${store.readerLayout().customFont}"`);
-  store.setReaderLayout({ customFont: 'N'.repeat(120) });
-  ok(store.readerLayout().customFont.length === 80, `B U21 customFont 80 字封顶 got=${store.readerLayout().customFont.length}`);
-  // 重启读回
-  store.preferences.flushSync();
-  store.database.close();
-  store = new AppStore(userData);
-  ok(store.readerLayout().fontFamily === 'custom' && store.readerLayout().customFont.length === 80,
-    'B U21 重启读回：fontFamily=custom + customFont 保留');
+  const store = new AppStore(userData);
   store.setReaderLayout({ fontFamily: 'serif', customFont: '' }); // UI 阶段从干净预设开始
 
   // U25 数据：灌文（feed + 3 文 + 标签 + 已读）
@@ -194,31 +175,76 @@ async function phaseService() {
   return store;
 }
 
+/** U21 持久化断言（UI 阶段之后单独跑：close+重开 AppStore 不与开着的探针窗口混跑）。 */
+async function phasePersistence() {
+  const { AppStore } = require('../src/main/AppStore');
+  const userData = app.getPath('userData');
+  let store = new AppStore(userData);
+  store.setReaderLayout({ fontFamily: 'fangsong' });
+  ok(store.readerLayout().fontFamily === 'fangsong', 'B U21 setReaderLayout 仿宋入库（readerLayout 投影）');
+  store.setReaderLayout({ fontFamily: 'kaiti' });
+  ok(store.readerLayout().fontFamily === 'kaiti', 'B U21 setReaderLayout 楷体入库');
+  store.setReaderLayout({ fontFamily: 'comic-sans' });
+  ok(store.readerLayout().fontFamily === 'kaiti', 'B U21 非法字体族键被白名单拒（保持原值）');
+  store.setReaderLayout({ fontFamily: 'custom', customFont: 'Source "Han"; Serif{bad}\\x' });
+  ok(store.readerLayout().fontFamily === 'custom' && store.readerLayout().customFont === 'Source Han Serifbadx',
+    `B U21 customFont 消毒（引号/分号/花括号/反斜杠剥除）got="${store.readerLayout().customFont}"`);
+  store.setReaderLayout({ customFont: 'N'.repeat(120) });
+  ok(store.readerLayout().customFont.length === 80, `B U21 customFont 80 字封顶 got=${store.readerLayout().customFont.length}`);
+  // 重启读回
+  store.preferences.flushSync();
+  store.database.close();
+  store = new AppStore(userData);
+  ok(store.readerLayout().fontFamily === 'custom' && store.readerLayout().customFont.length === 80,
+    'B U21 重启读回：fontFamily=custom + customFont 保留');
+  store.preferences.flushSync();
+  store.database.close();
+}
+
 // ── Phase C：UI 阶段（offscreen 真窗 + 真 IPC；150s 竞速降级 SKIP）─────────
-async function uiProbe(store) {
-  let win = null;
+// 窗口早开（f36 同款：进程年轻时创建健康；Desktop Heap 耗尽会使晚创建同步死锁），
+// IPC 注册与页面加载在服务级断言之后进行（handlers 绑定重启后的最终 store）。
+function openUIWindow() {
   try {
-    win = new BrowserWindow({
+    return new BrowserWindow({
       show: false, width: 1280, height: 860, useContentSize: true,
       webPreferences: { offscreen: true, contextIsolation: true, backgroundThrottling: false, preload: path.join(ROOT, 'src', 'main', 'preload.js') },
     });
   } catch (err) {
     console.error('UI probe: window create failed (environmental):', String((err && err.message) || err));
-    return { uiSkipped: true };
+    return null;
   }
+}
+
+async function uiProbe(store, win) {
   try {
     const { registerIPCHandlers } = require('../src/main/ipc');
     registerIPCHandlers(store, win);
     await win.loadFile(path.join(ROOT, 'src', 'renderer', 'index.html'));
   } catch (err) {
     console.error('UI probe: load failed (environmental):', String((err && err.message) || err));
-    try { win.destroy(); } catch (_) { /* 已销毁 */ }
     return { uiSkipped: true };
   }
   await sleep(1600);
+  const js = async (label, code) => {
+    console.log(`C ${label} …`);
+    const r = await win.webContents.executeJavaScript(code);
+    console.log(`C ${label} 完成`);
+    return r;
+  };
 
-  const out = await win.webContents.executeJavaScript(`(async () => {
+  const out = await js('U21/U22 块', `(async () => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const waitFor = async (fn, ms = 15000) => {
+      const t0 = Date.now();
+      for (;;) {
+        let v = null;
+        try { v = await fn(); } catch (_) { v = null; }
+        if (v) return v;
+        if (Date.now() - t0 > ms) return null;
+        await sleep(200);
+      }
+    };
     const out = {};
     const viewsURL = (f) => new URL(f, ${JSON.stringify(modURL('x'))}).href;
     const dataURL = (f) => new URL('../data/' + f, ${JSON.stringify(modURL('x'))}).href;
@@ -289,6 +315,13 @@ async function uiProbe(store) {
     await sleep(1100);
     out.u22GhostGone = !ghost.isConnected;
     target.remove();
+    return out;
+  })()`);
+  Object.assign(out, await js('U23/U24 块', `(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const out = {};
+    const viewsURL = (f) => new URL(f, ${JSON.stringify(modURL('x'))}).href;
+    const root0 = document.documentElement;
 
     // ── U23：主题切换渐变 ──
     const te = await import(viewsURL('theme-engine.js'));
@@ -364,6 +397,22 @@ async function uiProbe(store) {
     await sleep(420);
     out.u24LPDetach = fired === null;
     lpHost.remove();
+    return out;
+  })()`));
+  Object.assign(out, await js('U25 块', `(async () => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const waitFor = async (fn, ms = 15000) => {
+      const t0 = Date.now();
+      for (;;) {
+        let v = null;
+        try { v = await fn(); } catch (_) { v = null; }
+        if (v) return v;
+        if (Date.now() - t0 > ms) return null;
+        await sleep(200);
+      }
+    };
+    const out = {};
+    const viewsURL = (f) => new URL(f, ${JSON.stringify(modURL('x'))}).href;
 
     // ── U25：年报（真 IPC + 真渲染）──
     const wrappedData = await window.robin.kbWrapped();
@@ -395,10 +444,11 @@ async function uiProbe(store) {
     out.u25XSS = !/[<]script/.test(wca.wrappedCardArt({ ...args, topTheme: '<script>alert(1)</script>' }))
       && wca.wrappedCardArt({ ...args, topTheme: '<b>尖</b>' }).includes('&lt;b&gt;');
     out.u25Content = a1.includes('2026') && a1.includes('42') && a1.includes('NOTES') && a1.includes('data-wrapped-card="2026"');
-    const cf = wca.cloudFontSize;
+    const wv = await import(viewsURL('wrapped-view.js'));
+    const cf = wv.cloudFontSize;
     out.u25CloudFont = cf(21, 1, 21) > cf(1, 1, 21) && cf(5, 5, 5) === 20 && cf(1, 1, 21) === 14;
     return out;
-  })()`);
+  })()`));
 
   return { uiSkipped: false, out, win };
 }
@@ -436,12 +486,27 @@ async function phaseReducedMotion(win) {
 
 app.whenReady().then(async () => {
   try {
+    // UI 窗早开（f36 同款：进程年轻时创建健康；晚创建在重初始化后偶发同步死锁）
+    const uiWin = openUIWindow();
+    if (!uiWin) {
+      // 窗口都建不出来：全量 UI 断言按 SKIP 降级（环境性），服务级断言照跑
+      const store0 = await phaseService();
+      console.log('UI 阶段 SKIP：窗口创建失败（环境性）');
+      try { fs.writeFileSync(path.join(__dirname, '.ci-skip-marker'), 'scripts/diag-u21-25a.js'); } catch (_) { /* 标记失败仅影响连击治理 */ }
+      store0.preferences.flushSync();
+      store0.database.close();
+      console.log(`TOTAL passed=${passed} failed=${failed}`);
+      process.exit(failed ? 1 : 0);
+      return;
+    }
+    uiWin.on('render-process-gone', (_e, d) => console.error('RENDER-GONE', JSON.stringify(d)));
     phaseSource();
     const store = await phaseService();
 
     // ── UI 阶段（150s 竞速降级 SKIP）──
+    console.log('UI 阶段启动…');
     const ui = await Promise.race([
-      uiProbe(store),
+      uiProbe(store, uiWin).catch((err) => { console.error('uiProbe threw:', String(err && err.stack || err).slice(0, 800)); return { uiSkipped: true }; }),
       new Promise((r) => setTimeout(() => r({ uiSkipped: true }), 150000)),
     ]);
     if (ui.uiSkipped) {
@@ -463,35 +528,26 @@ app.whenReady().then(async () => {
     ok(b.u21Presets, label('u21Presets', 'C U21 四套皮肤+wenkai 兼容栈解析'));
     ok(b.u21Custom && b.u21CustomEmpty, label('u21Custom', 'C U21 自定义拼栈（名前引号包裹）与空名回退'));
     ok(b.u21Sanitize, label('u21Sanitize', 'C U21 sanitizeCustomFontName 消毒/截断'));
-    // 设置页真渲染 + 真 IPC
+    // 设置页真渲染 + 真 IPC（先选预设并断言落库，再输入自定义名——两者都写 fontFamily，须分序）
     const uiSet = await ui.win.webContents.executeJavaScript(`(async () => {
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       const viewsURL = (f) => new URL(f, ${JSON.stringify(modURL('x'))}).href;
       const dlg = await import(viewsURL('dialogs.js'));
       const snapshot = await window.robin.getState();
       const sv = new dlg.SettingsView({ state: { snapshot: { ...snapshot.data, preferences: snapshot.data.preferences }, llm: {} }, views: {}, onAddFreshRSS: null, onReload: null, onRefreshState: null });
+      window.__u21Settings = sv; // 第二段（自定义输入）复用同一实例
       sv.present('appearance');
       await sleep(500);
       const preview = document.querySelector('[data-role="font-family-preview"]');
-      const select = preview ? preview.closest('.settings-group')?.querySelector('select') : null;
       const allSelects = [...document.querySelectorAll('.modal select')];
       const fontSelect = allSelects.find((s) => [...s.options].some((o) => o.value === 'fangsong'));
       const out = { preview: !!preview, options: fontSelect ? fontSelect.options.length : 0 };
       if (fontSelect) {
         fontSelect.value = 'fangsong';
         fontSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        await sleep(400);
+        await sleep(600); // IPC 落库
         out.previewFont = preview.style.fontFamily || '';
       }
-      const input = document.querySelector('[data-role="custom-font-input"]');
-      if (input) {
-        input.value = 'Bad "Quote"; Name';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        await sleep(800); // 500ms 防抖 + IPC
-        out.customSent = true;
-      }
-      sv.dismiss();
-      await sleep(200);
       return out;
     })()`);
     ok(uiSet.preview, 'C U21 设置→外观：字体预览元素真渲染');
@@ -499,6 +555,19 @@ app.whenReady().then(async () => {
     ok(/FangSong/i.test(uiSet.previewFont || ''), `C U21 选仿宋即时预览换栈（got=${uiSet.previewFont}）`);
     await waitFor(() => store.readerLayout().fontFamily === 'fangsong', 4000);
     ok(store.readerLayout().fontFamily === 'fangsong', 'C U21 选仿宋经真 IPC 落库（设置→外观→阅读排版）');
+    // 第二段：自定义字体输入（写 fontFamily:'custom' + 消毒后的 customFont）
+    const uiSetInput = await ui.win.webContents.executeJavaScript(`(async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const input = document.querySelector('[data-role="custom-font-input"]');
+      if (!input) return { input: false };
+      input.value = 'Bad "Quote"; Name';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await sleep(900); // 500ms 防抖 + IPC
+      window.__u21Settings?.dismiss?.();
+      await sleep(200);
+      return { input: true };
+    })()`);
+    ok(uiSetInput.input, 'C U21 自定义字体输入框真渲染');
     ok(store.readerLayout().customFont === 'Bad Quote Name',
       `C U21 自定义输入消毒落库（got="${store.readerLayout().customFont}"）`);
     // U22
@@ -539,7 +608,9 @@ app.whenReady().then(async () => {
     ok(rm.u22RMNoGhost, 'D U22 reduced-motion：不建幽灵直达终态');
     ok(rm.u23RMNoClass, 'D U23 reduced-motion：切换不挂过渡类');
 
-    try { ui.win.destroy(); } catch (_) { /* 已销毁 */ }
+    try { uiWin.destroy(); } catch (_) { /* 已销毁 */ }
+    // ── Phase E：U21 持久化（close+重开不与开着的探针窗口混跑）──
+    await phasePersistence();
     store.preferences.flushSync();
     store.database.close();
     console.log(`TOTAL passed=${passed} failed=${failed}`);

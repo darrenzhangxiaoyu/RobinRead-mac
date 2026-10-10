@@ -98,9 +98,14 @@ assert.ok(fs.existsSync(path.join(ROOT, 'src', 'renderer', 'fonts', 'OFL-LXGWWen
   'OFL 授权文件应随包分发');
 assert.ok(cssSrc.includes('@font-face') && cssSrc.includes("'LXGW WenKai Screen'"), 'robin.css 应注册内置字体');
 assert.ok(cssSrc.includes('../fonts/LXGWWenKaiScreen.ttf'), '@font-face 应指向随包字体文件');
-assert.ok(/fontFamily: \['serif', 'sans', 'wenkai'\]/.test(storeSrc), 'fontFamily 白名单应含 wenkai');
-assert.ok(appSrc.includes("wenkai: '"), 'app.js fontMap 应含 wenkai 回退栈');
-assert.ok(dialogsSrc.includes("t('霞鹜文楷（内置）')"), '设置面应含霞鹜文楷选项');
+assert.ok(/fontFamily: \['serif', 'sans', 'wenkai', 'fangsong', 'kaiti', 'custom'\]/.test(storeSrc), 'fontFamily 白名单应含 wenkai（U21 扩至四套皮肤+custom）');
+// U21 重构：wenkai 回退栈迁入 font-family-presets.js 单一数据源（app.js 走 resolveReaderFontStack）
+const fontPresetsSrc = fs.readFileSync(path.join(ROOT, 'src', 'renderer', 'data', 'font-family-presets.js'), 'utf8');
+assert.ok(/wenkai: '/.test(fontPresetsSrc), 'font-family-presets.js 应含 wenkai 回退栈');
+assert.ok(appSrc.includes('resolveReaderFontStack'), 'app.js 应走字体族单一数据源');
+// U21 重构：设置面选项改由 READER_FONT_LABELS 单一数据源供名（含霞鹜文楷）
+assert.ok(fontPresetsSrc.includes("'霞鹜文楷（内置）'"), '字体族单一数据源应含霞鹜文楷选项');
+assert.ok(dialogsSrc.includes('READER_FONT_LABELS'), '设置面应消费 READER_FONT_LABELS（霞鹜文楷选项在列）');
 assert.ok(stringsSrc.includes('"霞鹜文楷（内置）"'), 'i18n 应含霞鹜文楷英文条目');
 
 // ── 4. 标题字体通道（方向 2 v2）与每日刊头（方向 6）锚点 ──
