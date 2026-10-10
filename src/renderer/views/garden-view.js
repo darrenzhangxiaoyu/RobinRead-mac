@@ -1,14 +1,17 @@
 'use strict';
 /**
- * RobinRead（知更）— 知识花园浮层（F23 知识花园 · 知更养成）
+ * RobinRead（知更）— 知识花园浮层（F23 知识花园 · 知更养成 + F40 挑战赛季）
  *
  * 侧栏底部花园徽章点击唤起：
  * - 「花园」tab：garden-art 确定性 SVG 花园（按状态渲染花株/知更鸟/天气，
  *   颜色取当前主题令牌）+ 阶段铭牌 + 阳光/水滴/养分三枚计 + 下一阶段目标；
  * - 「开花报告」tab：本周（7 天）浇水/种子统计 + 阶段跃迁清单 + 本周新开花；
+ * - 「挑战」tab（F40）：进行中挑战卡（进度条 + 剩余天数 + 书单勾选）+ 新挑战
+ *   （3 个零 AI 模板 / 自定义主题）+ 历史挑战（含 failed 诚实展示）+ 完成挑战卡
+ *   （确定性 SVG，可复制分享）；
  * - 阶段跃迁入场动画：浮层打开时若阶段较上次观看有跃迁 → 花园生长动画
  *   （reduced-motion 直达终态，见 robin.css）；
- * - garden:changed 推送在场时热刷新（读着读着花开当场可见）。
+ * - garden:changed / challenge:changed 推送在场时热刷新（读着读着花开当场可见）。
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
@@ -56,7 +59,9 @@ export class GardenView {
     this.tab = 'garden';
     this.state = null;
     this.report = null;
+    this.challenges = null;   // F40：{ challenges, templates }（懒加载）
     this._unsubscribe = null;
+    this._unsubscribeChallenge = null;
   }
 
   present() {
@@ -78,7 +83,7 @@ export class GardenView {
 
     const tabs = el('div', 'nj-garden-tabs');
     this._tabButtons = {};
-    for (const [key, label] of [['garden', t('花园')], ['report', t('开花报告')]]) {
+    for (const [key, label] of [['garden', t('花园')], ['report', t('开花报告')], ['challenge', t('挑战')]]) {
       const btn = el('button', 'nj-garden-tab');
       btn.type = 'button';
       btn.textContent = label;
@@ -111,6 +116,12 @@ export class GardenView {
       if (!this.overlay) return;
       this._load(true);
     });
+    // F40 挑战变更推送（完成/放弃/新建）：在场时热刷新挑战 tab
+    this._unsubscribeChallenge = window.robin.onChallengeChanged?.(() => {
+      if (!this.overlay || this.tab !== 'challenge') return;
+      this.challenges = null;
+      this._renderBody();
+    });
 
     this._syncTabs();
     this._load();
@@ -120,6 +131,7 @@ export class GardenView {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this._esc);
     if (this._unsubscribe) { try { this._unsubscribe(); } catch (_) { /* 已退订 */ } this._unsubscribe = null; }
+    if (this._unsubscribeChallenge) { try { this._unsubscribeChallenge(); } catch (_) { /* 已退订 */ } this._unsubscribeChallenge = null; }
     this.overlay.remove();
     this.overlay = null;
   }
@@ -146,6 +158,7 @@ export class GardenView {
 
   _renderBody() {
     if (!this.overlay || !this.bodyEl) return;
+    if (this.tab === 'challenge') { this._renderChallenge(); return; }
     if (!this.state) {
       this.bodyEl.innerHTML = `<div class="nj-garden-empty">${escapeText(t('花园还在整理土壤，稍后再来看看。'))}</div>`;
       return;
@@ -240,6 +253,189 @@ export class GardenView {
     const heads = this.bodyEl.querySelectorAll('.nj-garden-report-sec h4');
     if (heads[0]) heads[0].textContent = t('本周新开花');
     if (heads[1]) heads[1].textContent = t('阶段跃迁');
+  }
+
+  // MARK: 挑战赛季（F40：进行中 / 新挑战 / 历史 + 挑战卡）
+
+  async _renderChallenge() {
+    if (!this.challenges) {
+      try {
+        const [list, tpl, avail] = await Promise.all([
+          window.robin.challengeList?.(),
+          window.robin.challengeTemplates?.(),
+          window.robin.challengeAvailable?.(),
+        ]);
+        this.challenges = {
+          items: (list && Array.isArray(list.challenges)) ? list.challenges : [],
+          templates: (tpl && Array.isArray(tpl.templates)) ? tpl.templates : [],
+          ai: Boolean(avail && avail.ai),
+        };
+      } catch (_) {
+        this.challenges = { items: [], templates: [], ai: false };
+      }
+    }
+    const { items, templates, ai } = this.challenges;
+    const active = items.find((c) => c.status === 'active') || null;
+    const history = items.filter((c) => c.status !== 'active');
+    const doneLatest = history.find((c) => c.status === 'done') || null;
+
+    this.bodyEl.innerHTML = '';
+    const root = el('div', 'nj-challenge');
+    this.bodyEl.appendChild(root);
+
+    // ── 进行中挑战：进度条 + 剩余天数 + 书单勾选 ──
+    if (active) {
+      const card = el('div', 'nj-challenge-active');
+      card.dataset.role = 'challenge-active';
+      const headLine = el('div', 'nj-challenge-head');
+      const theme = el('b', 'nj-challenge-theme', active.theme);
+      const left = el('span', 'nj-challenge-left', active.daysLeft > 0
+        ? tf('剩 %lld 天', active.daysLeft)
+        : t('今天截止'));
+      headLine.append(theme, left);
+      const barWrap = el('div', 'nj-challenge-bar');
+      const barFill = el('span', 'nj-challenge-bar-fill');
+      barFill.style.width = `${Math.max(2, active.pct)}%`;
+      barWrap.appendChild(barFill);
+      const counts = el('div', 'nj-challenge-counts', tf('%lld / %lld 篇', active.done, active.target));
+      const listWrap = el('div', 'nj-challenge-list');
+      for (const entry of (active.entries || [])) {
+        const rowEl = el('div', `nj-challenge-entry${entry.isRead ? ' read' : ''}`);
+        rowEl.innerHTML = `<span class="nj-challenge-check"></span><span class="nj-challenge-entry-title"></span>`;
+        rowEl.querySelector('.nj-challenge-entry-title').textContent = entry.title || entry.entryID;
+        rowEl.title = entry.sourceTitle ? `${entry.sourceTitle} · ${entry.isRead ? t('已读完') : t('未读完')}` : '';
+        listWrap.appendChild(rowEl);
+      }
+      const abandonBtn = el('button', 'btn-text bordered nj-challenge-abandon', t('放弃挑战'));
+      abandonBtn.type = 'button';
+      abandonBtn.addEventListener('click', async () => {
+        abandonBtn.disabled = true;
+        try {
+          await window.robin.challengeAbandon?.(active.id);
+          if (this.deps.toast) this.deps.toast(t('已放弃——随时可以开新赛季。'));
+        } finally {
+          this.challenges = null;
+          this._renderChallenge();
+        }
+      });
+      card.append(headLine, barWrap, counts, listWrap, abandonBtn);
+      root.appendChild(card);
+    }
+
+    // ── 完成挑战卡（最近一次 done；确定性 SVG，点击复制分享）──
+    if (doneLatest && !active) {
+      const cardWrap = el('div', 'nj-challenge-share');
+      cardWrap.dataset.role = 'challenge-card';
+      const cap = el('div', 'nj-challenge-share-cap', t('挑战卡 · 点击复制，分享你的战绩'));
+      const artBox = el('div', 'nj-challenge-share-art');
+      cardWrap.append(cap, artBox);
+      root.appendChild(cardWrap);
+      try {
+        const svg = await window.robin.challengeCard?.(doneLatest.id);
+        if (svg) {
+          artBox.innerHTML = svg;
+          artBox.addEventListener('click', async () => {
+            try {
+              await window.robin.copyText?.(svg);
+              if (this.deps.toast) this.deps.toast(t('挑战卡 SVG 已复制'));
+            } catch (_) { /* 剪贴板不可用静默 */ }
+          });
+        }
+      } catch (_) { /* 挑战卡生成失败静默 */ }
+    }
+
+    // ── 新挑战（模板 3 个零 AI / 自定义主题）──
+    const isNewDisabled = Boolean(active);
+    const newWrap = el('div', 'nj-challenge-new');
+    newWrap.dataset.role = 'challenge-new';
+    newWrap.appendChild(el('div', 'nj-challenge-sec-title', t('开个新赛季')));
+    const tplRow = el('div', 'nj-challenge-tpl-row');
+    for (const tpl of templates) {
+      const btn = el('button', 'nj-challenge-tpl');
+      btn.type = 'button';
+      btn.disabled = isNewDisabled;
+      btn.innerHTML = `<b></b><i></i>`;
+      btn.querySelector('b').textContent = tpl.theme;
+      btn.querySelector('i').textContent = tf('%lld 天 · %lld 篇', tpl.days, tpl.target);
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await window.robin.challengeCreate?.({ templateID: tpl.id });
+          if (this.deps.toast) this.deps.toast(t('新赛季开跑了！'));
+        } catch (err) {
+          if (this.deps.toast) this.deps.toast(String((err && err.message) || err));
+          btn.disabled = false;
+          return;
+        }
+        this.challenges = null;
+        this._renderChallenge();
+      });
+      tplRow.appendChild(btn);
+    }
+    newWrap.appendChild(tplRow);
+
+    const customRow = el('div', 'nj-challenge-custom');
+    const themeInput = el('input', 'control nj-challenge-theme-input');
+    themeInput.type = 'text';
+    themeInput.placeholder = t('自定义主题，如：量子计算入门');
+    themeInput.setAttribute('aria-label', t('自定义主题'));
+    const daysInput = el('input', 'control nj-challenge-days');
+    daysInput.type = 'number';
+    daysInput.min = '1'; daysInput.max = '60';
+    daysInput.value = '7';
+    daysInput.setAttribute('aria-label', t('天数'));
+    const targetInput = el('input', 'control nj-challenge-target');
+    targetInput.type = 'number';
+    targetInput.min = '1'; targetInput.max = '30';
+    targetInput.value = '10';
+    targetInput.setAttribute('aria-label', t('篇数'));
+    const createBtn = el('button', 'btn-text primary nj-challenge-create', t('创建挑战'));
+    createBtn.type = 'button';
+    createBtn.disabled = isNewDisabled;
+    createBtn.addEventListener('click', async () => {
+      createBtn.disabled = true;
+      try {
+        await window.robin.challengeCreate?.({
+          theme: themeInput.value.trim(),
+          days: Number(daysInput.value) || 7,
+          target: Number(targetInput.value) || 10,
+        });
+        if (this.deps.toast) this.deps.toast(t('新赛季开跑了！'));
+        this.challenges = null;
+        this._renderChallenge();
+      } catch (err) {
+        if (this.deps.toast) this.deps.toast(String((err && err.message) || err));
+        createBtn.disabled = false;
+      }
+    });
+    customRow.append(themeInput, daysInput, targetInput, createBtn);
+    newWrap.appendChild(customRow);
+    newWrap.appendChild(el('div', 'nj-challenge-hint', ai
+      ? t('自定义挑战会请 AI 从订阅库挑书；未配置 AI 时按标签聚合选文。')
+      : t('未配置 AI Key：按标签聚合选文，模板挑战不受影响。')));
+    root.appendChild(newWrap);
+
+    // ── 历史挑战（done / failed / abandoned 诚实展示）──
+    const histWrap = el('div', 'nj-challenge-history');
+    histWrap.dataset.role = 'challenge-history';
+    histWrap.appendChild(el('div', 'nj-challenge-sec-title', t('历史挑战')));
+    if (!history.length) {
+      histWrap.appendChild(el('div', 'nj-challenge-hint', t('还没有历史挑战——完成或放弃的挑战都会诚实记录在这里。')));
+    } else {
+      for (const c of history) {
+        const rowEl = el('div', `nj-challenge-history-row st-${c.status}`);
+        rowEl.innerHTML = `<span class="nj-challenge-h-theme"></span><span class="nj-challenge-h-meta"></span><span class="nj-challenge-h-badge"></span>`;
+        rowEl.querySelector('.nj-challenge-h-theme').textContent = c.theme;
+        rowEl.querySelector('.nj-challenge-h-meta').textContent = tf('%lld / %lld 篇 · %lld 天', c.done, c.target, c.days);
+        rowEl.querySelector('.nj-challenge-h-badge').textContent = {
+          done: t('已完成'),
+          failed: t('未达标'),
+          abandoned: t('已放弃'),
+        }[c.status] || c.status;
+        histWrap.appendChild(rowEl);
+      }
+    }
+    root.appendChild(histWrap);
   }
 }
 

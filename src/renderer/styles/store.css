@@ -193,7 +193,7 @@
 /* ── 侧栏底栏（账号/商店/热点/知识/进化/花园/胶囊/周刊/课程/设置 十入口，5×2 网格）──
    批 F 审查 P2：6 列 × 10 键折成参差双行且高度翻倍，改 5 列两整行 */
 .footer-nav {
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(6, 1fr); /* 批 H 审查 P2：F37 重访键入列后 12 键 = 6×2 两整行 */
   gap: 2px; flex: 1; min-width: 0;
 }
 .footer-nav-btn {

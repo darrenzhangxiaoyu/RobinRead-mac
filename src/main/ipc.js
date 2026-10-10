@@ -835,6 +835,22 @@ function registerIPCHandlers(store, window) {
   handle('spectrum:cancel', () => SPECT().cancel());
   handle('spectrum:forEntry', (entryID) => SPECT().forEntry(String(entryID || '')));
 
+  // MARK: 挑战赛季（F40：列表懒结算 / 模板 / 创建 / 放弃 / 挑战卡 SVG / 变更推送）
+  const CH = () => store.challenge;
+  handle('challenge:list', () => ({ challenges: CH().list() }));
+  handle('challenge:templates', () => ({ templates: CH().templates() }));
+  handle('challenge:available', () => CH().available());
+  handle('challenge:create', (payload) => CH().createChallenge(payload || {}));
+  handle('challenge:abandon', (challengeID) => CH().abandon(String(challengeID || '')));
+  handle('challenge:card', (challengeID) => CH().card(String(challengeID || '')));
+  store.on('challenge:changed', (payload) => send('challenge:changed', payload));
+
+  // MARK: 阅读数据开放 API（F39：配置读回 / 变更（开关即时启停/端口校验）/ 令牌重生成 / 状态）
+  handle('api:config', () => ({ config: store.api.getConfig(), status: store.api.status() }));
+  handle('api:setConfig', (patch) => store.api.configure(patch || {}));
+  handle('api:regenerateToken', () => ({ token: store.api.regenerateToken(), status: store.api.status() }));
+  store.on('api:changed', (payload) => send('api:changed', payload));
+
   // MARK: 外文源自动译（F33：手动整篇翻译 / 读回 / 取消 / 订阅级开关 / 可用性 / 诊断；
   //   分块进度走推送通道 translate:progress（阅读器进度提示），终态走信封返回）
   const TR = () => store.translation;

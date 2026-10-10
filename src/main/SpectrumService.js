@@ -29,6 +29,7 @@ const SPECTRUM = {
   RECENT_PER_FEED: 5,     // 画像输入：每源最近 N 篇标题 + 摘要摘选
   DETAIL_RECENT: 3,       // 详情面板：最近 3 篇标题
   PROFILE_TTL_DAYS: 7,    // 画像过期天数（过期后台重析）
+  REANALYZE_COOLDOWN_SEC: 1800, // 后台自动重析最短间隔 30 分钟（审查 P2：needsReanalyze 永真防烧）
   SPECTRUM_MIN: -100,     // 轴左端：技术实用
   SPECTRUM_MAX: 100,      // 轴右端：观点人文
   TITLE_SLICE: 80,        // prompt 里源名截断
@@ -242,11 +243,18 @@ class SpectrumService {
    * @param {{ force?: boolean }} opts force=true 忽略缓存全量重析
    * @returns 视图投影（view()）；degraded=true 表示无 Key（零 LLM 调用）。
    */
-  async analyze({ force = false } = {}) {
+  async analyze({ force = false, auto = false } = {}) {
     if (!this.store.hasAIAPIKey()) {
       this.counters.degraded += 1;
       return { ...this.view(), degraded: true };
     }
+    // 冷却节流（批 H 审查 P2：needsReanalyze 在坏输出/缺槽时永真，每轮刷新静默烧 20 源 LLM）
+    // 30 分钟最短重析间隔；仅约束 auto（刷新钩子）路径——手动按钮/并发单飞不受限
+    const now = this.now();
+    if (auto && !force && this._lastAttemptAt && (now - this._lastAttemptAt) < SPECTRUM.REANALYZE_COOLDOWN_SEC) {
+      return { ...this.view(), cooled: true };
+    }
+    this._lastAttemptAt = now;
     if (this._running) {
       this.counters.requestInFlightRejected += 1;
       throw new LLMServiceError('requestInProgress');

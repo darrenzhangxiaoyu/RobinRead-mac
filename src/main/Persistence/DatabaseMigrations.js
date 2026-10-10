@@ -1251,6 +1251,43 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v30-challenges-garden-decor',
+    up: (db) => {
+      // ── F40 挑战赛季 ──
+      // challenges：主题阅读挑战（一周一期：期内读完书单 ≥ target 篇 → done + 花园限定装饰）。
+      // - status: active（进行中，全库至多一条——单飞由服务层 + 读取侧共同保证）|
+      //   done（达标/提前完成，reward_granted 发奖）| failed（超时未达标，温和设计不扣分）|
+      //   abandoned（主动放弃）；重建 = 新行（历史保留诚实展示）。
+      // - entry_ids_json：挑战书单（entryID 数组，创建时校验真实存在后落库）；
+      //   进度 = 书单内 is_read=1 计数（懒算，读取侧投影，无定时器）。
+      // - started_at/ends_at：挑战窗口（ends_at 过期由读取侧懒结算翻 done/failed）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS challenges (
+            id              TEXT PRIMARY KEY NOT NULL,
+            theme           TEXT NOT NULL,
+            days            INTEGER NOT NULL,
+            target          INTEGER NOT NULL,
+            entry_ids_json  TEXT NOT NULL DEFAULT '[]',
+            started_at      REAL NOT NULL,
+            ends_at         REAL NOT NULL,
+            status          TEXT NOT NULL DEFAULT 'active'
+                CHECK (status IN ('active','done','failed','abandoned')),
+            reward_granted  INTEGER NOT NULL DEFAULT 0,
+            created_at      REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_challenges_status
+        ON challenges(status, created_at DESC);
+      `);
+
+      // ── F40 联动 F23 花园：限定装饰 ──
+      // garden_state 加 challenge_decor 列（JSON 数组 [{id,kind,label,grantedAt}]）——
+      // 挑战 done 时 GardenService.grantDecor 追加（按 decor id 幂等）。
+      // 加列走幂等 try/catch（v6/v9/v15 同款：列已存在时重入跳过）。
+      try { db.exec('ALTER TABLE garden_state ADD COLUMN challenge_decor TEXT'); }
+      catch (_) { /* 列已存在：幂等重入 */ }
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

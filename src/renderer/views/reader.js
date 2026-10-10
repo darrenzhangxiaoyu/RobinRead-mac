@@ -173,6 +173,8 @@ export class ReaderView {
       this._translationProgress = null;
       this._archiveMode = false;
       this._archivedAt = null;
+      // F38 光谱 popover 随换文复位（批 H 审查 P2：popover 挂 body，头部重建不会带它走）
+      document.getElementById('nj-spectrum-popover')?.remove();
     }
     this._showLoading();
     // 渲染期任何异常（怪异 DOM 结构等）都不能让「正在准备正文…」遮罩永久卡死——

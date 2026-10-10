@@ -235,6 +235,20 @@ contextBridge.exposeInMainWorld('robin', {
   spectrumCancel: () => invoke('spectrum:cancel'),
   spectrumForEntry: (entryID) => data('spectrum:forEntry', entryID),
 
+  // 挑战赛季（F40：列表 / 模板 / 可用性 / 创建 / 放弃 / 挑战卡 SVG；onChallengeChanged 收完成推送）
+  challengeList: () => data('challenge:list'),
+  challengeTemplates: () => data('challenge:templates'),
+  challengeAvailable: () => data('challenge:available'),
+  challengeCreate: (payload) => invoke('challenge:create', payload || {}),
+  challengeAbandon: (challengeID) => invoke('challenge:abandon', challengeID),
+  challengeCard: (challengeID) => data('challenge:card', challengeID),
+  onChallengeChanged: (listener) => subscribe('challenge:changed', listener),
+
+  // 阅读数据开放 API（F39：配置读回 / 变更（开关即时启停/端口校验/日志开关）/ 令牌重生成）
+  apiConfig: () => data('api:config'),
+  apiSetConfig: (patch) => invoke('api:setConfig', patch || {}),
+  apiRegenerateToken: () => invoke('api:regenerateToken'),
+
   // 批注漂流瓶（F28：导出（保存对话框）/ 导入（打开对话框））
   bundleExport: (payload) => invoke('bundle:export', payload),
   bundleImportPick: () => invoke('bundle:importPick'),

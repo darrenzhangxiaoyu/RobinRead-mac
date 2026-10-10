@@ -30,6 +30,7 @@ const SECTIONS = [
   { id: 'voice', title: '语音指挥', icon: 'mic' },
   { id: 'obsidian', title: 'Obsidian', icon: 'bookOpen' },
   { id: 'bookshelf', title: '书架', icon: 'books' },
+  { id: 'openapi', title: '开放 API', icon: 'server' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
   { id: 'about', title: '关于', icon: 'info' },
 ];
@@ -53,6 +54,7 @@ const SECTION_INTRO = {
   voice: '朗读或电台播放中动口不动手：语音口令控制播放与收藏。',
   obsidian: '把文章与高亮导出成 Obsidian 知识库。',
   bookshelf: '把文集成书（EPUB）并管理书目。',
+  openapi: '在本机开放只读 REST 端点，把自己的阅读数据接进自建仪表盘。',
   feedback: '喜欢知更的话，这里可以帮到我们。',
   about: '版本、更新与开源致谢。',
 };
@@ -74,6 +76,7 @@ const SECTION_SEARCH_INDEX = {
   voice: ['开启语音指挥', '口令表', '麦克风能力'],
   obsidian: ['导出目录', '导出文章', '导出高亮与批注', '立即导出', '全量重导'],
   bookshelf: ['新建文集'],
+  openapi: ['开启开放 API', '监听端口', '只读令牌', '重新生成令牌', '请求日志'],
   feedback: ['前往官网'],
   about: ['检查更新'],
 };
@@ -259,6 +262,7 @@ export class SettingsView {
       case 'voice': this._voice(scroll); break;
       case 'obsidian': this._obsidian(scroll); break;
       case 'bookshelf': this._bookshelf(scroll); break;
+      case 'openapi': this._openapi(scroll); break;
       case 'feedback': this._feedback(scroll); break;
       case 'about': this._about(scroll); break;
       default: break;
@@ -2318,6 +2322,95 @@ export class SettingsView {
       row(t('最后导出'), null, staticText(lastExportAt
         ? tf('上次导出：%@', new Date(lastExportAt * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
         : t('尚未导出'))),
+    ]));
+  }
+
+  // MARK: 开放 API（F39 阅读数据开放 API）
+
+  /**
+   * 开放 API 分区：开关（即时启停）/ 端口（1024-65535，改端口重启生效）/
+   * 只读令牌（显示 + 一键复制 + 重新生成）/ 监听状态徽标 / 请求日志开关。
+   */
+  async _openapi(container) {
+    const cfg = (await window.robin.apiConfig?.().catch(() => null)) || {};
+    const conf = cfg.config || {};
+    const st = cfg.status || {};
+    const showToastLocal = (msg) => showToast?.(msg);
+
+    // 状态徽标（监听中 / 已停止；带端口）
+    const badge = document.createElement('span');
+    badge.className = `nj-api-badge ${st.running ? 'on' : 'off'}`;
+    badge.dataset.role = 'api-status';
+    badge.textContent = st.running ? `${t('监听中')} · 127.0.0.1:${st.port}` : t('已停止');
+
+    // 端口输入（change 时校验落库；运行中改端口 → 提示重启生效）
+    const portInput = document.createElement('input');
+    portInput.className = 'control';
+    portInput.type = 'number';
+    portInput.min = '1024';
+    portInput.max = '65535';
+    portInput.style.minWidth = '110px';
+    portInput.value = String(conf.port ?? 7962);
+    portInput.setAttribute('aria-label', t('监听端口'));
+    portInput.addEventListener('change', async () => {
+      const next = Number(portInput.value);
+      try {
+        await window.robin.apiSetConfig({ port: next });
+        if (st.running && next !== st.port) showToastLocal(t('端口已保存——重启应用或关闭再开启开关后生效。'));
+      } catch (err) {
+        showToastLocal(String(err && err.message || err));
+        portInput.value = String(conf.port ?? 7962);
+      }
+    });
+
+    // 令牌行：掩码显示 + 复制 + 重新生成
+    const tokenText = document.createElement('span');
+    tokenText.className = 'nj-api-token';
+    tokenText.dataset.role = 'api-token';
+    tokenText.textContent = conf.token || '';
+    tokenText.title = t('点击复制完整令牌');
+    tokenText.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(conf.token || ''); showToastLocal(t('令牌已复制')); } catch (_) { /* 剪贴板不可用静默 */ }
+    });
+    const regenButton = document.createElement('button');
+    regenButton.className = 'btn-text bordered';
+    regenButton.textContent = t('重新生成令牌');
+    regenButton.addEventListener('click', async () => {
+      const go = await confirmBox(t('重新生成令牌？'), {
+        message: t('旧令牌即刻失效，已接入的仪表盘需要换成新令牌。'),
+        okLabel: t('重新生成'),
+      });
+      if (!go) return;
+      const result = await window.robin.apiRegenerateToken?.().catch(() => null);
+      if (result?.ok && result.data?.token) {
+        conf.token = result.data.token;
+        tokenText.textContent = result.data.token;
+        showToastLocal(t('已生成新令牌'));
+      }
+    });
+
+    container.appendChild(group(t('阅读数据开放 API'), t('在本机开放一组只读 REST 端点（统计 / 订阅源 / 批注 / 生物钟 / 胶囊 / 周刊），把你的阅读数据接进自建仪表盘。数据只绑定 127.0.0.1，永不离开本机。'), [
+      toggleRow(t('开启开放 API'), t('默认关闭。开启后立即在本机监听；所有端点只读，需携带下方令牌访问。'), conf.enabled === true,
+        async (v) => { await window.robin.apiSetConfig?.({ enabled: v === true }); this.render(); }),
+      row(t('监听状态'), st.running ? t('服务正在本机监听，端口关闭开关或退出应用即释放。') : t('服务未运行。'), badge),
+      row(t('监听端口'), t('1024-65535；默认 7962。修改已保存，重启后生效。'), portInput),
+      row(t('只读令牌'), t('请求头携带 Authorization: Bearer <令牌>。点击令牌复制。'), (() => {
+        const wrap = document.createElement('div');
+        wrap.className = 'setting-control';
+        wrap.style.gap = '8px';
+        wrap.append(tokenText, regenButton);
+        return wrap;
+      })()),
+      toggleRow(t('请求日志'), t('默认关闭。开启后在内存保留最近 100 条请求记录（不写盘），便于调试自建仪表盘。'), conf.logRequests === true,
+        (v) => { window.robin.apiSetConfig?.({ logRequests: v === true }); }),
+    ]));
+
+    container.appendChild(group(t('端点清单'), t('全部只读 JSON，GET 访问；每分钟最多 120 次请求。'), [
+      row('GET /api/v1/stats', t('存储统计与阅读统计（完读数 / 批注数 / 连续天数）。')),
+      row('GET /api/v1/feeds', t('订阅源列表（标题 / 地址 / 健康分，不含任何凭据）。')),
+      row('GET /api/v1/annotations', t('批注分页（高亮文本 / 笔记 / 文章标题 / 时间；不含文章正文）。')),
+      row('GET /api/v1/reading-clock', t('阅读生物钟 24 小时桶与高峰时段。')),
+      row('GET /api/v1/capsules · /api/v1/weeklies', t('时间胶囊与周刊的元数据清单。')),
     ]));
   }
 

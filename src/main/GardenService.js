@@ -255,7 +255,39 @@ class GardenService {
       featherMax: GARDEN.FEATHER_READS.length - 1,
       nextRule: stage < GARDEN.STAGE_RULES.length - 1 ? GARDEN.STAGE_RULES[stage + 1] : null,
       noteMinChars: GARDEN.NOTE_MIN_CHARS,
+      challengeDecor: this._decor(row), // F40 挑战赛季限定装饰（v30 列；老库无列时为 []）
     };
+  }
+
+  /** 限定装饰投影（challenge_decor JSON 数组；坏 JSON/缺列容错为空）。 */
+  _decor(row = null) {
+    const raw = (row || this._row()).challenge_decor;
+    try {
+      const list = JSON.parse(raw || '[]');
+      return Array.isArray(list) ? list : [];
+    } catch (_) { return []; }
+  }
+
+  /**
+   * 发放限定装饰（F40 挑战赛季奖励入口；按 decor.id 幂等——重复发放零增量）。
+   * @param {{ id: string, kind?: string, label?: string }} decor
+   * @returns {{ applied: boolean, decor: object[] }}
+   */
+  grantDecor(decor) {
+    const id = String((decor && decor.id) || '').trim();
+    if (!id) return { applied: false, decor: this._decor() };
+    const list = this._decor();
+    if (list.some((d) => d && d.id === id)) return { applied: false, decor: list };
+    list.push({
+      id,
+      kind: String((decor && decor.kind) || 'challenge'),
+      label: String((decor && decor.label) || '').slice(0, 60),
+      grantedAt: nowSeconds(),
+    });
+    this.store.database.prepare('UPDATE garden_state SET challenge_decor = ?, updated_at = ? WHERE id = 1')
+      .run(JSON.stringify(list), nowSeconds());
+    try { this.store.emit('garden:changed', this.state()); } catch (_) { /* 无订阅者不阻塞 */ }
+    return { applied: true, decor: this._decor() };
   }
 
   /** 开花报告：本周（回看 WEEK_REPORT_DAYS 天）统计 + 阶段跃迁 + 新开花清单。 */

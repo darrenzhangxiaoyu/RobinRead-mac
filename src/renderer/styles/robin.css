@@ -7110,6 +7110,53 @@ body.nj-win-drag .nj-snap-edge { opacity: 0.85; }
 .nj-garden-bloom-row.muted { color: var(--text-tertiary); }
 .nj-garden-bloom-day { color: var(--accent); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 
+/* ── F40 挑战赛季（花园浮层挑战 tab）── */
+.nj-challenge { display: flex; flex-direction: column; gap: var(--space-4); }
+.nj-challenge-sec-title { font-size: var(--fs-md); font-weight: 600; color: var(--text-secondary); }
+.nj-challenge-active { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--note-border); border-radius: var(--radius-card); background: var(--note-background); }
+.nj-challenge-head { display: flex; align-items: baseline; gap: var(--space-3); }
+.nj-challenge-theme { font-size: 15px; font-weight: 700; color: var(--text-primary); flex: 1; }
+.nj-challenge-left { font-size: var(--fs-sm); color: var(--warn, #b0813f); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.nj-challenge-bar { height: 6px; border-radius: 3px; background: color-mix(in oklch, var(--note-border) 70%, transparent); overflow: hidden; }
+.nj-challenge-bar-fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width var(--dur-mid, 240ms) ease; }
+.nj-challenge-counts { font-size: var(--fs-sm); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.nj-challenge-list { display: flex; flex-direction: column; gap: 2px; max-height: 168px; overflow-y: auto; }
+.nj-challenge-entry { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); color: var(--text-primary); padding: 2px 0; }
+.nj-challenge-entry .nj-challenge-check { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 50%; border: 1.4px solid var(--note-border); }
+.nj-challenge-entry.read { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: color-mix(in oklch, var(--accent) 55%, transparent); }
+.nj-challenge-entry.read .nj-challenge-check { border-color: var(--accent); background: var(--accent); }
+.nj-challenge-entry-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nj-challenge-abandon { align-self: flex-start; }
+.nj-challenge-share { display: flex; flex-direction: column; gap: var(--space-2); align-items: center; }
+.nj-challenge-share-cap { font-size: var(--fs-sm); color: var(--text-tertiary); }
+.nj-challenge-share-art { cursor: copy; }
+.nj-challenge-share-art svg { width: 240px; height: auto; display: block; border-radius: var(--radius-card); box-shadow: var(--shadow-card); }
+.nj-challenge-new { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--separator); }
+.nj-challenge-tpl-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.nj-challenge-tpl { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border: 1px solid var(--note-border); border-radius: var(--radius-card); background: transparent; cursor: pointer; text-align: left; }
+.nj-challenge-tpl:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 8%, transparent); }
+.nj-challenge-tpl:disabled { opacity: 0.45; cursor: not-allowed; }
+.nj-challenge-tpl b { font-size: var(--fs-sm); font-weight: 600; color: var(--text-primary); }
+.nj-challenge-tpl i { font-style: normal; font-size: var(--fs-xs, 11px); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.nj-challenge-custom { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.nj-challenge-theme-input { flex: 1; min-width: 160px; }
+.nj-challenge-days, .nj-challenge-target { width: 72px; flex: 0 0 auto; }
+.nj-challenge-hint { font-size: var(--fs-xs, 11px); color: var(--text-tertiary); }
+.nj-challenge-history { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-2); border-top: 1px solid var(--separator); }
+.nj-challenge-history-row { display: flex; align-items: baseline; gap: var(--space-3); font-size: var(--fs-sm); padding: 3px 0; }
+.nj-challenge-h-theme { flex: 1; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nj-challenge-h-meta { color: var(--text-tertiary); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.nj-challenge-h-badge { flex: 0 0 auto; font-size: var(--fs-xs, 11px); padding: 1px 8px; border-radius: 99px; border: 1px solid var(--note-border); color: var(--text-secondary); }
+.nj-challenge-history-row.st-done .nj-challenge-h-badge { border-color: var(--accent); color: var(--accent); }
+.nj-challenge-history-row.st-failed .nj-challenge-h-badge { border-color: var(--warn, #b0813f); color: var(--warn, #b0813f); }
+
+/* ── F39 开放 API（设置分区状态徽标 / 令牌）── */
+.nj-api-badge { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs, 11px); font-variant-numeric: tabular-nums; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--note-border); color: var(--text-secondary); }
+.nj-api-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--text-tertiary); }
+.nj-api-badge.on { border-color: color-mix(in oklch, var(--accent) 55%, transparent); color: var(--accent); }
+.nj-api-badge.on::before { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent); }
+.nj-api-token { font-family: ui-monospace, monospace; font-size: var(--fs-xs, 11px); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: copy; padding: 3px 8px; border: 1px dashed var(--note-border); border-radius: var(--radius-sm); color: var(--text-secondary); }
+
 /* ── F24 观点对照镜 ── */
 .nj-mirror-panel {
   max-width: var(--reader-page-width, 820px);

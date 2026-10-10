@@ -50,6 +50,7 @@ export function renderSpectrum(host, view, { toast = null, onOpenFeedArticles = 
       const envelope = await window.robin.spectrumAnalyze({ force: false }); // invoke 信封 {ok, data}
       const fresh = envelope && envelope.ok ? envelope.data : null;
       if (!fresh) throw new Error(String((envelope && envelope.error) || 'analyze failed'));
+      if (!host.isConnected) return; // 批 H 审查 P2：切 tab 重建 contentHost 后旧 host 脱离 DOM，不再覆写新 tab 内容
       if (toast && fresh.feeds && fresh.feeds.length) toast(t('光谱已更新'));
       renderSpectrum(host, fresh, { toast, onOpenFeedArticles });
     } catch (err) {

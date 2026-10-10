@@ -270,6 +270,9 @@ if (!IS_PROBE) {
       store.shutdown?.(); // 二轮修复：首位停掉 outbox 等触碰数据库的定时器——否则关库后定时器触发抛 "database is not open" 弹窗
     } catch (_) { /* 退出路径不抛错 */ }
     try {
+      store.api?.stop(); // F39 开放 API：应用退出自动停服（端口立即释放）
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
       store.fulltext?.dispose(); // F1：全文抓取队列清空，退出不再发起新提取
     } catch (_) { /* 退出路径不抛错 */ }
     try {
