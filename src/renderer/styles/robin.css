@@ -80,6 +80,10 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.25, 1);
   --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.15);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  /* ── U31 空态错峰阶梯（插画/标题/副文案三拍：0/60/120ms；新代码消费令牌禁裸 ms）── */
+  --nj-stagger-1: 0ms;
+  --nj-stagger-2: 60ms;
+  --nj-stagger-3: 120ms;
   /* P2-6：55% 光环对纸底实算仅 2.10:1（弱于非文本 3:1 指标），80% 后浅色 3.18:1、
      暗色（随 body.dark 提亮 accent）4.34:1；消费点 6048/6359/6376/6389/6813 自动跟随。 */
   --focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent);
@@ -8319,4 +8323,233 @@ html.theme-transition * {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
+}
+
+/* ==========================================================================
+   视觉批 3（U31–U35）：空态错峰 / 统一进度语言 / 侧栏 2.0 / 阅读器边注 / 划词浮条 2.0
+   护栏口径：本段零裸字号 / 零裸圆角 / 零裸时长（一律令牌）。
+   ========================================================================== */
+
+/* ── U31 空态二期：插画/标题/副文案 0/60/120ms 错峰入场（stagger 壳统一挂 .stagger）──
+   reduced-motion 由全局收敛块统一停表（直达终态，无闪烁）。 */
+@media (prefers-reduced-motion: no-preference) {
+  .list-empty.stagger .empty-art,
+  .list-empty.stagger .glyph {
+    animation: nj-empty-rise var(--dur-slow) var(--ease-out) both;
+    animation-delay: var(--nj-stagger-1);
+  }
+  .list-empty.stagger h3 {
+    animation: nj-empty-rise var(--dur-slow) var(--ease-out) both;
+    animation-delay: var(--nj-stagger-2);
+  }
+  .list-empty.stagger p {
+    animation: nj-empty-rise var(--dur-slow) var(--ease-out) both;
+    animation-delay: var(--nj-stagger-3);
+  }
+  .list-empty.stagger .btn-text {
+    animation: nj-empty-rise var(--dur-slow) var(--ease-out) both;
+    animation-delay: var(--nj-stagger-3);
+  }
+}
+@keyframes nj-empty-rise {
+  from { opacity: 0; transform: translateY(var(--space-2)); }
+  to { opacity: 1; transform: none; }
+}
+/* 错峰期间三拍元素占位可交互（无 pointer 卡顿）；动画结束后 both 保持在终态 */
+
+/* ── U32 统一进度语言 .nj-progress 双形态令牌组件 ──
+   形态一（确定式）：.nj-progress 进度槽 + .nj-progress-fill 填充 + .nj-progress-pct 百分比；
+   形态二（不确定式）：.nj-progress--indeterminate 呼吸点（.nj-progress-dot 缓胀缓缩）。 */
+.nj-progress {
+  position: relative;
+  height: var(--space-1);
+  min-width: calc(var(--space-8) * 3);
+  flex: 1 1 auto;
+  border-radius: var(--radius-full);
+  background: var(--row-hover);
+  overflow: hidden;
+}
+.nj-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--dur-mid) var(--ease-out);
+}
+.nj-progress-pct {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+/* 形态二：不确定式呼吸点（transform 缩放 + 透明度呼吸；reduced-motion 全局停表后为静息点） */
+.nj-progress--indeterminate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: auto;
+  min-height: var(--space-4);
+  background: transparent;
+  overflow: visible;
+}
+.nj-progress--indeterminate .nj-progress-fill { display: none; }
+.nj-progress-dot {
+  flex: 0 0 auto;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  animation: nj-progress-breathe 1.6s var(--ease-in-out) infinite;
+}
+@keyframes nj-progress-breathe {
+  0%, 100% { opacity: 0.35; transform: scale(0.72); }
+  50% { opacity: 1; transform: scale(1); }
+}
+/* 组合行：呼吸点 + 说明文案（不确定式长任务的统一容器） */
+.nj-progress-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.nj-progress-row .nj-progress-note {
+  font-size: var(--fs-sm);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 内联宿主适配：阅读器译文浮标里的进度条收窄（浮标为右下角小件） */
+.translate-progress .nj-progress {
+  flex: 0 1 calc(var(--space-8) * 3);
+  min-width: var(--space-8);
+}
+
+/* ── U33 侧栏 2.0：底栏 12 键 6×2 分组分隔线（组首键挂 data-nav-sep）── */
+.footer-nav-btn[data-nav-sep] {
+  position: relative;
+}
+.footer-nav-btn[data-nav-sep]::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--space-1) / 2);
+  top: 20%;
+  width: 1px;
+  height: 60%;
+  background: var(--separator);
+  pointer-events: none;
+}
+/* 拖拽悬停待展开的目标文件夹：disclosure 旋开提示（展开由 JS 计时器完成） */
+.sidebar-folder.drag-pending .sidebar-disclosure {
+  transform: rotate(90deg);
+}
+
+/* ── U34 阅读器边注模式：批注笔记常显页边（正文右侧 200px 列，锚点段落对齐）──
+   默认关；开启后 .reader-article.has-margin-notes 撑出右肩位，边注 absolute 对齐锚段顶。 */
+.reader-article.has-margin-notes {
+  position: relative;
+  padding-right: calc(var(--space-8) + var(--space-2) + var(--nj-margin-note-width, 200px) + var(--space-5));
+}
+.nj-margin-notes {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--nj-margin-note-width, 200px);
+  height: 100%;
+  pointer-events: none; /* 容器穿透，卡片自身恢复交互 */
+}
+.nj-margin-note {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--note-background);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  pointer-events: auto;
+  cursor: default;
+  box-shadow: var(--shadow-1);
+}
+.nj-margin-note-kind {
+  display: inline-flex;
+  align-items: center;
+  margin-right: var(--space-1);
+  color: var(--accent);
+  vertical-align: -0.15em;
+}
+.nj-margin-note-kind svg { width: var(--icon-sm); height: var(--icon-sm); }
+.nj-margin-note-quote {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 窄屏回退：<1200px 收起页边列，边注转为锚段后的内联卡（JS 同步内联模式渲染） */
+@media (max-width: 1199px) {
+  .reader-article.has-margin-notes {
+    padding-right: min(40px, 5vw); /* 恢复既有版心内边距（U26 口径） */
+  }
+  .nj-margin-notes { display: none; }
+  .nj-margin-note--inline {
+    position: static;
+    width: auto;
+    margin: var(--space-2) 0 var(--space-3);
+    display: block;
+  }
+}
+
+/* ── U35 划词浮条 2.0：动作注册表溢出折叠「…更多」二级弹出 ── */
+.nj-selection-action.nj-selection-more {
+  color: var(--text-tertiary);
+}
+.nj-selection-more-pop {
+  position: fixed;
+  z-index: 2147483645;
+  display: flex;
+  flex-direction: column;
+  min-width: 148px;
+  padding: var(--space-1);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--page-background) 96%, #fff);
+  box-shadow: var(--shadow-2);
+  animation: materialize var(--dur-fast) var(--ease-out) both;
+}
+.nj-selection-more-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.nj-selection-more-item svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--text-secondary); }
+.nj-selection-more-item:hover { background: var(--row-hover); color: var(--accent); }
+/* 脚本动作图标化：首字母徽章（无 SVG 图标的注册动作的统一视觉） */
+.nj-selection-script-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1;
 }

@@ -5,6 +5,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 import { focusArrowSiblings } from './kbd-nav.js'; /* U18：模态侧栏导航 ↑↓ 补齐 */
 
 function timeAgo(seconds) {
@@ -304,7 +305,8 @@ export class EvolutionView {
   }
 
   _empty(host, title, desc) {
-    host.innerHTML = `<div class="list-empty"><div class="glyph">${icon('spark')}</div><h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
+    // U31 空态二期：插画空态（未命中线稿回退 .glyph）+ 错峰入场
+    host.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
   }
 }
 

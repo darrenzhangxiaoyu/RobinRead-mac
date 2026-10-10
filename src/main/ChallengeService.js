@@ -429,10 +429,18 @@ class ChallengeService {
 
     const id = uuid();
     const now = this.now();
-    this.store.database.prepare(`
-      INSERT INTO challenges (id, theme, days, target, entry_ids_json, started_at, ends_at, status, reward_granted, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)
-    `).run(id, cleanTheme, daysN, targetN, JSON.stringify(entries.map((e) => e.id)), now, now + daysN * 86400, nowSeconds());
+    // 单飞 TOCTOU 闸（批 I 审查 P2：active 检查与 INSERT 之间隔着 await llmComplete，
+    // 两个并发 createChallenge 都能过闸 → v30 无部分唯一索引，进程内创建锁兜底）
+    if (this._creating) throw new Error('已有一个进行中的挑战——先完成或放弃它，再开新赛季。');
+    this._creating = true;
+    try {
+      this.store.database.prepare(`
+        INSERT INTO challenges (id, theme, days, target, entry_ids_json, started_at, ends_at, status, reward_granted, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 0, ?)
+      `).run(id, cleanTheme, daysN, targetN, JSON.stringify(entries.map((e) => e.id)), now, now + daysN * 86400, nowSeconds());
+    } finally {
+      this._creating = false;
+    }
     this.counters.created += 1;
     try { this.store.emit('challenge:changed', {}); } catch (_) { /* 无订阅者不阻塞 */ }
     return this.get(id);
@@ -498,6 +506,12 @@ class ChallengeService {
       "SELECT * FROM challenges WHERE status = 'active' ORDER BY created_at DESC LIMIT 1"
     ).get();
     if (!row) return { settled: false };
+    // 过期先结算（批 I 审查 P2：ends_at 已过但懒结算未跑时，补读书单末篇不得曲解为「提前完成」
+    // 翻 done 发奖——达标与否以期末快照计，过期即走 failed）
+    if (this._now() >= row.ends_at) {
+      this.settle();
+      return { settled: false, expired: true };
+    }
     const entryIDs = this._entryIDs(row);
     if (!entryIDs.includes(id)) return { settled: false };
     const done = this._readCount(entryIDs);

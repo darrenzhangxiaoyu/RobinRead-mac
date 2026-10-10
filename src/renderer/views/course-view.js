@@ -9,6 +9,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -167,10 +168,9 @@ export class CourseView {
     if (this.showForm) this.bodyEl.appendChild(this._form());
     if (!this.courses.length && !this.showForm) {
       this.bodyEl.innerHTML = `
-        <div class="nj-course-empty">
-          <span class="nj-course-empty-icon">${icon('bookOpen')}</span>
-          <h3></h3><p></p>
-        </div>`;
+        <div class="nj-course-empty list-empty stagger">
+          ${staggerEmptyHTML('books')}
+        </div>`; // U31 空态二期：书架插画 + 错峰入场
       this.bodyEl.querySelector('h3').textContent = t('还没有课程');
       this.bodyEl.querySelector('p').textContent = t('给一个学习目标，AI 从你的订阅库里排出 7 或 14 天课程，每天读几篇刚好。');
       return;

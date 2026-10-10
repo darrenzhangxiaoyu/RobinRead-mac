@@ -7,6 +7,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { alertBox } from '../ui-prompt.js';
+import { Toast } from './toast.js'; // U32 统一进度语言：不确定式长任务呼吸点
 
 /** 同步统计 → 人类可读结果（上行 / 下行合并 / 合并后上行三态）。 */
 export function syncResultText(stats) {
@@ -36,18 +37,23 @@ export function syncPaletteCommand({ notify = null, silentError = false } = {}) 
     keywords: 'sync webdav 立即同步 多设备 同步坚果云 dav',
     icon: 'cloud',
     action: async () => {
+      // U32 统一进度语言：同步无百分比 → 不确定式呼吸点进度通知（done/fail 收口换态）。
+      // 成功路径 breathe.done 即收口提示；notify 仅在调用方需要旁路展示（如设置页状态行）时保留。
+      const breathe = Toast.breathe(t('正在同步…'), { note: t('与 WebDAV 交换快照') });
       try {
-        notify?.(t('正在同步…'));
         const result = await window.robin.syncNow();
         if (result && result.ok) {
-          notify?.(syncResultText(result.data));
+          breathe.done(syncResultText(result.data));
+          if (notify) notify(syncResultText(result.data));
         } else {
           const message = String((result && result.error) || t('同步失败'));
+          breathe.fail(message);
           if (silentError) notify?.(message);
           else await alertBox(t('同步失败'), message);
         }
       } catch (err) {
         const message = String((err && err.message) || err || t('同步失败'));
+        breathe.fail(message);
         if (silentError) notify?.(message);
         else await alertBox(t('同步失败'), message);
       }

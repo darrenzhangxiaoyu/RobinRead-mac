@@ -231,6 +231,14 @@ export class SidebarView {
     });
     this._bindDrop(row, (feedIDs) => this.handlers.onMoveFeeds(feedIDs, folder.name), () => {
       this._removeFromCollapsed(key);
+    }, null, {
+      // U33 拖拽增强：悬停折叠文件夹 450ms 自动展开（放下前先看到落点内容）
+      isCollapsed: () => this.collapsedFolders.has(key),
+      expand: () => {
+        this._removeFromCollapsed(key);
+        wrapper.classList.remove('collapsed', 'drag-pending');
+      },
+      pendingHost: () => wrapper,
     });
     wrapper.appendChild(row);
 
@@ -379,24 +387,43 @@ export class SidebarView {
 
   _bindCount(row, count) {
     const el = row.querySelector('.sidebar-count');
-    if (count > 0) {
-      el.textContent = count > 999 ? '999+' : String(count);
+    const label = formatBadgeCount(count);
+    if (label) {
+      el.textContent = label;
       el.style.visibility = 'visible';
     } else {
-      el.style.visibility = 'hidden';
+      el.style.visibility = 'hidden'; // U33 徽标精修：零值统一隐藏
     }
   }
 
-  _bindDrop(element, onDrop, onDropSuccess, canDrop) {
+  _bindDrop(element, onDrop, onDropSuccess, canDrop, opts = {}) {
+    let expandTimer = 0;
+    const cancelPendingExpand = () => {
+      clearTimeout(expandTimer);
+      expandTimer = 0;
+      opts.pendingHost?.().classList.remove('drag-pending');
+    };
     element.addEventListener('dragover', (event) => {
       if (!event.dataTransfer.types.includes('application/x-robinread-feeds')) return;
       if (canDrop && !canDrop()) return; // U28：同组排序拖放由订阅行自身的插入指示接管
       event.preventDefault();
       element.classList.add('drop-target');
+      // U33 拖拽增强：目标为折叠文件夹 → 悬停短暂延迟后自动展开（揭示落点）
+      if (opts.isCollapsed && opts.expand && opts.isCollapsed() && !expandTimer) {
+        opts.pendingHost?.().classList.add('drag-pending');
+        expandTimer = setTimeout(() => {
+          expandTimer = 0;
+          opts.expand();
+        }, 450);
+      }
     });
-    element.addEventListener('dragleave', () => element.classList.remove('drop-target'));
+    element.addEventListener('dragleave', () => {
+      element.classList.remove('drop-target');
+      cancelPendingExpand();
+    });
     element.addEventListener('drop', (event) => {
       element.classList.remove('drop-target');
+      cancelPendingExpand();
       const raw = event.dataTransfer.getData('application/x-robinread-feeds');
       if (!raw) return;
       event.preventDefault();
@@ -408,6 +435,7 @@ export class SidebarView {
         }
       } catch (_) { /* 忽略非法数据 */ }
     });
+    element.addEventListener('dragend', cancelPendingExpand); // drop 在别处收场也清计时器
   }
 
   /**
@@ -492,6 +520,8 @@ export class SidebarView {
 
     const storeBtn = document.createElement('button');
     storeBtn.className = 'footer-nav-btn';
+    storeBtn.dataset.navGroup = 'content'; // U33 底栏分组：内容（账号/商店/热点）
+    storeBtn.dataset.navSep = '1';
     storeBtn.title = t('浏览订阅商店');
     storeBtn.innerHTML = `${icon('store')}<span class="nav-label"></span>`;
     storeBtn.querySelector('.nav-label').textContent = t('商店');
@@ -508,6 +538,8 @@ export class SidebarView {
 
     const knowledgeBtn = document.createElement('button');
     knowledgeBtn.className = 'footer-nav-btn';
+    knowledgeBtn.dataset.navGroup = 'knowledge'; // U33 底栏分组：知识（知识/进化/花园/胶囊/周刊/课程/存档馆/重访）
+    knowledgeBtn.dataset.navSep = '1';
     knowledgeBtn.title = t('知识中心 (Ctrl+K)');
     knowledgeBtn.innerHTML = `${icon('spark')}<span class="nav-label"></span>`;
     knowledgeBtn.querySelector('.nav-label').textContent = t('知识');
@@ -586,6 +618,8 @@ export class SidebarView {
 
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
+    settingsBtn.dataset.navGroup = 'system'; // U33 底栏分组：系统（设置）
+    settingsBtn.dataset.navSep = '1';
     settingsBtn.title = t('设置');
     settingsBtn.innerHTML = `${icon('gear')}<span class="nav-label"></span>`;
     settingsBtn.querySelector('.nav-label').textContent = t('设置');
@@ -631,8 +665,9 @@ export class SidebarView {
       const badge = btn.querySelector('.nj-capsule-badge');
       if (!badge) return;
       const n = Number(count) || 0;
-      badge.textContent = String(n);
-      badge.hidden = n <= 0;
+      const label = formatBadgeCount(n); // U33 徽标精修：9+ 封顶 / 零值隐藏
+      badge.textContent = label || '0';
+      badge.hidden = !label;
       btn.title = n > 0 ? tf('%lld 枚时间胶囊已到期', n) : t('时间胶囊');
     }).catch(() => { /* 胶囊计数不可得：徽章保持静默 */ });
   }
@@ -650,8 +685,9 @@ export class SidebarView {
       const badge = btn.querySelector('.nj-revisit-badge');
       if (!badge) return;
       const n = Number(nudge.count) || 0;
-      badge.textContent = String(n);
-      badge.hidden = n <= 0;
+      const label = formatBadgeCount(n); // U33 徽标精修：9+ 封顶 / 零值隐藏
+      badge.textContent = label || '0';
+      badge.hidden = !label;
       btn.title = n > 0 ? tf('%lld 篇长文该重访了', n) : t('深读重访');
       if (nudge.breathe) {
         badge.classList.add('breathing');
@@ -774,6 +810,16 @@ export function feedIconURL(feed) {
   if (feed.feedURL) params.set('feed', feed.feedURL);
   if (host) params.set('host', host);
   return `robin-icon://icon/?${params.toString()}`;
+}
+
+/**
+ * U33 徽标精修（统一口径，全库计数徽标单一数据源）：
+ * ≤0 → ''（零值隐藏，调用方负责 visibility/hidden）；>9 → '9+' 封顶；其余原数。
+ */
+export function formatBadgeCount(count) {
+  const n = Number(count) || 0;
+  if (n <= 0) return '';
+  return n > 9 ? '9+' : String(n);
 }
 
 function letter(title) {

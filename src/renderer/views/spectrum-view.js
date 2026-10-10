@@ -10,6 +10,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -26,7 +27,11 @@ function pct(x) {
 export function renderSpectrum(host, view, { toast = null, onOpenFeedArticles = null } = {}) {
   host.innerHTML = '';
   if (!view) {
-    host.appendChild(el('div', 'nj-spectrum-empty', t('光谱还没绘出来。')));
+    const empty = el('div', 'nj-spectrum-empty list-empty stagger'); // U31 空态二期：插画 + 错峰入场
+    empty.innerHTML = staggerEmptyHTML('spectrum');
+    empty.querySelector('h3').textContent = t('光谱还没绘出来。');
+    empty.querySelector('p').textContent = t('分析常读的订阅源后，它们会按立场排成一条光谱。');
+    host.appendChild(empty);
     return;
   }
   const wrap = el('div', 'nj-spectrum-wrap');
@@ -63,9 +68,9 @@ export function renderSpectrum(host, view, { toast = null, onOpenFeedArticles = 
   wrap.appendChild(toolbar);
 
   if (view.grey) {
-    // 无 Key 且零画像：灰置 + 说明（不假装）
-    const grey = el('div', 'nj-spectrum-grey');
-    grey.innerHTML = `<span class="nj-spectrum-grey-icon">${icon('spectrum')}</span><h3></h3><p></p>`;
+    // 无 Key 且零画像：灰置 + 说明（不假装）；U31 插画空态 + 错峰入场
+    const grey = el('div', 'nj-spectrum-grey list-empty stagger');
+    grey.innerHTML = staggerEmptyHTML('spectrum');
     grey.querySelector('h3').textContent = t('光谱需要 AI');
     grey.querySelector('p').textContent = t('来源立场判断由 AI 完成：配置 AI Key 后，点「分析我的订阅源」为你常读的源绘像布点。');
     wrap.appendChild(grey);

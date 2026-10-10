@@ -371,6 +371,14 @@ function applyReaderLayout(layout) {
   document.body.dataset.readerAlign = layout?.textAlign === 'justify' ? 'justify' : 'left';
   document.body.classList.toggle('rp-micro-off', layout?.microTypography === 'off');
   document.body.classList.toggle('rp-dropcap', layout?.dropCap === 'on');
+  // U34 边注模式：开关变化时通知阅读器在已打开文章上就地重排边注列（不整篇重建）
+  {
+    const mn = layout?.marginNotes === 'on' ? 'on' : 'off';
+    if (applyReaderLayout._lastMarginNotes !== undefined && mn !== applyReaderLayout._lastMarginNotes) {
+      document.dispatchEvent(new CustomEvent('robinread:margin-notes-changed'));
+    }
+    applyReaderLayout._lastMarginNotes = mn;
+  }
   window.__robinReaderLayout = layout || {};
   // 微排版是 DOM 结构性的（spacer 增删）：设置变化时通知阅读器在已打开的文章上重建。
   // 必须在 __robinReaderLayout 更新之后再派发——阅读器按新值重建
@@ -800,7 +808,7 @@ function buildPaletteCommands() {
     { label: t('从链接精读…'), keywords: 'url link 链接 精读 extract openUrl', icon: 'globe', action: () => readFromUrlPrompt() },
     { label: t('设置'), keywords: 'settings 设置 preference open', icon: 'gear', desc: t('外观、账户、同步与 AI 配置都在这里。'), action: () => showSettings('appearance') },
     { label: t('刷新全部订阅'), keywords: 'refresh 刷新 订阅', icon: 'refresh', action: () => window.robin.refresh() },
-    syncPaletteCommand({ notify: (message) => showToast(message), silentError: false }),
+    syncPaletteCommand({ silentError: false }), // U32：进度/结果统一走呼吸点进度通知（notify 旁路不再需要）
     { label: t('增大字号'), keywords: 'font size larger 字号 增大', icon: 'textLarger', action: () => adjustFontSize(1) },
     { label: t('减小字号'), keywords: 'font size smaller 字号 减小', icon: 'textSmaller', action: () => adjustFontSize(-1) },
   ];

@@ -15,6 +15,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 import { gardenArt } from './garden-art.js';
 import { playSfx } from './sfx.js'; /* U27 微交互音效：挑战完成琶音 */
 
@@ -163,7 +164,10 @@ export class GardenView {
     if (!this.overlay || !this.bodyEl) return;
     if (this.tab === 'challenge') { this._renderChallenge(); return; }
     if (!this.state) {
-      this.bodyEl.innerHTML = `<div class="nj-garden-empty">${escapeText(t('花园还在整理土壤，稍后再来看看。'))}</div>`;
+      // U31 空态二期：插画空态 + 错峰入场
+      this.bodyEl.innerHTML = `<div class="nj-garden-empty list-empty stagger">${staggerEmptyHTML('spark')}<h3></h3><p></p></div>`;
+      this.bodyEl.querySelector('h3').textContent = t('花园还在整理土壤');
+      this.bodyEl.querySelector('p').textContent = t('稍后再来看看。');
       return;
     }
     if (this.tab === 'report') this._renderReport();
@@ -363,7 +367,8 @@ export class GardenView {
       btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
-          await window.robin.challengeCreate?.({ templateID: tpl.id });
+          const res = await window.robin.challengeCreate?.({ templateID: tpl.id });
+          if (res && res.ok === false) { if (this.deps.toast) this.deps.toast(String(res.error || t('创建失败'))); btn.disabled = false; return; }
           if (this.deps.toast) this.deps.toast(t('新赛季开跑了！'));
         } catch (err) {
           if (this.deps.toast) this.deps.toast(String((err && err.message) || err));
@@ -398,11 +403,12 @@ export class GardenView {
     createBtn.addEventListener('click', async () => {
       createBtn.disabled = true;
       try {
-        await window.robin.challengeCreate?.({
+        const res = await window.robin.challengeCreate?.({
           theme: themeInput.value.trim(),
           days: Number(daysInput.value) || 7,
           target: Number(targetInput.value) || 10,
         });
+        if (res && res.ok === false) { if (this.deps.toast) this.deps.toast(String(res.error || t('创建失败'))); createBtn.disabled = false; return; }
         if (this.deps.toast) this.deps.toast(t('新赛季开跑了！'));
         this.challenges = null;
         this._renderChallenge();

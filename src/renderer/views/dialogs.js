@@ -67,7 +67,7 @@ const SECTION_INTRO = {
 
 // 搜索索引：分区 → 代表性设置项标题（全部为既有 i18n 键，只读检索用途）
 const SECTION_SEARCH_INDEX = {
-  appearance: ['外观模式', '主题设计器', '预设字号', '正文字体', '页面宽度', '行距', '段落风格', '文字对齐', '列表密度', '首字下沉', '中文微排版', '自定义样式', '最低信噪分', '标题自动译中文', '版式预设'],
+  appearance: ['外观模式', '主题设计器', '预设字号', '正文字体', '页面宽度', '行距', '段落风格', '文字对齐', '列表密度', '首字下沉', '中文微排版', '自定义样式', '最低信噪分', '标题自动译中文', '版式预设', '边注模式', '批注呈现'],
   general: ['自动备份', '导出备份', '导入备份', '关闭窗口时最小化到托盘', '刷新发现新文章时系统通知', '开机自启', '微交互音效', '音效'],
   accounts: ['昵称', 'UID', '会员'],
   mail: ['邮箱接入'],
@@ -357,6 +357,18 @@ export class SettingsView {
         (value) => {
           window.__robinListTitleZh = value === 'on';
           window.robin.setTitleZh(value === 'on');
+        },
+      )),
+    ]));
+
+    // U34 边注模式：高亮批注的笔记内容常显在正文右侧页边（默认关；窄屏自动回退内联）
+    container.appendChild(group(t('批注呈现'), t('边注把高亮批注的笔记摆在正文页边，随锚点段落对齐；窄窗口自动回到正文内联。'), [
+      row(t('边注模式'), null, segmented(
+        [['off', t('关闭')], ['on', t('开启')]],
+        (prefs.readerLayout || {}).marginNotes === 'on' ? 'on' : 'off',
+        (value) => {
+          window.robin.setReaderLayout({ marginNotes: value });
+          this.handlers.onRefreshState?.();
         },
       )),
     ]));
@@ -2427,7 +2439,8 @@ export class SettingsView {
     portInput.addEventListener('change', async () => {
       const next = Number(portInput.value);
       try {
-        await window.robin.apiSetConfig({ port: next });
+        const res = await window.robin.apiSetConfig({ port: next });
+        if (res && res.ok === false) throw new Error(String(res.error || t('保存失败'))); // 批 I 审查 P2：业务错误走 resolve 不走 catch
         if (st.running && next !== st.port) showToastLocal(t('端口已保存——重启应用或关闭再开启开关后生效。'));
       } catch (err) {
         showToastLocal(String(err && err.message || err));

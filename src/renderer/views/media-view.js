@@ -13,6 +13,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { emptyArtSVG } from './empty-art.js';
+import { progressElement } from './toast.js'; // U32 统一进度语言：双形态令牌组件
 
 const PAGE_SIZE = 100;
 
@@ -309,8 +310,10 @@ export class MediaView {
       const wrap = document.createDocumentFragment();
       if (state === 'running' || state === 'queued') {
         const pct = state === 'running' && live && live.pct != null ? Math.max(1, Math.min(99, live.pct)) : null;
-        wrap.appendChild(el('span', 'nj-media-tx-status',
-          state === 'queued' ? t('排队中') : (pct != null ? tf('转写中 %lld%', pct) : t('转写中…'))));
+        // U32 统一进度语言：确定式（有百分比→进度条+百分比）/ 不确定式（无→呼吸点）
+        const prog = progressElement({ percent: pct, note: state === 'queued' ? t('排队中') : (pct != null ? t('转写中') : t('转写中…')) });
+        prog.el.classList.add('nj-media-tx-status');
+        wrap.appendChild(prog.el);
       } else if (state === 'error') {
         const badge = el('span', 'nj-media-tx-status failed', t('失败'));
         badge.title = String(live?.error || fresh.transcriptError || t('转写失败'));

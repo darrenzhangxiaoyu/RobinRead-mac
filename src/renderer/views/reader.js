@@ -20,6 +20,7 @@ import { ContextMenu } from './context-menu.js';
 import * as CJKMicro from './cjk-micro.js';
 import { ArticleSearch } from './article-search.js';
 import { runUserScriptsViaFrame, runUserActionViaFrame } from './user-script-sandbox-client.js'; // F32 知更实验室：沙箱桥（专用帧执行）
+import { progressElement } from './toast.js'; // U32 统一进度语言：双形态令牌组件
 import { parseArtifactToCard, extractFirstImage, base64ImageToDataURI } from '../card-export/parse.js';
 import { openCardExportModal } from '../card-export/preview.js';
 
@@ -29,6 +30,43 @@ const VISIBLE_BATCH = 24;
 // 阅读位置持久化：localStorage 键与条目上限（FIFO，超出删最早写入的）
 const SCROLL_POSITIONS_KEY = 'robinread.scrollPositions';
 const SCROLL_POSITIONS_LIMIT = 300;
+
+// MARK: - U35 划词浮条 2.0（动作注册表）
+
+/** 浮条直接可见动作上限（图标化压缩宽度；超出折叠进「…更多」二级弹出）。 */
+export const SELECTION_ACTION_VISIBLE_MAX = 7;
+
+/**
+ * U35 划词动作注册表（纯函数，零 DOM，探针可直测）：
+ * 内置动作（AI 三键按设置开关显隐 + 复制 + 高亮 + 笔记）+ 外部注册动作 +
+ * 脚本声明动作（F32 add-actions）依序入册；超过 SELECTION_ACTION_VISIBLE_MAX
+ * 的动作折叠进「…更多」二级弹出。
+ * @returns {{items:Array, visible:Array, overflow:Array}}
+ *   item = { kind, title, iconKey, script? }（title/iconKey 为键，渲染时经 t()/icon() 解析；
+ *   script=true 的动作无 SVG 图标，浮条以首字母徽章图标化，title 即脚本声明 label）
+ */
+export function buildSelectionActionPlan(llm = {}, scriptActions = [], extraActions = []) {
+  const items = [];
+  if (llm.showsSelectionExplanation !== false) items.push({ kind: 'explanation', title: '解释所选文字', iconKey: 'spark' });
+  if (llm.showsSelectionAsk !== false) items.push({ kind: 'ask', title: '问 AI 所选文字', iconKey: 'question' });
+  if (llm.showsSelectionTranslation !== false) items.push({ kind: 'translation', title: '翻译所选文字', iconKey: 'translate' });
+  items.push({ kind: 'copy', title: '复制所选文字', iconKey: 'copy' });
+  items.push({ kind: 'divider', title: '', iconKey: '', divider: true });
+  items.push({ kind: 'highlight', title: '高亮选中文字', iconKey: 'marker' });
+  items.push({ kind: 'note', title: '对选中文字写笔记', iconKey: 'noteSticky' });
+  for (const extra of extraActions || []) {
+    if (extra && extra.kind && extra.title) items.push(extra);
+  }
+  for (const sa of scriptActions || []) {
+    if (!sa || !sa.label) continue;
+    items.push({ kind: `script:${sa.scriptID || ''}`, title: sa.label, iconKey: '', script: true, scriptAction: sa });
+  }
+  return {
+    items,
+    visible: items.slice(0, SELECTION_ACTION_VISIBLE_MAX),
+    overflow: items.slice(SELECTION_ACTION_VISIBLE_MAX),
+  };
+}
 
 // MARK: - TTS 朗读（听文章）常量
 // 引擎：window.speechSynthesis（Chromium 内置，Windows 本地语音，离线零成本）。
@@ -76,6 +114,15 @@ export class ReaderView {
     document.addEventListener('robinread:theme-applied', () => this._applyDarkPaperInversion(true));
     // 排版设置变更：微排版是 DOM 结构性的（spacer 增删），需在打开的文章上重建
     document.addEventListener('robinread:reader-layout-changed', () => this._applyMicroTypography());
+    // U34 边注模式开关变化：已打开的文章就地重排边注列（不整篇重建）
+    document.addEventListener('robinread:margin-notes-changed', () => this._renderMarginNotes());
+    // U34 窄屏回退：跨越 1200px 断点时在页边/内联两形态间重排（节流防抖）
+    this._marginResizeTimer = 0;
+    window.addEventListener('resize', () => {
+      if (!this._marginNotesOn()) return;
+      clearTimeout(this._marginResizeTimer);
+      this._marginResizeTimer = setTimeout(() => this._renderMarginNotes(), 180);
+    });
 
     this.entryID = null;
     this.entry = null;
@@ -2329,7 +2376,8 @@ export class ReaderView {
   }
 
   /**
-   * 翻译进度浮标（阅读区右下角）：慢 API 时给出「X/Y 句」推进反馈；
+   * 翻译进度浮标（阅读区右下角）：慢 API 时给出推进反馈；
+   * U32 统一进度语言：确定式进度条+百分比（句译完比率可得）双形态令牌组件。
    * 全部完成时短暂显示「翻译完成」后自动消失。
    */
   _refreshTranslateProgress() {
@@ -2341,7 +2389,9 @@ export class ReaderView {
     const active = this.bilingualActive && (this._translationBusy || this.pendingIDs.size > 0);
     if (!active) {
       if (pill && doneUnits > 0 && doneUnits >= totalUnits && totalUnits > 0) {
-        pill.textContent = `${t('翻译完成')} · ${doneUnits}`;
+        const label = pill.querySelector('.nj-translate-label');
+        if (label) label.textContent = `${t('翻译完成')} · ${doneUnits}`;
+        else pill.textContent = `${t('翻译完成')} · ${doneUnits}`; // 兼容旧结构
         pill.classList.add('is-done');
         setTimeout(() => document.getElementById('nj-translate-progress')?.remove(), 1800);
       } else {
@@ -2354,10 +2404,19 @@ export class ReaderView {
       el = document.createElement('div');
       el.id = 'nj-translate-progress';
       el.className = 'translate-progress';
+      const label = document.createElement('span');
+      label.className = 'nj-translate-label';
+      el.appendChild(label);
+      this._translateProgressApi = progressElement({ percent: 0 }); // U32：确定式进度条+百分比
+      el.appendChild(this._translateProgressApi.el);
       host.appendChild(el);
     }
     el.classList.remove('is-done');
-    el.textContent = `${t('翻译中')} ${doneUnits}/${totalUnits}`;
+    const pct = totalUnits > 0 ? (doneUnits / totalUnits) * 100 : null;
+    this._translateProgressApi?.setPercent(pct);
+    const label = el.querySelector('.nj-translate-label');
+    if (label) label.textContent = `${t('翻译中')} ${doneUnits}/${totalUnits}`;
+    else el.textContent = `${t('翻译中')} ${doneUnits}/${totalUnits}`;
   }
 
   async _translateBatch() {
@@ -2533,38 +2592,29 @@ export class ReaderView {
     this._dismissPopover();
     this._dismissSelection();
     const llm = window.__robinLLM || {};
-    const aiActions = [];
-    if (llm.showsSelectionExplanation !== false) aiActions.push({ kind: 'explanation', svg: icon('spark'), title: t('解释所选文字') });
-    if (llm.showsSelectionAsk !== false) aiActions.push({ kind: 'ask', svg: icon('question'), title: t('问 AI 所选文字') });
-    if (llm.showsSelectionTranslation !== false) aiActions.push({ kind: 'translation', svg: icon('translate'), title: t('翻译所选文字') });
-    // 批注组（本地能力，不依赖 AI 配置）：高亮（选色）+ 锚定笔记
-    const annotActions = [
-      { kind: 'highlight', svg: icon('marker'), title: t('高亮选中文字') },
-      { kind: 'note', svg: icon('noteSticky'), title: t('对选中文字写笔记') },
-    ];
-    const actions = aiActions.length ? [...aiActions, { divider: true }, ...annotActions] : annotActions;
-    if (actions.length === 0) return;
+    // U35 动作注册表：内置（AI 三键按开关显隐 + 复制 + 高亮 + 笔记）+ 脚本声明动作（F32）
+    const plan = buildSelectionActionPlan(llm, this._userScriptActions || [], this._extraSelectionActions || []);
+    if (!plan.items.some((item) => !item.divider)) return;
 
     const pill = document.createElement('div');
     pill.className = 'nj-selection-actions';
-    for (const action of actions) {
-      if (action.divider) {
-        const divider = document.createElement('span');
-        divider.className = 'nj-selection-divider';
-        pill.appendChild(divider);
-        continue;
-      }
-      const button = document.createElement('button');
-      button.className = 'nj-selection-action';
-      button.title = action.title;
-      button.innerHTML = action.svg;
-      button.addEventListener('mousedown', (event) => event.preventDefault());
-      button.addEventListener('click', () => {
-        if (action.kind === 'highlight') this._showHighlightColorPicker(payload);
-        else if (action.kind === 'note') this._showSelectionNoteEditor(payload);
-        else this._openPopover(action.kind, payload);
+    for (const action of plan.visible) {
+      pill.appendChild(this._selectionActionButton(action, payload));
+    }
+    // U35 溢出折叠：超出可见上限的动作收进「…更多」二级弹出（图标+文字行）
+    if (plan.overflow.some((item) => !item.divider)) {
+      const moreBtn = document.createElement('button');
+      moreBtn.type = 'button';
+      moreBtn.className = 'nj-selection-action nj-selection-more';
+      moreBtn.dataset.role = 'selection-more';
+      moreBtn.title = t('更多');
+      moreBtn.innerHTML = icon('ellipsis');
+      moreBtn.addEventListener('mousedown', (event) => event.preventDefault());
+      moreBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this._openSelectionMorePop(plan.overflow.filter((item) => !item.divider), moreBtn, payload);
       });
-      pill.appendChild(button);
+      pill.appendChild(moreBtn);
     }
     document.body.appendChild(pill);
     this.selectionEl = pill;
@@ -2580,10 +2630,126 @@ export class ReaderView {
 
     setTimeout(() => {
       this._selectionDismissHandler = (event) => {
-        if (!pill.contains(event.target) && !this.popover?.contains(event.target)) this._dismissSelection();
+        if (!pill.contains(event.target) && !this.popover?.contains(event.target)
+          && !event.target.closest?.('.nj-selection-more-pop')) this._dismissSelection();
       };
       document.addEventListener('mousedown', this._selectionDismissHandler);
     }, 0);
+  }
+
+  /** U35：单枚浮条动作按钮（iconKey → SVG 图标；脚本动作 → 首字母徽章图标化压缩宽度）。 */
+  _selectionActionButton(action, payload) {
+    if (action.divider) {
+      const divider = document.createElement('span');
+      divider.className = 'nj-selection-divider';
+      return divider;
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'nj-selection-action';
+    button.dataset.selKind = action.kind;
+    button.title = t(action.title);
+    if (action.script) {
+      const badge = document.createElement('span');
+      badge.className = 'nj-selection-script-badge';
+      badge.textContent = (String(action.title).trim()[0] || '·').toUpperCase();
+      button.appendChild(badge);
+    } else {
+      button.innerHTML = action.iconKey ? icon(action.iconKey) : '';
+    }
+    button.addEventListener('mousedown', (event) => event.preventDefault());
+    button.addEventListener('click', () => this._runSelectionAction(action, payload));
+    return button;
+  }
+
+  /** U35：动作分发（内置直连既有路径；脚本动作经沙箱帧执行 fn）。 */
+  _runSelectionAction(action, payload) {
+    switch (action.kind) {
+      case 'highlight': this._showHighlightColorPicker(payload); return;
+      case 'note': this._showSelectionNoteEditor(payload); return;
+      case 'copy':
+        window.robin.copyText?.(payload.selection).then((copied) => {
+          this.handlers.onFeedback?.(copied === false ? t('复制失败') : t('已复制所选文字'));
+        }).catch(() => this.handlers.onFeedback?.(t('复制失败')));
+        this._dismissSelection();
+        return;
+      case 'explanation':
+      case 'ask':
+      case 'translation':
+        this._openPopover(action.kind, payload);
+        return;
+      default:
+        if (action.kind.startsWith('script:')) {
+          const sa = action.scriptAction;
+          if (!sa) return;
+          runUserActionViaFrame(sa.fn, {
+            title: this.entry?.title || '', url: this.entry?.url || '', body: this.html || '',
+          }).then((outcome) => {
+            if (!outcome || !outcome.ok) {
+              this.handlers.onFeedback?.(`${t('脚本执行失败')}：${(outcome && outcome.error) || t('脚本沙箱无响应，请重试。')}`);
+              return;
+            }
+            this.handlers.onFeedback?.(typeof outcome.value === 'string' && outcome.value ? outcome.value : t('脚本已执行'));
+          });
+          this._dismissSelection();
+        }
+    }
+  }
+
+  /** U35：「…更多」二级弹出（溢出动作按 图标+文字 行排布；点外即收）。 */
+  _openSelectionMorePop(overflowItems, anchorBtn, payload) {
+    document.querySelector('.nj-selection-more-pop')?.remove();
+    if (!overflowItems.length) return;
+    const pop = document.createElement('div');
+    pop.className = 'nj-selection-more-pop';
+    pop.dataset.role = 'selection-more-pop';
+    for (const action of overflowItems) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'nj-selection-more-item';
+      item.dataset.selKind = action.kind;
+      if (action.script) {
+        const badge = document.createElement('span');
+        badge.className = 'nj-selection-script-badge';
+        badge.textContent = (String(action.title).trim()[0] || '·').toUpperCase();
+        item.appendChild(badge);
+      } else if (action.iconKey) {
+        item.innerHTML = icon(action.iconKey);
+      }
+      const label = document.createElement('span');
+      label.textContent = t(action.title);
+      item.appendChild(label);
+      item.addEventListener('mousedown', (event) => event.preventDefault());
+      item.addEventListener('click', () => {
+        pop.remove();
+        this._runSelectionAction(action, payload);
+      });
+      pop.appendChild(item);
+    }
+    document.body.appendChild(pop);
+    const rect = anchorBtn.getBoundingClientRect();
+    const pw = pop.getBoundingClientRect().width;
+    let x = Math.max(10, Math.min(window.innerWidth - pw - 10, rect.left + rect.width / 2 - pw / 2));
+    let y = rect.bottom + 6;
+    if (y + pop.getBoundingClientRect().height > window.innerHeight - 12) y = rect.top - pop.getBoundingClientRect().height - 6;
+    pop.style.left = `${x}px`;
+    pop.style.top = `${y}px`;
+    setTimeout(() => {
+      const away = (event) => {
+        if (!pop.contains(event.target)) {
+          pop.remove();
+          document.removeEventListener('mousedown', away);
+        }
+      };
+      document.addEventListener('mousedown', away);
+    }, 0);
+  }
+
+  /** U35 外部注册口：内置/脚本之外的动作可注册进浮条（kind/title 必填；溢出折叠同样适用）。 */
+  registerSelectionAction(action) {
+    if (!action || !action.kind || !action.title) return;
+    this._extraSelectionActions = this._extraSelectionActions || [];
+    this._extraSelectionActions.push(action);
   }
 
   _dismissSelection() {
@@ -2593,6 +2759,7 @@ export class ReaderView {
     }
     this.selectionEl?.remove();
     this.selectionEl = null;
+    document.querySelector('.nj-selection-more-pop')?.remove(); // U35：二级弹出随浮条一并收场
   }
 
   _openPopover(kind, payload) {
@@ -3507,6 +3674,95 @@ export class ReaderView {
       });
       block.appendChild(marker);
     }
+    this._renderMarginNotes(); // U34 边注模式：随批注标点重建（开关关/无批注时为空操作）
+  }
+
+  // MARK: - 边注模式（U34：批注笔记常显页边）
+
+  /** 边注模式开关（设置 → 外观 → 批注呈现；默认关）。 */
+  _marginNotesOn() {
+    return window.__robinReaderLayout?.marginNotes === 'on';
+  }
+
+  /**
+   * 边注渲染：锚定笔记 + AI 解释批注 → 正文右侧 200px 边注列（absolute 对齐锚段顶）；
+   * 视口 <1200px 回退内联模式（卡片插到锚段之后，正文流内）。重入安全：先清后建，零残留。
+   */
+  _renderMarginNotes() {
+    const article = this._articleEl;
+    if (!article || !this.body || !article.isConnected) return;
+    article.querySelector('.nj-margin-notes')?.remove();
+    article.querySelectorAll('.nj-margin-note--inline').forEach((el) => el.remove());
+    article.classList.remove('has-margin-notes');
+    if (!this._marginNotesOn()) return;
+    /** 批注源：锚定笔记 + AI 解释（两者都有 anchor.paragraphID + content）。 */
+    const entries = [];
+    for (const note of this.notes || []) {
+      if (note.anchor?.paragraphID && note.content) {
+        entries.push({ kind: 'note', iconName: 'noteSticky', blockID: note.anchor.paragraphID, quote: note.anchor.quote, content: note.content, note });
+      }
+    }
+    for (const ann of this.annotations || []) {
+      if (ann.anchor?.paragraphID && ann.content) {
+        entries.push({ kind: 'explain', iconName: 'spark', blockID: ann.anchor.paragraphID, quote: ann.selection, content: ann.content, note: null });
+      }
+    }
+    if (!entries.length) return;
+    const inline = window.innerWidth < 1200; // U34 窄屏自动回退内联模式
+    article.classList.add('has-margin-notes');
+    if (inline) {
+      for (const item of entries) {
+        const block = this.body.querySelector(`[data-nj-id="${cssEscape(item.blockID)}"]`);
+        if (!block) continue;
+        block.after(this._marginNoteCard(item, true));
+      }
+      return;
+    }
+    const articleRect = article.getBoundingClientRect();
+    const col = document.createElement('div');
+    col.className = 'nj-margin-notes';
+    col.dataset.role = 'margin-notes';
+    const laid = [];
+    for (const item of entries) {
+      const block = this.body.querySelector(`[data-nj-id="${cssEscape(item.blockID)}"]`);
+      if (!block) continue;
+      const card = this._marginNoteCard(item, false);
+      // 锚段顶（相对 article；rect 差值与滚动无关）
+      let top = block.getBoundingClientRect().top - articleRect.top;
+      laid.push({ card, top });
+    }
+    // 防重叠：按锚点纵序排列，后卡撞上前卡底缘时顺延（同段多批注不错位叠字）
+    laid.sort((a, b) => a.top - b.top);
+    let prevBottom = -Infinity;
+    for (const { card, top } of laid) {
+      col.appendChild(card); // 先入树再量高（脱树元素 rect 恒 0）
+      const h = card.getBoundingClientRect().height;
+      const settled = Math.max(top, prevBottom);
+      card.style.top = `${Math.round(settled)}px`;
+      prevBottom = settled + h + 8;
+    }
+    if (col.childElementCount) article.appendChild(col);
+    else article.classList.remove('has-margin-notes');
+  }
+
+  /** 单枚边注卡（kind 图标 + 原文引用 + 笔记全文；笔记类点击唤起既有便签卡）。 */
+  _marginNoteCard(item, inline) {
+    const card = document.createElement('div');
+    card.className = `nj-margin-note${inline ? ' nj-margin-note--inline' : ''}`;
+    card.dataset.marginKind = item.kind;
+    const head = document.createElement('span');
+    head.className = 'nj-margin-note-quote';
+    head.innerHTML = `<span class="nj-margin-note-kind">${icon(item.iconName)}</span>`;
+    head.appendChild(document.createTextNode(String(item.quote || '').slice(0, 80)));
+    const text = document.createElement('span');
+    text.className = 'nj-margin-note-text';
+    text.textContent = String(item.content || '');
+    card.append(head, text);
+    if (item.note) {
+      card.title = t('点击查看笔记');
+      card.addEventListener('click', () => this._openNoteCard(item.note, card));
+    }
+    return card;
   }
 
   /** 便签卡（查看/编辑/删除）。 */

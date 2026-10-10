@@ -111,9 +111,37 @@ const SCENES = {
     <path d="M96 44 l10 8 -10 8"/>
     <path d="M118 44 l-10 8 10 8"/>
     <path d="M132 34 l3 0 M133.5 32.5 l0 3"/>`),
+  // U31 标签空：吊牌 + 缠线 + 落鸟
+  tag: frame(`
+    <path d="M60 42 L96 42 L114 60 L96 78 L60 78 Z"/>
+    <circle class="ea-accent" cx="72" cy="60" r="4.5"/>
+    <path d="M114 60 q14 -6 18 -16"/>
+    <path d="M50 84 q6 6 14 2"/>
+    ${bird(126, 36, 1.7)}`),
+  // U31 光谱空：天平横轴 + 两端砝码 + 游星
+  spectrum: frame(`
+    <line x1="36" y1="66" x2="128" y2="66"/>
+    <path d="M36 66 l-6 12 M36 66 l6 12"/>
+    <path d="M128 66 l-6 12 M128 66 l6 12"/>
+    <line x1="82" y1="58" x2="82" y2="82"/>
+    <circle class="ea-accent" cx="82" cy="52" r="6"/>
+    <path d="M46 30 q4 6 -2 10"/>
+    ${bird(116, 30, 1.6)}`),
 };
 
 /** glyph → 版画场景；未知 glyph 返回空串（调用方回退既有 .glyph 图标）。 */
 export function emptyArtSVG(glyph) {
   return SCENES[glyph] || '';
+}
+
+/**
+ * U31 空态二期：统一空态壳（插画 + 标题 + 副文案），挂 `stagger` 错峰类。
+ * 返回 innerHTML；标题/副文案由调用方以 textContent 填充（防注入），按钮类内容随后续 append。
+ * 未命中线稿库时回退空 .glyph 槽位（调用方可再注入图标）。
+ */
+export function staggerEmptyHTML(glyph) {
+  const art = emptyArtSVG(glyph);
+  return art
+    ? `<div class="empty-art">${art}</div><h3></h3><p></p>`
+    : `<div class="glyph"></div><h3></h3><p></p>`;
 }

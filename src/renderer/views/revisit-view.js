@@ -10,6 +10,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -90,8 +91,8 @@ export class RevisitView {
     if (!this.bodyEl) return;
     this.bodyEl.innerHTML = '';
     if (!due.length) {
-      const empty = el('div', 'nj-revisit-empty');
-      empty.innerHTML = `<span class="nj-revisit-empty-icon">${icon('revisit')}</span><h3></h3><p></p>`;
+      const empty = el('div', 'nj-revisit-empty list-empty stagger'); // U31 空态二期：插画 + 错峰入场
+      empty.innerHTML = staggerEmptyHTML('clock');
       empty.querySelector('h3').textContent = t('现在没有到期的重访');
       empty.querySelector('p').textContent = t('读完的长文会在 30 天后回到这里，温和地提醒你重访它。');
       this.bodyEl.appendChild(empty);

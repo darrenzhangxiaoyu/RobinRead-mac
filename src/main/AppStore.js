@@ -3691,6 +3691,8 @@ class AppStore extends EventEmitter {
       translateSkipped: this.getTranslateSkipped(),
       // 默认关闭：文章打开不自动翻译，由用户手动触发（设置里可开启自动精读）
       autoTranslateEnglish: this.preferences.get('RobinRead.autoTranslateEnglish', false) === true,
+      // U34 边注模式（默认关）：高亮批注的笔记内容常显在正文右侧页边（<1200px 自动回退内联）
+      marginNotes: this.preferences.get('RobinRead.marginNotes', 'off'),
     };
   }
 
@@ -3781,6 +3783,7 @@ class AppStore extends EventEmitter {
       listViewMode: ['list', 'magazine'],
       translateMode: ['off', 'bilingual', 'zh'],
       autoTranslateEnglish: [true, false],
+      marginNotes: ['on', 'off'], // U34 边注模式
     };
     for (const [key, value] of Object.entries(patch || {})) {
       if (key === 'autoTranslateEnglish') {

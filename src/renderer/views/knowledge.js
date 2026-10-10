@@ -6,7 +6,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { promptBox, confirmBox } from '../ui-prompt.js';
-import { emptyArtSVG } from './empty-art.js';
+import { emptyArtSVG, staggerEmptyHTML } from './empty-art.js';
 import { renderMarkdown } from '../markdown.js';
 import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline, onResolutionChange } from './chart-kit.js'; /* U16 */
 import { renderSpectrum } from './spectrum-view.js'; /* F38 来源立场光谱 */
@@ -568,8 +568,7 @@ export class KnowledgeCenter {
   }
 
   _emptyIn(host, title, desc) {
-    const art = emptyArtSVG('spark'); // U11 插画空态
-    host.innerHTML = `<div class="list-empty">${art ? `<div class="empty-art">${art}</div>` : `<div class="glyph">${icon('spark')}</div>`}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
+    host.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`; // U31 空态二期
   }
 
   _renderHighlights(items) {
@@ -1444,8 +1443,8 @@ export class KnowledgeCenter {
     const renderEmptyHint = () => {
       streamHost.innerHTML = '';
       const empty = document.createElement('div');
-      empty.className = 'list-empty nj-rag-empty';
-      empty.innerHTML = `<div class="glyph">${icon('spark')}</div><h3></h3><p></p>`;
+      empty.className = 'list-empty stagger nj-rag-empty'; // U31 空态二期：插画 + 错峰入场
+      empty.innerHTML = staggerEmptyHTML('spark');
       empty.querySelector('h3').textContent = t('问点什么吧');
       empty.querySelector('p').textContent = t('问题会先在你的订阅全文、高亮与笔记里检索，再由 AI 作答。');
       streamHost.appendChild(empty);
@@ -2216,8 +2215,10 @@ export class KnowledgeCenter {
 
     if (!tags.length) {
       const empty = document.createElement('div');
-      empty.className = 'list-empty';
-      empty.innerHTML = `<div class="glyph">${icon('spark')}</div><h3>${escapeHTML(t('该来源暂无标签'))}</h3><p>${escapeHTML(t('AI 自动标签开启后，新文章会在这里等待复核。'))}</p>`;
+      empty.className = 'list-empty stagger'; // U31 空态二期：吊牌插画 + 错峰入场
+      empty.innerHTML = staggerEmptyHTML('tag');
+      empty.querySelector('h3').textContent = t('该来源暂无标签');
+      empty.querySelector('p').textContent = t('AI 自动标签开启后，新文章会在这里等待复核。');
       wrap.appendChild(empty);
       this.contentHost.appendChild(wrap);
       return;
@@ -2306,8 +2307,10 @@ export class KnowledgeCenter {
 
     if (!feeds.length) {
       const empty = document.createElement('div');
-      empty.className = 'list-empty';
-      empty.innerHTML = `<div class="glyph">${icon('flame')}</div><h3>${escapeHTML(t('暂无订阅源'))}</h3><p>${escapeHTML(t('添加订阅后，这里会给出每份源的健康体检。'))}</p>`;
+      empty.className = 'list-empty stagger'; // U31 空态二期：火苗插画 + 错峰入场
+      empty.innerHTML = staggerEmptyHTML('flame');
+      empty.querySelector('h3').textContent = t('暂无订阅源');
+      empty.querySelector('p').textContent = t('添加订阅后，这里会给出每份源的健康体检。');
       wrap.appendChild(empty);
       this.contentHost.appendChild(wrap);
       return;
@@ -2338,8 +2341,10 @@ export class KnowledgeCenter {
       : feeds;
     if (!filtered.length) {
       const empty = document.createElement('div');
-      empty.className = 'list-empty';
-      empty.innerHTML = `<div class="glyph">${icon('flame')}</div><h3>${escapeHTML(t('没有匹配的源'))}</h3><p>${escapeHTML(t('换个筛选条件试试。'))}</p>`;
+      empty.className = 'list-empty stagger'; // U31 空态二期：火苗插画 + 错峰入场
+      empty.innerHTML = staggerEmptyHTML('flame');
+      empty.querySelector('h3').textContent = t('没有匹配的源');
+      empty.querySelector('p').textContent = t('换个筛选条件试试。');
       wrap.appendChild(empty);
       this.contentHost.appendChild(wrap);
       return;
@@ -2511,8 +2516,7 @@ export class KnowledgeCenter {
   }
 
   _empty(title, desc) {
-    const art = emptyArtSVG('spark'); // U11 插画空态
-    this.contentHost.innerHTML = `<div class="list-empty">${art ? `<div class="empty-art">${art}</div>` : `<div class="glyph">${icon('spark')}</div>`}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
+    this.contentHost.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`; // U31 空态二期
   }
 }
 

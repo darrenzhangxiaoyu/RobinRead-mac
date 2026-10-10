@@ -15,3 +15,7 @@ dist-release/
 .tmp-*
 .zcode/
 dist-v*/
+.ci-run*.log
+.ci-run*.err
+.ci-skip-marker
+.ci-skip-state.json

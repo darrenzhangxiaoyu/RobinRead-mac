@@ -130,11 +130,62 @@ export function dismissTop() {
 }
 
 /**
+ * U32 统一进度语言：.nj-progress 元素工厂（令牌组件双形态）。
+ * - percent == null → 不确定式呼吸点形态（.nj-progress--indeterminate + .nj-progress-dot）；
+ * - percent 数字 → 确定式进度条形态（.nj-progress + .nj-progress-fill + .nj-progress-pct）。
+ * 返回 { el, setPercent(p), setNote(text) }；setPercent(null) 可回退呼吸形态。
+ * 供阅读器译文浮标 / 媒体转写行内状态等内联场景复用（Toast.progress 为 toast 栈宿主）。
+ */
+export function progressElement({ percent = null, note = '' } = {}) {
+  const el = document.createElement('div');
+  el.className = 'nj-progress-row';
+  const bar = document.createElement('div');
+  bar.className = 'nj-progress';
+  const fill = document.createElement('i');
+  fill.className = 'nj-progress-fill';
+  const dot = document.createElement('span');
+  dot.className = 'nj-progress-dot';
+  const pct = document.createElement('span');
+  pct.className = 'nj-progress-pct';
+  const noteEl = document.createElement('span');
+  noteEl.className = 'nj-progress-note';
+  noteEl.textContent = String(note || '');
+  bar.append(fill, dot);
+  el.append(bar, pct, noteEl);
+
+  const api = {
+    el,
+    /** 推进：数字=确定式（条+百分比）；null=回退不确定式（呼吸点）。 */
+    setPercent(p) {
+      if (p == null || !Number.isFinite(Number(p))) {
+        bar.classList.add('nj-progress--indeterminate');
+        bar.removeAttribute('aria-valuenow');
+        pct.textContent = '';
+      } else {
+        const v = Math.max(0, Math.min(100, Math.round(Number(p))));
+        bar.classList.remove('nj-progress--indeterminate');
+        fill.style.width = `${v}%`;
+        bar.setAttribute('aria-valuemin', '0');
+        bar.setAttribute('aria-valuemax', '100');
+        bar.setAttribute('aria-valuenow', String(v));
+        pct.textContent = `${v}%`;
+      }
+      return api;
+    },
+    setNote(text) { noteEl.textContent = String(text ?? ''); return api; },
+  };
+  api.setPercent(percent);
+  return api;
+}
+
+/**
  * 进度通知（长任务：刷新/导出/成书/清理等）。
  * 返回句柄：set(pct, note?) / done(message?) / fail(message?) / close()。
  * 活跃期不自动消退；done/fail 落三态图标后按各自时长收口。
+ * U32：mode='breathe' 时以不确定式呼吸点形态呈现（无百分比的长任务：同步/连接探测等）；
+ * 呼吸期间 set(pct) 原地升级为确定式进度条（同一枚组件双形态切换）。
  */
-export function showProgress(title, { note = '', total = 100 } = {}) {
+export function showProgress(title, { note = '', total = 100, mode = 'determinate' } = {}) {
   const stack = ensureStack();
   while (live.size >= CAP) evictOldestNormal();
   const el = document.createElement('div');
@@ -152,6 +203,13 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
   noteEl.textContent = note;
   el.querySelector('.toast-body').appendChild(noteEl);
 
+  // U32：不确定式长任务（mode='breathe'）以 .nj-progress 呼吸点替换既有转圈细条，
+  // 确定式保留 .toast-bar（F13 合同不变，diag-u11-u15 依赖该选择器）。
+  if (mode === 'breathe') {
+    const inlineProgress = progressElement({ percent: null });
+    el.querySelector('.toast-bar').replaceWith(inlineProgress.el.querySelector('.nj-progress'));
+  }
+
   const entry = { el, duration: 0, timer: 0, startedAt: 0, remaining: 0, progress: true };
   stack.appendChild(el);
   live.add(entry);
@@ -159,6 +217,8 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
 
   const barFill = el.querySelector('.toast-bar > i');
   let lastPct = 0;
+  /** 当前进度宿主（确定式 .toast-bar / 不确定式或升级后的 .nj-progress）。 */
+  const progressHost = () => el.querySelector('.toast-bar, .nj-progress');
   /** 收口后若指针已悬停在条上（无新 mouseenter 事件），就地进入暂停态（审查 P3）。 */
   const settleTone = (toneClass, toneIcon, ms, message) => {
     el.classList.remove('progress');
@@ -166,7 +226,7 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
     el.querySelector('.toast-ic').innerHTML = toneIcon;
     if (message) el.querySelector('.toast-title').textContent = message;
     noteEl.remove();
-    el.querySelector('.toast-bar').remove();
+    progressHost()?.remove();
     entry.duration = ms;
     entry.remaining = ms;
     entry.startedAt = Date.now();
@@ -180,7 +240,14 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
     /** 推进进度：pct ∈ [0,100]（或按 total 归一），note 更新右侧小字。 */
     set(pct, noteText) {
       lastPct = Math.max(0, Math.min(100, (Number(pct) / (total || 100)) * 100));
-      barFill.style.width = `${lastPct}%`;
+      const host = progressHost();
+      if (host && host.classList.contains('nj-progress')) {
+        // 呼吸形态收到首个确定值：原地升级为确定式进度条+百分比（双形态切换）
+        const det = progressElement({ percent: lastPct });
+        host.replaceWith(det.el.querySelector('.nj-progress'));
+      } else if (barFill) {
+        barFill.style.width = `${lastPct}%`;
+      }
       if (noteText !== undefined) noteEl.textContent = String(noteText);
       return handle;
     },
@@ -204,4 +271,11 @@ export function showProgress(title, { note = '', total = 100 } = {}) {
 /** 探针/单测辅助：当前在场（未进入离场动画）条数。 */
 export function liveCount() { return live.size; }
 
-export const Toast = { show: showToast, dismissTop, progress: showProgress, liveCount };
+export const Toast = {
+  show: showToast,
+  dismissTop,
+  progress: showProgress,
+  /** U32 不确定式长任务（同步/探测等无百分比任务）统一呼吸点形态。 */
+  breathe: (title, opts = {}) => showProgress(title, { ...opts, mode: 'breathe' }),
+  liveCount,
+};

@@ -94,6 +94,8 @@ export const icons = {
   spectrum: i('<path d="M1.8 12.4h12.4"/><circle cx="3.6" cy="10" r="1.5"/><circle cx="8" cy="6.6" r="1.5"/><circle cx="12.4" cy="9" r="1.5"/>'),
   // F35 语音指挥舱：麦克风（设置分区 + 浮球语义）
   mic: i('<rect x="6" y="1.6" width="4" height="8" rx="2"/><path d="M3.6 7.6a4.4 4.4 0 0 0 8.8 0"/><path d="M8 12v2.4"/><path d="M5.8 14.4h4.4"/>'),
+  // U35 划词浮条 2.0：溢出折叠「…更多」二级入口
+  ellipsis: i('<circle cx="3.2" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="8" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="12.8" cy="8" r="1.1" fill="currentColor" stroke="none"/>'),
 };
 
 export function icon(name, extraClass = '') {

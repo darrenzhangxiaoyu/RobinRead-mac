@@ -9,6 +9,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -188,11 +189,10 @@ export class WeeklyView {
     if (!this.current || this.current.status !== 'ready') {
       const failed = this.list.find((w) => w.status === 'failed');
       this.bodyEl.innerHTML = `
-        <div class="nj-weekly-empty">
-          <span class="nj-weekly-empty-icon">${icon('newspaper')}</span>
-          <h3></h3><p></p>
+        <div class="nj-weekly-empty list-empty stagger">
+          ${staggerEmptyHTML('newspaper')}
           <button type="button" class="btn-text primary nj-weekly-empty-gen"></button>
-        </div>`;
+        </div>`; // U31 空态二期：报刊插画 + 错峰入场
       this.bodyEl.querySelector('h3').textContent = t('还没有周刊');
       this.bodyEl.querySelector('p').textContent = t('每周一自动把上周阅读编成一期：AI 导语 + 主题归纳 + 金句摘录。');
       const gen = this.bodyEl.querySelector('.nj-weekly-empty-gen');
