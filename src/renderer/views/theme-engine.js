@@ -194,10 +194,32 @@ export function fullPalette(t) {
 /** 应用调色板到文档根。 */
 export function applyPalette(palette) {
   const root = document.documentElement;
+  _beginThemeTransition(root); // U23：切换期间挂过渡类，THEME_TRANSITION_MS 后摘除（不常驻）
   for (const [key, value] of Object.entries(palette)) {
     if (key.startsWith('_')) continue;
     root.style.setProperty(key, value);
   }
+}
+
+// MARK: - U23 主题切换渐变
+
+/** 过渡类摘除时限：与 CSS 过渡时长（--dur-mid）对齐留少量余量。 */
+export const THEME_TRANSITION_MS = 300;
+
+/**
+ * 主题切换期间给 <html> 挂 .theme-transition（robin.css：颜色类属性过渡 --dur-mid），
+ * THEME_TRANSITION_MS 后摘除——只覆盖切换瞬间，不常驻（性能红线）。
+ * 首次应用（启动恢复）不做过渡；reduced-motion 直达终态不挂类。
+ */
+function _beginThemeTransition(root) {
+  try {
+    if (typeof window === 'undefined' || !root) return;
+    if (!applyPalette._booted) { applyPalette._booted = true; return; } // 启动首帧不渐变
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    root.classList.add('theme-transition');
+    clearTimeout(applyPalette._tt); // 连续切换只保留最后一次计时（类不叠加、不提前摘）
+    applyPalette._tt = setTimeout(() => root.classList.remove('theme-transition'), THEME_TRANSITION_MS + 60);
+  } catch (_) { /* 过渡失败不影响换色本身 */ }
 }
 
 export function clearPalette() {

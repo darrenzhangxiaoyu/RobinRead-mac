@@ -346,6 +346,52 @@ class KnowledgeEngine {
     return { daily, totals, streak };
   }
 
+  /**
+   * 阅读年报（U25）：本年聚合。全部走既有统计口径——
+   * reading_stats（完读/高亮/笔记/连击，本地日期键）+ article_tags×article_states（已读文 Top 主题）。
+   * 注入时钟可测：this._now?.() 覆盖年份起点（照 F36/F38 惯例）。
+   */
+  wrapped() {
+    const now = this._now ? this._now() : Date.now();
+    const year = new Date(now).getFullYear();
+    const yearKey = `${year}-01-01`;
+    const yearStartSec = Math.floor(new Date(year, 0, 1).getTime() / 1000);
+    const totals = this.store.database.prepare(
+      'SELECT COALESCE(SUM(articles_read), 0) AS read, COALESCE(SUM(highlights_made), 0) AS highlights, COALESCE(SUM(notes_created), 0) AS notes FROM reading_stats WHERE date >= ?',
+    ).get(yearKey);
+    const daily = this.store.database.prepare(
+      'SELECT date, articles_read AS read, highlights_made AS highlights, notes_created AS notes FROM reading_stats WHERE date >= ? ORDER BY date',
+    ).all(yearKey);
+    const isRead = (r) => (Number(r.read) || 0) > 0 || (Number(r.highlights) || 0) > 0 || (Number(r.notes) || 0) > 0;
+    let current = 0;
+    for (let i = daily.length - 1; i >= 0; i -= 1) { if (isRead(daily[i])) current += 1; else break; }
+    let best = 0; let run = 0;
+    for (const r of daily) { if (isRead(r)) { run += 1; if (run > best) best = run; } else run = 0; }
+    // Top 主题：本年已读文章的标签频次（article_states.updated_at 为状态突变时刻，作已读时间近似）
+    const topThemes = this.store.database.prepare(`
+      SELECT at.tag AS tag, COUNT(*) AS count
+      FROM article_tags at
+      INNER JOIN article_states st ON st.item_id = at.item_id
+      WHERE st.is_read = 1 AND st.updated_at >= ?
+      GROUP BY at.tag
+      ORDER BY count DESC, tag ASC
+      LIMIT 24
+    `).all(yearStartSec).map((r) => ({ tag: r.tag, count: Number(r.count) || 0 }));
+    const activeDays = daily.filter(isRead).length;
+    return {
+      year,
+      read: Number(totals.read) || 0,
+      highlights: Number(totals.highlights) || 0,
+      notes: Number(totals.notes) || 0,
+      annotations: (Number(totals.highlights) || 0) + (Number(totals.notes) || 0),
+      streak: current,
+      bestStreak: Math.max(best, current),
+      activeDays,
+      days: daily.length,
+      topThemes,
+    };
+  }
+
   // MARK: - 知识连接
   findRelated(itemID, limit = 5) {
     const tags = this.getItemTags(itemID).map((t) => t.tag);

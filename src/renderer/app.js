@@ -22,6 +22,8 @@ import { ContextMenu } from './views/context-menu.js';
 import { CommandPalette } from './views/command-palette.js';
 import { ReadingControls } from './views/reading-controls.js';
 import { TYPOGRAPHY_PRESETS } from './data/typography-presets.js';
+import { resolveReaderFontStack } from './data/font-family-presets.js';
+import { bindPinchFontSize, bindTouchLongPress } from './views/gesture-layer.js';
 import {
   normalizeTokens, switchModeTokens, fullPalette, applyPalette, clearPalette,
   persistTokens, clearTokens, pushRecent,
@@ -275,10 +277,20 @@ async function bootstrap() {
   bindEvents();
   bindSplitters();
   bindKeyboard();
+  bindGestures(); // U24 触控板/触屏手势（捏合字号 + 长按右键）
 
   await reloadAll();
   setActiveColumn(1, { autoSelect: false });
   setTimeout(checkUpdateQuietly, 6000);
+}
+
+/** U24 触控板/触屏手势：阅读器捏合缩放字号；触屏长按派发合成 contextmenu（走既有右键管线）。 */
+function bindGestures() {
+  const detachPinch = bindPinchFontSize(views.reader?.scrollEl, {
+    onStep: (dir) => { adjustFontSize(dir); },
+  });
+  window.addEventListener('beforeunload', detachPinch, { once: true });
+  bindTouchLongPress(document.body, {});
 }
 
 // MARK: - 主题 / 字号
@@ -319,10 +331,13 @@ function syncLLMGlobals(snapshot) {
 /** 恢复 / 重应用自定义主题（跟随当前明暗模式）。 */
 function applyReaderLayout(layout) {
   const root = document.documentElement;
-  const fontMap = { serif: 'var(--font-serif)', sans: 'var(--font-sans)', wenkai: '"LXGW WenKai Screen", var(--font-serif)' };
+  // U21 字体族套装：四档版式皮肤 + 自定义字体（单一数据源 font-family-presets.js）。
+  // --reader-font 既有合同保留（每源排版可 article 级覆盖）；--reader-font-family 为 U21 全局新变量。
+  const fontStack = resolveReaderFontStack(layout);
+  root.style.setProperty('--reader-font', fontStack);
+  root.style.setProperty('--reader-font-family', fontStack);
   const widthMap = { narrow: '680px', standard: '820px', wide: '960px' };
   const heightMap = { compact: '1.55', standard: '1.72', loose: '1.95' };
-  root.style.setProperty('--reader-font', fontMap[layout?.fontFamily] || fontMap.serif);
   root.style.setProperty('--reader-page-width', widthMap[layout?.pageWidth] || widthMap.standard);
   root.style.setProperty('--reader-line-height', heightMap[layout?.lineHeight] || heightMap.standard);
   // 排版引擎 v2：字距走 CSS 变量；段落风格/对齐/微排版/首字下沉走 body 标记（CSS 按标记生效）

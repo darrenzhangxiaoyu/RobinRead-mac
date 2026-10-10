@@ -11,6 +11,8 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { feedFontStack } from '../data/font-family-presets.js'; /* U21 字体族套装（每源排版同源） */
+import { playTitleTransition } from './shared-transition.js'; /* U22 共享元素转场 */
 import { emptyArtSVG } from './empty-art.js';
 import { formatFullDate } from './list.js';
 import { renderMarkdown } from '../markdown.js';
@@ -709,12 +711,17 @@ export class ReaderView {
     }
     this.scrollEl.appendChild(article);
     this._articleEl = article; // 翻页动效挂载点
+    // U22 共享元素转场：列表行点击的标题快照 → 从原位飞至文首位（FLIP）。
+    // 无快照（翻页/重渲染/弹窗）/reduced-motion 时 playTitleTransition 内部直达终态（不建幽灵）。
+    if (this.handlers.mode !== 'popup') {
+      playTitleTransition(this.entryID, article.querySelector('.robin-header-title'));
+    }
     this._loadContinueReading(article); // F13：文末「继续读」相关文章（异步，不阻塞首屏）
     // 每源排版偏好（重量级）：article 级 CSS 变量覆盖（比根变量更近作用域，仅影响本篇）
     const typo = (window.__robinFeedTypography || {})[this.feed?.id];
     if (typo) {
-      const fontMap = { serif: 'var(--font-serif)', sans: 'var(--font-sans)', wenkai: '"LXGW WenKai Screen", var(--font-serif)' };
-      if (fontMap[typo.fontFamily]) article.style.setProperty('--reader-font', fontMap[typo.fontFamily]);
+      const fontStack = feedFontStack(typo.fontFamily); // U21：四档皮肤单一数据源（未指定 → null 跟随全局）
+      if (fontStack) article.style.setProperty('--reader-font', fontStack);
       if (Number(typo.fontSize) > 0) article.style.setProperty('--article-font-size', `${typo.fontSize}px`);
       const widthMap = { narrow: '680px', standard: '820px', wide: '960px' };
       if (widthMap[typo.pageWidth]) article.style.setProperty('--reader-page-width', widthMap[typo.pageWidth]);
@@ -1153,7 +1160,12 @@ export class ReaderView {
         title: this.entry?.title || '', url: this.entry?.url || '', body: this.html || '',
       });
       if (this.entryID !== entryID) return;
-      if (typeof usResult.body === 'string' && usResult.body) this.html = usResult.body;
+      if (typeof usResult.body === 'string' && usResult.body) {
+        // 批 J 审查 P2：脚本输出是全应用唯一不经白名单消毒直达 innerHTML 的通道——
+        // 回主进程过 sanitizedHTML（fail-closed：IPC 失败保留原正文，脚本变换放弃）
+        const sanitized = await window.robin.userScriptsSanitize?.(usResult.body).catch(() => null);
+        if (typeof sanitized === 'string' && sanitized) this.html = sanitized;
+      }
       this._userScriptActions = usResult.actions || [];
       for (const err of usResult.errors || []) {
         console.warn('[reader] user script skipped:', err.scriptID, err.message);

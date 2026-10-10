@@ -36,6 +36,10 @@
      @font-face 按需加载 + font-display: swap（见下方 @font-face），不阻塞首屏。 */
   --font-serif: "LXGW WenKai Screen", "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "Microsoft YaHei UI", "Microsoft YaHei", SimSun, Georgia, "Times New Roman", serif;
   --font-sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  /* ── U21 正文字体族：四档版式皮肤缺省值（宋体系）──
+     运行时由 font-family-presets.js（单一数据源）按选择写入具体栈；
+     此处缺省与该文件 serif 栈保持同步（改动须两处同改）。 */
+  --reader-font-family: "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif SC", "SimSun", Georgia, serif;
   --article-font-size: 17px;
   --toolbar-height: 52px;
 
@@ -99,6 +103,9 @@
   --fs-sm: 10.5px;
   --fs-md: 11px;
   --fs-lg: 11.5px;
+  /* ── U25 展示级字号两档（年报四卡大数字/刊头；>12px 展示字归簇进令牌阶梯）── */
+  --fs-display: 22px;
+  --fs-hero: 32px;
   /* ── U18 焦点环家族量纲（accent 环宽 / 档位偏移：按钮外扩、列表项内嵌）── */
   --focus-w: 2px;
   --focus-off: 2px;      /* 按钮/链接档：环画在元素外 */
@@ -718,7 +725,8 @@ body.zen .list-top-inset { display: none; }
   margin: 0 auto 42px;
   padding: 32px 40px 0;
   font-size: var(--article-font-size, 17px);
-  font-family: var(--reader-font, var(--font-serif));
+  /* U21 字体族链：每源排版（--reader-font）> 全局字体族套装（--reader-font-family）> 内置衬线 */
+  font-family: var(--reader-font, var(--reader-font-family, var(--font-serif)));
   font-weight: 400;
   line-height: var(--reader-line-height, 1.78);
   letter-spacing: var(--reader-letter-spacing, 0.006em);
@@ -8133,3 +8141,118 @@ mark.nj-hl.nj-hl-flash { animation: nj-hl-flash-pulse 1.1s ease-in-out 2; }
   .nj-spectrum-layout { grid-template-columns: 1fr; }
 }
 
+
+/* ==========================================================================
+   U22 共享元素转场：列表行标题 → 阅读器标题飞入（FLIP）
+   ========================================================================== */
+.nj-shared-ghost {
+  position: fixed; z-index: 6;
+  pointer-events: none;
+  box-sizing: border-box;
+  margin: 0;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-family: var(--reader-title-font, var(--reader-font-family, var(--font-serif)));
+  font-weight: 700;
+  color: var(--text-primary);
+  background: transparent;
+  transform-origin: top left;
+  will-change: transform;
+}
+/* Play：过渡归位（时长走 U2 慢速档；类挂上才带 transition，落位瞬跳不闪） */
+.nj-shared-ghost-play {
+  transition: transform var(--dur-slow) var(--ease-out);
+  transform: translate(0, 0) scale(1) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* reduced-motion 直达终态：不飞（JS 侧同样短路，此处为 CSS 兜底） */
+  .nj-shared-ghost { display: none; }
+}
+
+/* ==========================================================================
+   U23 主题切换渐变：切换期间给根挂过渡类，300ms 后由 theme-engine 摘除
+   （只覆盖颜色类属性；不常驻——类摘除即恢复瞬时，日常交互零开销）
+   ========================================================================== */
+html.theme-transition,
+html.theme-transition body,
+html.theme-transition * {
+  transition:
+    background-color var(--dur-mid) var(--ease-in-out),
+    color var(--dur-mid) var(--ease-in-out),
+    border-color var(--dur-mid) var(--ease-in-out),
+    fill var(--dur-mid) var(--ease-in-out),
+    stroke var(--dur-mid) var(--ease-in-out),
+    box-shadow var(--dur-mid) var(--ease-in-out) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition body,
+  html.theme-transition * {
+    transition: none !important;
+  }
+}
+
+/* ==========================================================================
+   U25 阅读年报（知识中心「阅读年报」tab）：四大数据卡 / 关键词云 / 分享卡
+   ========================================================================== */
+.wrapped-view { display: flex; flex-direction: column; gap: var(--space-5); padding: var(--space-2); }
+.wrapped-hero { text-align: center; padding: var(--space-4) 0 var(--space-2); }
+.wrapped-hero-title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.wrapped-hero-sub { margin: 0; font-size: var(--fs-md); color: var(--text-tertiary); }
+.wrapped-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+.wrapped-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-1);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.wrapped-card:hover { transform: translateY(var(--lift-y)); box-shadow: var(--shadow-1); }
+.wrapped-card-art { display: flex; align-items: center; justify-content: center; min-height: 40px; }
+.wrapped-num {
+  font-family: var(--font-serif);
+  font-size: var(--fs-hero);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.wrapped-label { font-size: var(--fs-md); color: var(--text-secondary); text-align: center; }
+.wrapped-theme {
+  font-size: var(--fs-md); font-weight: 700; color: var(--text-primary);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.wrapped-cloud {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-2xl);
+  background: var(--page-background);
+  min-height: 96px;
+}
+.wrapped-cloud-word {
+  font-family: var(--font-serif);
+  line-height: 1.5;
+  color: var(--text-primary);
+  cursor: default;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.wrapped-cloud-word:hover { color: var(--accent); }
+.wrapped-actions { display: flex; justify-content: center; padding-bottom: var(--space-4); }
+@media (prefers-reduced-motion: reduce) {
+  .wrapped-card { transition: none; }
+  .wrapped-cloud-word { transition: none; }
+}

@@ -9,6 +9,7 @@ import { icon } from '../icons.js';
 import { FEED_REFRESH_INTERVALS_META } from '../refresh-intervals.js';
 import { promptBox, confirmBox, alertBox } from '../ui-prompt.js';
 import { TYPOGRAPHY_PRESETS } from '../data/typography-presets.js';
+import { READER_FONT_LABELS, resolveReaderFontStack, sanitizeCustomFontName } from '../data/font-family-presets.js'; /* U21 字体族套装 */
 import { syncResultText } from './sync-command.js';
 import { bookMetaLine, showCreateBookDialog } from './bookshelf.js';
 import { Toast } from './toast.js';
@@ -470,12 +471,59 @@ export class SettingsView {
 
     // ── 阅读排版 ──
     const layout = prefs.readerLayout || { fontFamily: 'serif', pageWidth: 'standard', lineHeight: 'standard', listDensity: 'comfortable' };
+    // U21 字体族套装：四档版式皮肤（宋体系/黑体系/仿宋/楷体，wenkai 内置楷体兼容）+ 自定义，
+    // 与下方「自定义字体」输入共用即时预览（选卡/输入即刻换栈预览）。
+    const fontPreview = document.createElement('div');
+    fontPreview.className = 'setting-control';
+    fontPreview.dataset.role = 'font-family-preview';
+    fontPreview.style.cssText = 'border:1px solid var(--note-border);border-radius:var(--radius-md);padding:var(--space-3);background:var(--page-background);';
+    const refreshFontPreview = () => {
+      const fam = fontPreview.dataset.fontFamily || 'serif';
+      const custom = sanitizeCustomFontName(fontPreview.dataset.customFont || '');
+      fontPreview.style.fontFamily = resolveReaderFontStack({ fontFamily: fam, customFont: custom });
+      fontPreview.textContent = t('知更 RobinRead — 纸上见字如面 0123456789');
+    };
+    fontPreview.dataset.fontFamily = layout.fontFamily || 'serif';
+    fontPreview.dataset.customFont = layout.customFont || '';
+    refreshFontPreview();
+    const fontRow = row(t('正文字体族'), t('宋体系/黑体系/仿宋/楷体四套版式皮肤；霞鹜文楷为内置开源字体（OFL 授权）离线可用；自定义可填系统已装字体名。'), selectControl(
+      Object.entries(READER_FONT_LABELS).map(([value, label]) => [value, t(label)]),
+      layout.fontFamily || 'serif',
+      async (value) => {
+        fontPreview.dataset.fontFamily = value;
+        refreshFontPreview();
+        await window.robin.setReaderLayout({ fontFamily: value });
+        this.handlers.onRefreshState?.();
+      },
+    ));
+    const customFontRow = row(t('自定义字体'), t('输入系统已安装的字体名（不导入字体文件）；留空或字体缺失时回退宋体系。选择「自定义…」后生效。'), (() => {
+      const wrap = document.createElement('div');
+      wrap.className = 'setting-control';
+      wrap.style.cssText = 'display:flex;flex-direction:column;gap:var(--space-2);align-items:stretch;';
+      const input = document.createElement('input');
+      input.className = 'control';
+      input.type = 'text';
+      input.spellcheck = false;
+      input.placeholder = t('如：Microsoft YaHei UI / 楷体 / 思源宋体');
+      input.value = layout.customFont || '';
+      input.dataset.role = 'custom-font-input';
+      let timer = null;
+      input.addEventListener('input', () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(async () => {
+          fontPreview.dataset.customFont = input.value;
+          refreshFontPreview();
+          await window.robin.setReaderLayout({ fontFamily: 'custom', customFont: input.value });
+          this.handlers.onRefreshState?.();
+        }, 500);
+      });
+      wrap.appendChild(input);
+      return wrap;
+    })());
     container.appendChild(group(t('阅读排版'), t('字体、页宽、行距与列表密度，即刻生效并跨重启保持。'), [
-      row(t('正文字体'), t('霞鹜文楷为内置开源字体（OFL 授权），离线可用，楷体风格适合文艺类长文。'), selectControl(
-        [['serif', t('衬线（默认）')], ['sans', t('无衬线')], ['wenkai', t('霞鹜文楷（内置）')]],
-        layout.fontFamily || 'serif',
-        async (value) => { await window.robin.setReaderLayout({ fontFamily: value }); this.handlers.onRefreshState?.(); },
-      )),
+      fontRow,
+      customFontRow,
+      (() => { const pr = row(t('字体预览'), null, fontPreview); pr.dataset.role = 'font-preview-row'; return pr; })(),
       row(t('标题字体'), t('标题、刊头独立选字；得意黑为内置开源斜体黑（OFL 授权），仅适合大标题，不适合正文。'), selectControl(
         [['inherit', t('跟随正文（默认）')], ['smiley', t('得意黑（内置）')]],
         layout.titleFont || 'inherit',

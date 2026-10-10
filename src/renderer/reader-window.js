@@ -17,6 +17,7 @@ import {
   applyPalette, clearPalette, fullPalette,
   normalizeTokens, switchModeTokens,
 } from './views/theme-engine.js';
+import { resolveReaderFontStack } from './data/font-family-presets.js'; /* U21 字体族套装 */
 
 const params = new URLSearchParams(location.search);
 const entryID = params.get('entry') || '';
@@ -37,12 +38,14 @@ function showToast(message) {
 /** 排版变量（app.js applyReaderLayout 的 reader 作用域子集：字体/页宽/行距/字距/标题字）。 */
 function applyReaderLayoutCSS(layout) {
   const root = document.documentElement;
-  const fontMap = { serif: 'var(--font-serif)', sans: 'var(--font-sans)', wenkai: '"LXGW WenKai Screen", var(--font-serif)' };
+  // U21 字体族套装：与主窗同源（font-family-presets.js 单一数据源，四档皮肤+自定义）
+  const fontStack = resolveReaderFontStack(layout);
   const widthMap = { narrow: '680px', standard: '820px', wide: '960px' };
   const heightMap = { compact: '1.55', standard: '1.72', loose: '1.95' };
   const letterMap = { normal: '0.006em', wide: '0.028em', loose: '0.05em' };
   const titleMap = { inherit: 'var(--font-serif)', smiley: '"Smiley Sans", var(--font-serif)' };
-  root.style.setProperty('--reader-font', fontMap[layout?.fontFamily] || fontMap.serif);
+  root.style.setProperty('--reader-font', fontStack);
+  root.style.setProperty('--reader-font-family', fontStack);
   root.style.setProperty('--reader-page-width', widthMap[layout?.pageWidth] || widthMap.standard);
   root.style.setProperty('--reader-line-height', heightMap[layout?.lineHeight] || heightMap.standard);
   root.style.setProperty('--reader-letter-spacing', letterMap[layout?.letterSpacing] || letterMap.normal);

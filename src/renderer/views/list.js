@@ -10,6 +10,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
+import { snapshotEntryTitle, setSharedSnapshot } from './shared-transition.js'; /* U22 共享元素转场（FLIP First 快照） */
 import { EditionReader } from './edition-reader.js';
 import { paperPref, setPaperPref } from './paper-pref.js';
 import { feedIconURL } from './sidebar.js';
@@ -592,6 +593,8 @@ export class ListView {
         else this._togglePick(item.id);
         return;
       }
+      // U22 共享元素转场：打开前快照行标题（FLIP First；阅读器渲染后按 ID 消费，超时/换文自动失效）
+      setSharedSnapshot(snapshotEntryTitle(item.id, row.querySelector('.entry-title')));
       this.handlers.onSelect(item.id, item);
     });
     row.addEventListener('contextmenu', (event) => {

@@ -863,6 +863,8 @@ function registerIPCHandlers(store, window) {
   handle('userScripts:list', () => ({ scripts: US().list() }));
   handle('userScripts:enabled', () => ({ scripts: US().enabledScripts() }));
   handle('userScripts:get', (id) => US().get(String(id || '')));
+  // 脚本输出消毒（批 J 审查 P2）：用户脚本变换结果直达 innerHTML 前的最后闸门
+  handle('userScripts:sanitize', (html) => ArticleExtractor.sanitizedHTML(String(html || '')));
   handle('userScripts:import', (payload) => US().importScript(payload)); // 载荷=JSON 字符串或对象（文件导入走 importPick 对话框）
   handle('userScripts:importPick', async () => {
     const result = await dialog.showOpenDialog(window, {
@@ -1258,6 +1260,7 @@ function registerIPCHandlers(store, window) {
   handle('kb:addTag', (itemID, tag) => K().addManualTag(itemID, tag));
   handle('kb:removeTag', (itemID, tag) => K().removeTag(itemID, tag));
   handle('kb:stats', (days) => K().getStats(days || 30));
+  handle('kb:wrapped', () => K().wrapped()); // U25 阅读年报：本年统计聚合（只读）
   handle('kb:collections', () => K().listCollections());
   handle('kb:createCollection', (name, desc) => K().createCollection(name, desc));
   handle('kb:updateCollection', (id, patch) => K().updateCollection(id, patch || {}));

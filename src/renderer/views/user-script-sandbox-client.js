@@ -30,6 +30,7 @@ function teardownFrame() {
   try { frameEl?.remove(); } catch (_) { /* 已移除 */ }
   frameEl = null;
   readyPromise = null;
+  readyResolve = null;
 }
 
 function ensureFrame() {
@@ -44,17 +45,22 @@ function ensureFrame() {
   readyPromise = new Promise((resolve) => {
     // 就绪与结果共用一个监听；帧起不来时超时放行（调用方走零脚本降级）
     window.addEventListener('message', onFrameMessage);
-    setTimeout(resolve, READY_TIMEOUT_MS);
+    readyResolve = resolve;
+    setTimeout(resolve, READY_TIMEOUT_MS); // 兜底：帧起不来的降级通路
   });
   document.body.appendChild(frameEl);
   return readyPromise;
 }
 
+let readyResolve = null;
+
 function onFrameMessage(event) {
   const data = event.data;
   if (!data || typeof data !== 'object' || typeof data.kind !== 'string') return;
   if (data.kind === 'us-sandbox-ready') {
-    // 就绪广播：持有 readyPromise 的等待方自行 resolve，这里无需额外状态
+    // 就绪广播：立即兑现 readyPromise（批 J 审查 P1：原实现只等 4s 超时兜底，
+    // 启用脚本后首篇打开固定多 4s；重建帧后本分支同样即时兑现新 promise）
+    if (readyResolve) { readyResolve(); readyResolve = null; }
     return;
   }
   if (data.kind === 'us-sandbox-result' && pending.has(data.nonce)) {

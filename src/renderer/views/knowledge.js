@@ -10,6 +10,7 @@ import { emptyArtSVG } from './empty-art.js';
 import { renderMarkdown } from '../markdown.js';
 import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline, onResolutionChange } from './chart-kit.js'; /* U16 */
 import { renderSpectrum } from './spectrum-view.js'; /* F38 来源立场光谱 */
+import { renderWrapped } from './wrapped-view.js'; /* U25 阅读年报 */
 
 const TABS = [
   { id: 'dashboard', label: '看板', icon: 'general' },
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'threads', label: '线索', icon: 'search' },
   { id: 'dash', label: '源体检', icon: 'flame' },
   { id: 'spectrum', label: '光谱', icon: 'spectrum' },
+  { id: 'wrapped', label: '阅读年报', icon: 'spark' }, // U25 阅读年报：本年数据卡+关键词云+分享卡
 ];
 
 // F15 复核过滤 chips：标签云按来源过滤展示（只过滤，不改数据）
@@ -129,6 +131,7 @@ export class KnowledgeCenter {
       threads: async () => window.robin.threadsList(), // F13：线索聚类（_renderThreads 自取详情）
       dash: async () => window.robin.dashOverview(), // F16：源体检总览（60s 缓存）
       spectrum: async () => window.robin.spectrumView(), // F38：来源立场光谱（画像缓存 + 布点投影）
+      wrapped: async () => window.robin.kbWrapped(), // U25：本年统计聚合（reading_stats + 标签频次）
     };
     // P1-5：await 前快照 tab——快速切 tab 时旧载荷不得写错键/错渲染；
     // 落地时已切走则按快照键入缓存（回到该 tab 仍可用），但不渲染当前视图
@@ -226,6 +229,7 @@ export class KnowledgeCenter {
       case 'threads': this._renderThreads(); break;
       case 'dash': this._renderDash(data || {}); break;
       case 'spectrum': this._renderSpectrum(data || null); break;
+      case 'wrapped': this._renderWrapped(data || {}); break;
     }
   }
 
@@ -2284,6 +2288,11 @@ export class KnowledgeCenter {
   /** 来源立场光谱（F38）：轴 + 源点布点 + 右侧详情（spectrum-view.js 渲染）。 */
   _renderSpectrum(data) {
     renderSpectrum(this.contentHost, data, { toast: this.handlers?.toast });
+  }
+
+  /** 阅读年报（U25）：四大数据卡 + 关键词云 + 分享卡导出（wrapped-view.js 渲染）。 */
+  _renderWrapped(data) {
+    renderWrapped(this.contentHost, data, { toast: this.handlers?.toast });
   }
 
   _renderDash(data) {

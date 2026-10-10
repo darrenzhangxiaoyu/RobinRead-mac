@@ -81,6 +81,7 @@ const OFFLINE = [
   { file: 'scripts/diag-u6-u10.js', runner: 'electron', desc: 'U6–U10 视觉轮：暗色表面三档与阴影加深档+季节套包+图标描边/阶梯统一+滚动条 hover 加宽与 smooth 限锚点+resize 过渡抑制（离线）' },
   { file: 'scripts/diag-u11-u15.js', runner: 'electron', desc: 'U11–U15 视觉轮：插画空态与骨架屏/进度语言+按压开关悬停微交互+Toast 栈三态与进度通知+设置全屏化导航搜索+期刊封面确定性版画（离线）' },
   { file: 'scripts/diag-u16-u20.js', runner: 'electron', desc: 'U16–U20 收官视觉轮：chart-kit 图表 dpr/令牌色/入场动画（折线生长/柱条升起/reduced-motion 终态）+命令面板 2.0（模糊高亮/图标行/预览窗格）+焦点环三档与设置/自进化导航 ↑↓+标题栏拖拽态与 snap 提示层+字号阶梯归簇与跨视图漂移合并（离线）' },
+  { file: 'scripts/diag-u21-25a.js', runner: 'electron', timeout: 480000, desc: '视觉批 1：U21 字体族套装（四套版式皮肤+自定义字体+设置选择器/输入/即时预览+持久化+reader 双变量链）+U22 共享元素转场（FLIP 快照/幽灵飞入/reduced-motion 直达）+U23 主题切换渐变（过渡类 300ms 摘除/启动不渐变）+U24 触控板手势（捏合字号/滚动语义保持/触屏长按右键）+U25 阅读年报（年度聚合/四数据卡 countup/关键词云/确定性 SVG 分享卡）（离线）' },
   { file: 'scripts/diag-r45-details.js', runner: 'electron', desc: 'R45 细节三连：chips 卫生/清除键 aria/批量条 toolbar（离线）' },
   { file: 'scripts/diag-r39-details.js', runner: 'electron', desc: 'R39 细节三连：时间/来源悬停全量+清除键命中区（离线）' },
   { file: 'scripts/diag-r40-details.js', runner: 'electron', desc: 'R40 细节三连：chips 换行/历史键盘导航/工具条 aria（离线）' },

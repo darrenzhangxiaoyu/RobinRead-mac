@@ -3637,6 +3637,8 @@ class AppStore extends EventEmitter {
   readerLayout() {
     return {
       fontFamily: this.preferences.get('RobinRead.readerFontFamily', 'serif'),
+      // U21 自定义字体名（fontFamily='custom' 时由渲染层拼栈；空名回退宋体系）
+      customFont: this.preferences.get('RobinRead.readerCustomFont', ''),
       pageWidth: this.preferences.get('RobinRead.readerPageWidth', 'standard'),
       lineHeight: this.preferences.get('RobinRead.readerLineHeight', 'standard'),
       // 排版引擎 v2（调研报告 2026-09-26 方向 1/4/7）：段落风格 / 对齐 / 字距 / 中文微排版 / 首字下沉 / 标题字体
@@ -3731,7 +3733,10 @@ class AppStore extends EventEmitter {
 
   setReaderLayout(patch) {
     const allowed = {
-      fontFamily: ['serif', 'sans', 'wenkai'],
+      // U21 字体族套装：四档版式皮肤（serif 宋体系 / sans 黑体系 / fangsong 仿宋 / kaiti 楷体）
+      // + wenkai（内置楷体兼容键）+ custom（自定义系统字体名，配套 customFont 字段）
+      fontFamily: ['serif', 'sans', 'wenkai', 'fangsong', 'kaiti', 'custom'],
+      customFont: null, // 自定义字体名：自由字符串（消毒后落库），走下方专门分支
       pageWidth: ['narrow', 'standard', 'wide'],
       lineHeight: ['compact', 'standard', 'loose'],
       paraStyle: ['spacing', 'indent'],
@@ -3755,6 +3760,18 @@ class AppStore extends EventEmitter {
       // 自定义 CSS（方向 24）：自由字符串，不进 readerLayout 快照（避免每次状态推送携带大文本）
       if (key === 'customCss') {
         this.preferences.set('RobinRead.readerCustomCSS', String(value ?? '').slice(0, 40000));
+        continue;
+      }
+      // U21 自定义字体名：剥除 font-family 语法字符（引号/分号/花括号/反斜杠）防 CSS 注入，80 字封顶
+      if (key === 'customFont') {
+        const name = String(value ?? '')
+          .replace(/["';{}\\]/g, '')
+          // eslint-disable-next-line no-control-regex
+          .replace(/[\u0000-\u001f\u007f]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80);
+        this.preferences.set('RobinRead.readerCustomFont', name);
         continue;
       }
       if (allowed[key] && allowed[key].includes(value)) {

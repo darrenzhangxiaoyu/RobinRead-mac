@@ -259,6 +259,7 @@ contextBridge.exposeInMainWorld('robin', {
   userScriptsList: () => data('userScripts:list'),
   userScriptsEnabled: () => data('userScripts:enabled'),
   userScriptsGet: (id) => data('userScripts:get', id),
+  userScriptsSanitize: (html) => invoke('userScripts:sanitize', html), // 脚本输出消毒（批 J 审查 P2）
   userScriptsImport: (payload) => invoke('userScripts:import', payload),
   userScriptsImportPick: () => invoke('userScripts:importPick'),
   userScriptsSetEnabled: (id, enabled) => invoke('userScripts:setEnabled', id, enabled === true),
@@ -453,6 +454,7 @@ contextBridge.exposeInMainWorld('robin', {
   kbAddTag: (itemID, tag) => invoke('kb:addTag', itemID, tag),
   kbRemoveTag: (itemID, tag) => invoke('kb:removeTag', itemID, tag),
   kbStats: (days) => data('kb:stats', days),
+  kbWrapped: () => data('kb:wrapped'), // U25 阅读年报：本年聚合（只读）
   kbCollections: () => data('kb:collections'),
   kbCreateCollection: (name, desc) => invoke('kb:createCollection', name, desc),
   kbUpdateCollection: (id, patch) => invoke('kb:updateCollection', id, patch),
