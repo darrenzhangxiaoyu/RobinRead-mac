@@ -2701,6 +2701,33 @@ const STRINGS = {
   // U35 划词浮条 2.0
   "复制所选文字": { zh: "复制所选文字", en: "Copy Selected Text" },
   "已复制所选文字": { zh: "已复制所选文字", en: "Selected text copied" },
+  // U37 表格化高级设置
+  "优先级": { zh: "优先级", en: "Priority" },
+  "操作符": { zh: "操作符", en: "Conditions" },
+  "命中数": { zh: "命中数", en: "Hits" },
+  "启停": { zh: "启停", en: "On/Off" },
+  "同步状态": { zh: "同步状态", en: "Sync Status" },
+  "邮箱": { zh: "邮箱", en: "Mailbox" },
+  "动作": { zh: "动作", en: "Actions" },
+  " 或 ": { zh: " 或 ", en: " or " },
+  " 且 ": { zh: " 且 ", en: " and " },
+  "打标签「%@」": { zh: "打标签「%@」", en: "Tag \"%@\"" },
+  // U38 首启引导流
+  "新手引导": { zh: "新手引导", en: "Welcome Tour" },
+  "重看新手引导": { zh: "重看新手引导", en: "Replay the Welcome Tour" },
+  "重看引导": { zh: "重看引导", en: "Replay Tour" },
+  "添加订阅、AI 配置与快捷键的三步引导。错过或想再看一遍，从这里重开。": { zh: "添加订阅、AI 配置与快捷键的三步引导。错过或想再看一遍，从这里重开。", en: "A three-step tour covering feeds, AI setup and shortcuts. Missed it or want another look? Restart here." },
+  "欢迎来到知更": { zh: "欢迎来到知更", en: "Welcome to RobinRead" },
+  "三步把阅读台搭起来：先添加你的第一个订阅源。": { zh: "三步把阅读台搭起来：先添加你的第一个订阅源。", en: "Three steps to set up your reading desk: start by adding your first feed." },
+  "配置 AI（可跳过）": { zh: "配置 AI（可跳过）", en: "Set Up AI (Optional)" },
+  "配上 AI 服务商即可解锁摘要、深读与逐段翻译；不配置也不影响阅读。": { zh: "配上 AI 服务商即可解锁摘要、深读与逐段翻译；不配置也不影响阅读。", en: "Add an AI provider to unlock summaries, deep reads and paragraph translation; reading works fine without it." },
+  "打开 AI 设置": { zh: "打开 AI 设置", en: "Open AI Settings" },
+  "一切就绪": { zh: "一切就绪", en: "All Set" },
+  "先记几枚最常用的键——其余随时按 Ctrl+/ 查看。": { zh: "先记几枚最常用的键——其余随时按 Ctrl+/ 查看。", en: "Memorize a few keys first — press Ctrl+/ anytime for the full list." },
+  "下一步": { zh: "下一步", en: "Next" },
+  "上一步": { zh: "上一步", en: "Back" },
+  "跳过引导": { zh: "跳过引导", en: "Skip Tour" },
+  "开始使用": { zh: "开始使用", en: "Start Reading" },
 };
 
 module.exports = { STRINGS };

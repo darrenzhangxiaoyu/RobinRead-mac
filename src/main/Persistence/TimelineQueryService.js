@@ -24,6 +24,9 @@ function rowToListItem(row) {
     title: row.title ?? '',
     url: row.url ?? null,
     summaryPreview: String(row.summary ?? '').slice(0, 240),
+    // 正文头 1600 字符（SQL 已截断）：杂志刊头封面/杂志卡三变体（U36）按它探测首图。
+    // 此前 SQL 选取 content_head 但投影层漏映射——杂志封面判定永远走无图分支（潜伏缺陷，U36 修复）。
+    contentHead: row.content_head ?? '',
     readMinutes: estimateReadingMinutes(row.content_length, Number(row.summary?.length) || 0),
     sourceTitle: row.feed_title ?? '',
     publishedAt: row.published_at ?? null,

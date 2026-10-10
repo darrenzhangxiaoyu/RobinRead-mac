@@ -9,6 +9,7 @@
  * 兼容合同：app.js 与 dialogs.js 的旧 showToast(message, duration?, action?) 签名
  * 委托到 Toast.show，全部既有调用点零改动。reduced-motion 由 robin.css 全局收敛块兜底。
  */
+import { t } from '../i18n.js'; /* 7042fbe 补 aria-label 时漏带本导入（Toast.progress 即抛 ReferenceError，批 4 回归收口修复） */
 import { icon } from '../icons.js';
 
 const STACK_ID = 'nj-toast-stack';

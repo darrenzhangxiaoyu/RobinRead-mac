@@ -831,8 +831,8 @@ export class SettingsView {
         return btn;
       })()),
     ]);
-    container.appendChild(onboardingGroup);
     container.appendChild(sfxGroup);
+    container.appendChild(onboardingGroup);
 
     // ── 阅读生物钟（F36）：24 桶热力条 + 高峰标注 + 对齐动作开关 ──
     await this._clockGroup(container);
