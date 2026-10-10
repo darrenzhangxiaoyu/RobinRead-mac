@@ -39,6 +39,7 @@ import { MediaMiniPlayer } from './views/media-player.js';
 import { PicksTTSPlayer } from './views/picks-tts.js';
 import { RadioPlayer } from './views/radio-player.js';
 import { FocusSessionPanel } from './views/focus-session.js';
+import { VoiceOrb } from './views/voice-orb.js';
 import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 import { syncPaletteCommand } from './views/sync-command.js';
@@ -171,6 +172,24 @@ async function bootstrap() {
     preferAI: radioPreferAI,
   });
   window.__robinRadio = views.radio; // E2E 测试句柄（含四方互斥反向缝）
+  // F35 语音指挥舱：朗读/电台 active 时浮出浮球（识别/口令环动作集在此注入）
+  views.voice = new VoiceOrb({
+    toast: showToast,
+    enabled: () => state.snapshot?.preferences?.voiceEnabled === true,
+    lang: () => (state.snapshot?.language === 'en' ? 'en' : 'zh'),
+    isActive: () => {
+      if ((views.radio?.state || 'idle') !== 'idle') return 'radio';
+      if ((views.reader?.ttsState || 'idle') !== 'idle') return 'reader';
+      return null;
+    },
+    actions: voiceCommandActions(),
+  });
+  views.voice.mount();
+  window.__robinVoice = views.voice; // E2E 测试句柄（能力探测/口令匹配/口令环）
+  window.__robinRefreshState = refreshState; // 探针注入缝：开关翻转后手动刷快照（voiceEnabled 等偏好读回）
+  // F36 生物钟：打开应用时若处于高峰时段且浅色主题 → 温和专注提示（每天至多一次）
+  window.__robinClockPrompt = mountPeakFocusPrompt; // 探针注入缝（正常路径由 setTimeout 触发）
+  setTimeout(mountPeakFocusPrompt, 4000);
   // F20 专注会话：内存对象（不持久化），篇数经 handleEntrySelect 钩子计数
   views.focus = new FocusSessionPanel({ toast: showToast });
   window.__robinFocus = views.focus; // E2E 测试句柄（探针注入时间加速）
@@ -1269,6 +1288,7 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
       radioBtn.style.display = '';
       mountDigestGoal(body);
       mountDigestCapsules(body); // F27：时间胶囊段浮在简报顶部
+      mountDigestClock(body); // F36：生物钟行（高峰 HH:00-HH:00）浮在简报顶部
       return;
     }
   }
@@ -1307,6 +1327,7 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
   radioBtn.style.display = '';
   mountDigestGoal(body);
   mountDigestCapsules(body); // F27：时间胶囊段浮在简报顶部
+  mountDigestClock(body); // F36：生物钟行（高峰 HH:00-HH:00）浮在简报顶部
 }
 
 /**
@@ -2379,7 +2400,9 @@ function openCourseView() {
 function openFromOverlay(entryID) {
   try { window.__robinWeeklyView?.dismiss(); } catch (_) { /* 已关 */ }
   try { window.__robinCourseView?.dismiss(); } catch (_) { /* 已关 */ }
-  handleEntrySelect(entryID, { isRead: true, isStarred: false });
+  // 不传 isRead:true（批 E 审查 P1：短路 markRead 使课程「完成本日」永远差一篇）——
+  // 走 handleEntrySelect 既有语义：打开即标已读，课程勾选自然达成
+  handleEntrySelect(entryID, { isRead: false, isStarred: false });
 }
 
 // MARK: - 时间胶囊（F27：到期浮出 + 开启仪式）
@@ -2520,6 +2543,112 @@ function openCapsuleCeremony(capsule, { from = null } = {}) {
 }
 
 /**
+ * 语音指挥舱动作集（F35）：识别与口令环共用的 dispatch 目标。
+ * - 电台 active 时 toggle/next/prev 走电台（下/上一句）；否则走阅读器/列表。
+ * - 「讲重点」：AI 摘要（缓存优先生成兜底）→ 精选播报链读出；无 Key 降级跳下一篇。
+ */
+function voiceCommandActions() {
+  const radioActive = () => (views.radio?.state || 'idle') !== 'idle';
+  const voiceGoto = async (direction) => {
+    if (radioActive()) {
+      if (direction === 'next') views.radio.nextSentence();
+      else views.radio.previousSentence();
+      return;
+    }
+    if (!state.selectedEntryID) return;
+    const result = await window.robin.getAdjacent(state.scope, state.selectedEntryID, direction);
+    const adjacent = result.ok ? result.data : null;
+    if (!adjacent) { showToast(t('已经是这一方向的文章尽头')); return; }
+    await handleEntrySelect(adjacent.id, adjacent);
+  };
+  return {
+    toggle: async () => {
+      if (radioActive()) { views.radio.toggle(); return; }
+      if ((views.reader?.ttsState || 'idle') !== 'idle' || state.selectedEntryID) views.reader?.toggleTTS?.();
+    },
+    next: () => voiceGoto('next'),
+    prev: () => voiceGoto('prev'),
+    star: async () => {
+      const entryID = state.selectedEntryID || views.reader?.entryID;
+      if (!entryID) { showToast(t('没有正在阅读的文章')); return; }
+      const next = await window.robin.toggleStar(entryID);
+      showToast(next ? t('已收藏') : t('已取消收藏'));
+    },
+    summarize: async () => {
+      const entryID = state.selectedEntryID || views.reader?.entryID;
+      if (!entryID) { showToast(t('没有正在阅读的文章')); return; }
+      // 无 Key 降级：跳到下一篇（口令闭环不断）
+      if (!state.snapshot?.hasAPIKey) { showToast(t('未配置 AI Key，跳到下一篇')); await voiceGoto('next'); return; }
+      const result = await window.robin.generateSummary(entryID).catch((err) => ({ ok: false, error: String(err?.message || err) }));
+      const content = result?.ok ? String(result.data?.content || '').trim() : '';
+      if (!content) {
+        showToast(t('摘要生成失败，跳到下一篇'));
+        await voiceGoto('next');
+        return;
+      }
+      await views.picksTTS?.play?.(content.slice(0, 600));
+    },
+    close: () => {
+      const overlay = document.querySelector('.digest-modal')?.closest('.modal-overlay');
+      if (overlay) { overlay.remove(); return; }
+      document.querySelector('.nj-brief-modal')?.closest('.modal-overlay')?.remove();
+    },
+  };
+}
+
+/**
+ * 阅读生物钟（F36）：每日简报顶部「你的生物钟」行——高峰 HH:00-HH:00（对齐动作开关可关）。
+ */
+async function mountDigestClock(body) {
+  try {
+    const config = await window.robin.clockConfig?.();
+    if (config && config.digestLine === false) return;
+    const status = await window.robin.clockStatus?.();
+    if (!status?.peak) return; // 冷启动未判定：整行隐藏
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!document.body.contains(body) || body.querySelector('.dg-clock')) return;
+      const line = document.createElement('div');
+      line.className = 'dg-clock';
+      line.dataset.role = 'digest-clock';
+      line.innerHTML = `${icon('clock')}<span class="dg-clock-text"></span>`;
+      const label = status.isPeakNow ? t('现在是你的高峰阅读时段') : t('你的生物钟');
+      line.querySelector('.dg-clock-text').textContent = `${label}：高峰 ${status.peakLabel}`;
+      body.insertBefore(line, body.firstChild);
+    }));
+  } catch (_) { /* 生物钟行失败不阻塞简报 */ }
+}
+
+/**
+ * 高峰专注提示条（F36）：打开应用时处于高峰时段且主题为浅色 → 温和提示
+ * 「要进入专注模式吗？」（每天至多一次；主进程记天，渲染层判主题与点击行为）。
+ */
+async function mountPeakFocusPrompt() {
+  try {
+    const config = await window.robin.clockConfig?.();
+    if (!config || config.focusPrompt === false) return;
+    const status = await window.robin.clockStatus?.();
+    if (!status?.isPeakNow) return;
+    const theme = state.snapshot?.preferences?.appTheme || 'system';
+    const prefersDark = Boolean(state.snapshot?.prefersDark);
+    const lightTheme = theme === 'light' || (theme === 'system' && !prefersDark);
+    if (!lightTheme) return;
+    if (!(await window.robin.clockShouldPromptFocus?.())) return;
+    await window.robin.clockMarkFocusPrompted();
+    const bar = document.createElement('div');
+    bar.className = 'nj-clock-prompt';
+    bar.dataset.role = 'clock-focus-prompt';
+    bar.innerHTML = `<span class="nj-clock-prompt-text"></span>`
+      + `<button type="button" class="btn-text primary nj-clock-prompt-go"></button>`
+      + `<button type="button" class="btn icon-only nj-clock-prompt-close">${icon('close')}</button>`;
+    bar.querySelector('.nj-clock-prompt-text').textContent = t('你的高峰阅读时段，要进入专注模式吗？');
+    bar.querySelector('.nj-clock-prompt-go').textContent = t('进入专注模式');
+    bar.querySelector('.nj-clock-prompt-go').addEventListener('click', () => { bar.remove(); views.focus?.open?.(); });
+    bar.querySelector('.nj-clock-prompt-close').addEventListener('click', () => bar.remove());
+    document.body.appendChild(bar);
+  } catch (_) { /* 提示条失败静默 */ }
+}
+
+/**
  * 每日简报顶部「时间胶囊」段（F27）：今日到期 N 枚——当年批注原文 + 文章标题
  * +「当时写下的」语态；点击开启仪式 → 直达文章。无到期时整段隐藏。
  */
@@ -2562,8 +2691,7 @@ async function mountDigestCapsules(body) {
   } catch (_) { /* 胶囊段失败不阻塞简报 */ }
 }
 
-/** F27：侧栏徽章热更（开启胶囊后计数即时回落）。 */
-function refreshSidebarBadges() {
+/** F27：侧栏徽章热更（开启胶囊后计数即时回落）。 */function refreshSidebarBadges() {
   try { views.sidebar?._refreshCapsuleBadge?.(); } catch (_) { /* 忽略 */ }
 }
 

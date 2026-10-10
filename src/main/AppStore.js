@@ -51,6 +51,8 @@ const { CapsuleService } = require('./CapsuleService'); // 时间胶囊（F27）
 const { RobinBundleService } = require('./RobinBundleService'); // 批注漂流瓶（F28）：.robin 包导出/导入/合并
 const { WeeklyService } = require('./WeeklyService'); // AI 周刊编辑部（F29）：上周阅读 → 导语+板块+金句+EPUB
 const { CourseService } = require('./CourseService'); // 自学课程引擎（F30）：目标 → 7/14 天课程 + 今日课推进
+const { ReadingClockService } = require('./ReadingClockService'); // 阅读生物钟（F36）：小时桶统计 + 7 天加权高峰 + 对齐动作
+const { VoiceCommandService } = require('./VoiceCommandService'); // 语音指挥舱（F35）：口令表 + 模糊匹配（识别在渲染层）
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -188,6 +190,8 @@ class AppStore extends EventEmitter {
     this.bundles = new RobinBundleService(this, userDataPath); // 批注漂流瓶（F28）：.robin 包导出/导入/双端合并
     this.weekly = new WeeklyService(this); // AI 周刊编辑部（F29）：每周一自动把上周阅读编成《知更周刊》
     this.course = new CourseService(this); // 自学课程引擎（F30）：学习目标 → 7/14 天课程 + 今日课推进
+    this.clock = new ReadingClockService(this); // 阅读生物钟（F36）：小时桶 + 高峰判定 + 对齐动作（markRead/时长脉冲喂入）
+    this.voice = new VoiceCommandService(this); // 语音指挥舱（F35）：口令表 + 模糊匹配（零 AI，识别在渲染层）
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -488,7 +492,27 @@ class AppStore extends EventEmitter {
       // 每源全文抓取三态偏好（F1）：off（默认）/ on / newOnly，列表徽标与设置页用
       fulltextFeedModes: this.fulltext.feedModes(),
       listWidth: this.preferences.get(PreferenceKey.listWidth, 340),
+      // 语音指挥舱（F35）：开关（识别能力探测与浮球在渲染层）
+      voiceEnabled: this.preferences.get('RobinRead.voice.enabled', false) === true,
+      // 阅读生物钟（F36）：对齐动作三开关（热力条数据走 clock:status 通道）
+      clock: this.clock.getConfig(),
     };
+  }
+
+  /**
+   * 自动刷新「锚点小时」：最近一次成功刷新所在的小时（F36 刷新调度建议的对照值）。
+   * 全源从未刷新（或仅手动）→ null——生物钟侧按「暂无固定锚点」给建议。
+   */
+  refreshAnchorHour() {
+    let latest = 0;
+    for (const account of this.accounts.enabledAccounts()) {
+      for (const feed of this.feedsRepo.feeds(account.id)) {
+        const at = Number(feed.lastRefreshedAt ?? feed.last_refreshed_at ?? 0);
+        if (at > latest) latest = at;
+      }
+    }
+    if (!latest) return null;
+    return new Date(latest * 1000).getHours();
   }
 
   _startOfDayTimestamp() {
@@ -1263,6 +1287,8 @@ class AppStore extends EventEmitter {
     // F23 完读浇水：仅 未读→已读 计一次（重复完读被 garden_events UNIQUE 吞掉）
     if (read && entry && !wasRead) {
       try { this.garden.onComplete({ entryID }); } catch (_) { /* 花园钩子不阻塞阅读 */ }
+      // F36 生物钟：真实完读事件喂入当前小时桶（重复已读不重复计）
+      try { this.clock.onRead(); } catch (_) { /* 生物钟钩子不阻塞阅读 */ }
     }
     if (entry) this.evolution.recordBehavior({ itemID: entryID, feedID: entry.feedID, action: read ? 'read' : 'skip' });
     this._noteEntryChange(entryID, read, entry ? entry.isStarred : false);

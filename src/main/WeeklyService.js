@@ -65,11 +65,14 @@ function mondayOf(nowSec) {
   return localDayKey(d);
 }
 
-/** 某时刻的「上一周」周一起点（每周一自动刊 = 上周阅读）。 */
+/** 某时刻的「上一周」周一起点（每周一自动刊 = 上周阅读）。
+ *  日历运算而非 epoch 减 7*86400（批 E 审查 P2：DST 春令时周会算出周日 23:00 → 键变周日 → 全年缺刊）。 */
 function lastWeekStart(nowSec) {
   const thisMonday = mondayOf(nowSec);
   const start = localDayStart(thisMonday);
-  return localDayKey(new Date((start - 7 * 86400) * 1000));
+  const d = new Date(start * 1000);
+  d.setDate(d.getDate() - 7); // 本地日历减 7 天，DST 安全
+  return localDayKey(d);
 }
 
 function isMondayKey(dayKey) {
@@ -121,6 +124,12 @@ class WeeklyService {
     if (missing.length) {
       throw new Error(`数据库 schema 缺少周刊表（${missing.join(', ')}）：DatabaseMigrations v26 未执行`);
     }
+    // 崩溃/硬失败清扫（批 E 审查 P1）：generating 行卡死则该周期数永久不可生成不可重试
+    try {
+      this.store.database.prepare(
+        "UPDATE weeklies SET status = 'failed', error = '上次中断，可重试', updated_at = ? WHERE status = 'generating'"
+      ).run(this._now());
+    } catch (_) { /* 表异常静默：与上方 schema 校验互斥 */ }
   }
 
   now() { return this._now(); }
@@ -139,7 +148,10 @@ class WeeklyService {
   weekData(weekStart) {
     const start = localDayStart(weekStart);
     if (start == null) throw new Error('周刊周期无效（需要 YYYY-MM-DD 的周一）。');
-    const end = start + 7 * 86400;
+    // 窗口终点走日历运算（批 E 审查 P2 同根：epoch +7*86400 在 DST 周会 ±3600s 截尾/漏读）
+    const endCal = new Date(start * 1000);
+    endCal.setDate(endCal.getDate() + 7);
+    const end = localDayStart(localDayKey(endCal));
     const db = this.store.database;
     const reads = db.prepare(`
       SELECT i.id AS entry_id, a.title AS title, a.url AS url,
@@ -265,6 +277,13 @@ class WeeklyService {
         this.counters.cancelled += 1;
         this._fail(target, { id: weeklyID }, '已取消，可重试。');
         return this.get(weeklyID);
+      }
+      // 一般性失败（网络/HTTP 429/超时）也落 failed（批 E 审查 P1：否则 generating 卡死，
+      // 该周期数永久不可生成不可重试——canceller 已删、cancelAI 无对象、无启动清扫）。
+      // 解析失败路径已自行 _fail（error='无法解析…'），此处仅兜底仍停在 generating 的行。
+      const cur = this.getByWeek(target);
+      if (cur && cur.status === 'generating') {
+        this._fail(target, { id: weeklyID }, String((err && err.message) || err).slice(0, 200));
       }
       throw err;
     } finally {

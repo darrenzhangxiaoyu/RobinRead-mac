@@ -27,6 +27,7 @@ const SECTIONS = [
   { id: 'language', title: '语言', icon: 'globe' },
   { id: 'sync', title: '同步', icon: 'cloud' },
   { id: 'transcribe', title: '转写', icon: 'docText' },
+  { id: 'voice', title: '语音指挥', icon: 'mic' },
   { id: 'obsidian', title: 'Obsidian', icon: 'bookOpen' },
   { id: 'bookshelf', title: '书架', icon: 'books' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
@@ -49,6 +50,7 @@ const SECTION_INTRO = {
   language: '界面语言与区域偏好。',
   sync: 'WebDAV 多设备同步与冲突策略。',
   transcribe: '把播客音频转成本地文字稿：可读、可搜、可 AI 摘要。',
+  voice: '朗读或电台播放中动口不动手：语音口令控制播放与收藏。',
   obsidian: '把文章与高亮导出成 Obsidian 知识库。',
   bookshelf: '把文集成书（EPUB）并管理书目。',
   feedback: '喜欢知更的话，这里可以帮到我们。',
@@ -69,6 +71,7 @@ const SECTION_SEARCH_INDEX = {
   language: ['界面语言', '语言选择'],
   sync: ['服务器地址', '用户名', '密码 / 授权码', '测试连接', '自动同步', '立即同步'], /* 用既有 i18n 键（审查 P3：'密码' 是无键裸中文，英文 UI 命中 chip 会回显中文） */
   transcribe: ['开启音频转写', '转写端点', '转写 API Key（可选）', '转写模型名'],
+  voice: ['开启语音指挥', '口令表', '麦克风能力'],
   obsidian: ['导出目录', '导出文章', '导出高亮与批注', '立即导出', '全量重导'],
   bookshelf: ['新建文集'],
   feedback: ['前往官网'],
@@ -253,6 +256,7 @@ export class SettingsView {
       case 'language': this._language(scroll, prefs); break;
       case 'sync': this._sync(scroll); break;
       case 'transcribe': this._transcribe(scroll); break;
+      case 'voice': this._voice(scroll); break;
       case 'obsidian': this._obsidian(scroll); break;
       case 'bookshelf': this._bookshelf(scroll); break;
       case 'feedback': this._feedback(scroll); break;
@@ -684,6 +688,9 @@ export class SettingsView {
       }),
     ]));
 
+    // ── 阅读生物钟（F36）：24 桶热力条 + 高峰标注 + 对齐动作开关 ──
+    await this._clockGroup(container);
+
     // ── 备份与恢复 ──
     container.appendChild(group(t('备份与恢复'), t('备份为单个 JSON 文件（完整数据库 + 偏好）；导入后需重启应用完成恢复，将覆盖当前全部数据。'), [
       row(t('导出备份'), t('生成包含全部订阅、文章、阅读状态与偏好的单文件快照。'), (() => {
@@ -786,6 +793,66 @@ export class SettingsView {
     openBtn.addEventListener('click', () => window.robin.openDataDir());
     actions.append(cleanBtn, openBtn);
     statsHost.appendChild(actions);
+  }
+
+  /**
+   * 阅读生物钟（F36）分组（设置 → 通用）：24 小时桶热力条（近 7 天聚合，纯令牌色）
+   * + 高峰标注 + 对齐动作三开关（刷新建议 / 高峰专注提示 / 简报生物钟行）。
+   */
+  async _clockGroup(container) {
+    const [config, status, advice] = await Promise.all([
+      window.robin.clockConfig?.().catch(() => null),
+      window.robin.clockStatus?.().catch(() => null),
+      window.robin.clockAdvice?.().catch(() => null),
+    ]);
+    const saveToggle = (key) => async (v) => {
+      await window.robin.clockConfig?.({ [key]: v === true });
+      this.handlers.onRefreshState?.();
+    };
+    const alignGroup = group(t('阅读生物钟'), t('按小时统计你的阅读行为（近 7 天加权），刷新建议、专注提示与简报会温和对齐你的高峰时段。全部纯本地统计。'), [
+      toggleRow(t('刷新调度建议'), t('自动刷新锚点不在高峰时段时，在刷新设置里提示「建议改到 HH:00」（不强制修改）。'), config?.alignRefresh !== false,
+        saveToggle('alignRefresh')),
+      toggleRow(t('高峰专注提示'), t('打开应用时正处于高峰时段且为浅色主题 → 温和提示进入专注模式（每天至多一次）。'), config?.focusPrompt !== false,
+        saveToggle('focusPrompt')),
+      toggleRow(t('简报生物钟行'), t('每日简报顶部显示「你的生物钟：高峰 HH:00-HH:00」。'), config?.digestLine !== false,
+        saveToggle('digestLine')),
+    ]);
+    alignGroup.dataset.role = 'clock-align';
+    container.appendChild(alignGroup);
+
+    // 热力条卡片：24 桶柱状（高度 = 相对样本量）+ 高峰小时高亮 + 刻度
+    const heat = document.createElement('div');
+    heat.className = 'settings-group';
+    heat.dataset.role = 'clock-heat';
+    heat.innerHTML = '<div class="settings-group-header"></div><div class="group-rows"><div class="nj-clock-heat-wrap"></div><div class="nj-clock-heat-note"></div></div>';
+    heat.querySelector('.settings-group-header').textContent = t('时段热力（近 7 天）');
+    container.appendChild(heat);
+    const wrap = heat.querySelector('.nj-clock-heat-wrap');
+    const note = heat.querySelector('.nj-clock-heat-note');
+    const buckets = Array.isArray(status?.buckets) ? status.buckets : new Array(24).fill(0);
+    const peak = Array.isArray(status?.peak) ? status.peak : null;
+    const max = Math.max(1, ...buckets);
+    for (let hour = 0; hour < 24; hour += 1) {
+      const cell = document.createElement('span');
+      cell.className = 'nj-clock-cell';
+      cell.dataset.hour = String(hour);
+      if (peak?.includes(hour)) cell.classList.add('peak');
+      const bar = document.createElement('i');
+      bar.style.height = `${Math.max(4, Math.round((buckets[hour] / max) * 100))}%`;
+      cell.title = tf('%lld:00 · %lld 次', hour, buckets[hour]);
+      cell.appendChild(bar);
+      wrap.appendChild(cell);
+    }
+    note.textContent = status?.peak
+      ? tf('你的高峰时段：%@（样本 %lld 次）', status.peakLabel, status.samples)
+      : tf('样本不足 %lld 次，暂不判定高峰（当前 %lld 次）——多读几天自然浮现。', status?.minSamples ?? 20, status?.samples ?? 0);
+    if (advice?.suggest && config?.alignRefresh !== false) {
+      const tip = document.createElement('div');
+      tip.className = 'nj-clock-advice';
+      tip.dataset.role = 'clock-refresh-tip';
+      tip.textContent = tf('建议把自动刷新安排在高峰 %@ 前后，新文章正好赶上你的阅读节奏。', advice.label);
+      heat.querySelector('.group-rows').appendChild(tip);
+    }
   }
 
   // MARK: 账号
@@ -1599,8 +1666,21 @@ export class SettingsView {
 
   // MARK: 刷新 / 语言 / 同步 / 反馈 / 关于
 
-  _refresh(container, prefs) {
-    container.appendChild(group(t('自动刷新'), t('应用保持打开时按此频率检查订阅；系统后台刷新时间可能会有所延迟。'), [
+  async _refresh(container, prefs) {
+    // F36 生物钟对齐：刷新锚点不在高峰时段 → 温和建议（不强制改；开关在 设置 → 通用）
+    const clockTip = document.createElement('div');
+    clockTip.dataset.role = 'clock-refresh-tip';
+    try {
+      const [advice, clockConfig] = await Promise.all([
+        window.robin.clockAdvice?.().catch(() => null),
+        window.robin.clockConfig?.().catch(() => null),
+      ]);
+      if (advice?.suggest && clockConfig?.alignRefresh !== false) {
+        clockTip.className = 'nj-clock-advice inline';
+        clockTip.textContent = tf('生物钟建议：把自动刷新安排在高峰 %@ 前后，新文章正好赶上你的阅读节奏。', advice.label);
+      }
+    } catch (_) { /* 建议拉取失败不阻塞刷新设置 */ }
+    const refreshGroup = group(t('自动刷新'), t('应用保持打开时按此频率检查订阅；系统后台刷新时间可能会有所延迟。'), [
       row(t('刷新频率'), null, selectControl(
         FEED_REFRESH_INTERVALS_META.map(([value]) => [value, t(value === 'manual' ? '仅手动' : intervalLabel(value))]),
         prefs.refreshInterval || 'thirtyMinutes',
@@ -1621,7 +1701,9 @@ export class SettingsView {
         });
         return button;
       })()),
-    ]));
+    ]);
+    container.appendChild(refreshGroup);
+    if (clockTip.textContent) refreshGroup.querySelector('.group-rows').appendChild(clockTip);
     this._fulltextFeeds(container, prefs);
   }
 
@@ -1997,6 +2079,55 @@ export class SettingsView {
     container.appendChild(group(t('工作方式'), null, [
       row(t('离线优先'), t('已离线下载的音频直接读本地文件；未离线的按需临时下载（≤500MB），转写完即删。')),
       row(t('单飞排队'), t('同一时刻只跑一个转写任务，其余自动排队；失败可一键重试。')),
+    ]));
+  }
+
+  /**
+   * 语音指挥（F35）分区：开关（默认关）+ 能力探测说明 + 口令表展示。
+   * 探测不到 webkitSpeechRecognition（或权限拒绝）→ 明确说明，并告知
+   * 口令按钮环降级方案（同样动作集）；Web Speech 若走系统/云端引擎的隐私口径也在此说明。
+   */
+  async _voice(container) {
+    const [cfg, table] = await Promise.all([
+      window.robin.voiceConfig?.().catch(() => null),
+      window.robin.voiceCommands?.().catch(() => null),
+    ]);
+    const enabled = cfg?.enabled === true;
+    const cap = window.__robinVoice?.capabilityState?.() || (window.SpeechRecognition || window.webkitSpeechRecognition ? 'available' : 'ring');
+    const capText = cap === 'available'
+      ? t('已就绪：识别引擎可用，朗读/电台播放时会浮出麦克风浮球。')
+      : cap === 'denied'
+        ? t('麦克风权限被拒绝：本次会话不再重试；授权后重启应用可恢复语音识别。')
+        : t('当前环境不支持语音识别：已自动切换为「口令按钮环」——播放时浮出同样动作的按钮环，点击执行。');
+
+    container.appendChild(group(t('语音指挥'), t('朗读或电台播放中动口不动手：说「暂停」「下一篇」「收藏」「讲重点」即可控制。只在播放时挂识别；关闭开关即完全不启用麦克风。'), [
+      toggleRow(t('开启语音指挥'), t('默认关闭。开启后，阅读器朗读或电台播放时浮出麦克风浮球（识别中带呼吸光环）。'), enabled,
+        async (v) => { await window.robin.voiceSetEnabled?.(v === true); this.handlers.onRefreshState?.(); }),
+      row(t('麦克风能力'), capText, (() => {
+        const badge = document.createElement('span');
+        badge.className = `nj-voice-cap ${cap === 'available' ? 'ok' : cap === 'denied' ? 'warn' : 'ring'}`;
+        badge.dataset.role = 'voice-capability';
+        badge.textContent = cap === 'available' ? t('可用') : cap === 'denied' ? t('权限被拒') : t('口令环模式');
+        return badge;
+      })()),
+    ]));
+
+    // 口令表（跟随界面语言；浮球悬停/长按亦展示同一份）
+    const commands = Array.isArray(table?.commands) ? table.commands : [];
+    container.appendChild(group(t('口令表'), t('模糊匹配：识别文本包含口令即执行；识别语言跟随界面语言（zh-CN / en-US）。'), commands.map((cmd) => row(
+      cmd.label,
+      null,
+      (() => {
+        const chips = document.createElement('span');
+        chips.className = 'nj-voice-chips';
+        chips.textContent = cmd.phrases.map((p) => `「${p}」`).join(' ');
+        return chips;
+      })(),
+    ))));
+
+    container.appendChild(group(t('隐私说明'), null, [
+      row(t('音频去向'), t('语音识别走系统/浏览器引擎（Web Speech）；若你的系统引擎为云端服务，音频将按该服务的政策处理——知更自身不录制、不上传任何音频。')),
+      row(t('「讲重点」'), t('触发当前文章的 AI 摘要播报（走你配置的 AI 服务）；未配置 Key 时自动降级为跳到下一篇。')),
     ]));
   }
 

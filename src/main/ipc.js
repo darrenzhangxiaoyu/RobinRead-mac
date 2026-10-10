@@ -846,7 +846,11 @@ function registerIPCHandlers(store, window) {
   const WK = () => store.weekly;
   handle('weekly:available', () => WK().available());
   handle('weekly:generate', (weekStart) => WK().generateWeek(weekStart ? String(weekStart) : null));
-  handle('weekly:cancel', (weekStart) => store.cancelAI(`weekly:${String(weekStart || WK().snapshot().running[0] || '')}`));
+  handle('weekly:cancel', (weekStart) => {
+    // running[0] 已是完整键（批 E 审查 P1：再拼 weekly: 前缀得 weekly:weekly:，取消静默 no-op）
+    const key = String(weekStart || '') ? `weekly:${String(weekStart)}` : String(WK().snapshot().running[0] || '');
+    return store.cancelAI(key);
+  });
   handle('weekly:list', () => ({ weeklies: WK().list() }));
   handle('weekly:get', (weeklyID) => WK().get(String(weeklyID || '')));
   handle('weekly:export', async (weeklyID) => {
@@ -874,6 +878,25 @@ function registerIPCHandlers(store, window) {
   handle('course:completeDay', (courseID, day) => CS().completeDay(String(courseID || ''), Number(day)));
   handle('course:abandon', (courseID) => CS().abandon(String(courseID || '')));
   handle('course:cancel', () => CS().cancelCreate());
+
+  // MARK: 语音指挥舱（F35：口令表 / 模糊匹配（单一事实源在主进程，渲染层识别回调走此通道）/
+  //   开关持久化）。识别本体（webkitSpeechRecognition）与浮球 UI 在渲染层，可用性探测后启用。
+  const VC = () => store.voice;
+  handle('voice:config', () => VC().getConfig());
+  handle('voice:setEnabled', (value) => VC().setEnabled(value === true));
+  handle('voice:commands', (lang) => ({ lang: VC().lang(), commands: VC().commands(lang ? String(lang) : null) }));
+  handle('voice:match', (text, lang) => VC().match(String(text || ''), lang ? String(lang) : null));
+
+  // MARK: 阅读生物钟（F36：高峰状态（热力条 24 桶）/ 对齐动作开关 / 刷新调度建议；
+  //   时长脉冲走 fire-and-forget（ipcMain.on，渲染层 15s 心跳，不占 invoke 往返））
+  handle('clock:status', () => store.clock.status());
+  handle('clock:advice', () => store.clock.refreshAdvice({ anchorHour: store.refreshAnchorHour() }));
+  handle('clock:config', (patch) => (patch ? store.clock.configure(patch || {}) : store.clock.getConfig()));
+  handle('clock:shouldPromptFocus', () => store.clock.shouldPromptFocus());
+  handle('clock:markFocusPrompted', () => store.clock.markFocusPrompted());
+  ipcMain.on('clock:pulse', (_event, ms) => {
+    try { store.clock.pulse(Number(ms) || 0); } catch (_) { /* 生物钟喂入失败不阻塞 */ }
+  });
 
   // MARK: AI 自动标签（F15：开关（偏好持久化）/ 立即跑一批 / 诊断快照）
   handle('tags:autoConfig', (patch) => {

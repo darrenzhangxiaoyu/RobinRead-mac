@@ -1127,6 +1127,30 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v27-reading-clock',
+    up: (db) => {
+      // ── F36 阅读生物钟 ──
+      // reading_clock：阅读行为的小时桶（一天 × 24 小时，近月滚动保留）。
+      // - 规格「hour 0-23 PK」补充 day 列：同一规格里的「近 7 天样本加权（近一天
+      //   权重高）」需要天归属——纯 hour 主键无法区分今天与六天前的样本，故
+      //   PK(day, hour)（一天每至多一行 × 24 桶），24 小时桶热力条 = 窗口聚合投影。
+      // - count：markRead（未读→已读）次数；total_ms：阅读器开启时的阅读时长脉冲
+      //   累计（渲染层 15s 心跳喂入，单脉冲钳制防休眠虚增）。
+      // - 滚动保留：服务层惰性删除 KEEP_DAYS 窗外旧行（表体量 = 天数 × ≤24 行）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS reading_clock (
+            day       TEXT NOT NULL,
+            hour      INTEGER NOT NULL CHECK (hour BETWEEN 0 AND 23),
+            count     INTEGER NOT NULL DEFAULT 0,
+            total_ms  INTEGER NOT NULL DEFAULT 0,
+            updated_at REAL NOT NULL,
+            PRIMARY KEY (day, hour)
+        );
+        CREATE INDEX IF NOT EXISTS idx_reading_clock_day ON reading_clock(day);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

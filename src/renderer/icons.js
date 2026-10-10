@@ -87,6 +87,8 @@ export const icons = {
   flower: i('<circle cx="8" cy="8" r="1.8"/><path d="M8 6.2V2.4M9.6 7.1l3.4-2M9.5 9.2l3 2.6M6.5 9.2l-3 2.6M6.4 7.1L3 5.1"/>'),
   // F24 观点对照镜：圆镜中轴 + 双面弧（旧文对照）
   mirror: i('<circle cx="8" cy="8" r="6.3"/><path d="M8 1.7v12.6"/><path d="M5.5 6c.9.9.9 3.1 0 4M10.5 6c-.9.9-.9 3.1 0 4"/>'),
+  // F35 语音指挥舱：麦克风（设置分区 + 浮球语义）
+  mic: i('<rect x="6" y="1.6" width="4" height="8" rx="2"/><path d="M3.6 7.6a4.4 4.4 0 0 0 8.8 0"/><path d="M8 12v2.4"/><path d="M5.8 14.4h4.4"/>'),
 };
 
 export function icon(name, extraClass = '') {

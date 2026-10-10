@@ -141,6 +141,7 @@ export class ReaderView {
 
   async open(entryID, { turn = null } = {}) {
     const sameEntry = this.entryID === entryID;
+    this._clockPause(); // F36 生物钟：换文前把上一段的阅读时长脉冲落账
     // 拟真翻页：仅真实换文时触发（启动自动选中/重开同篇不翻）
     if (turn && this.entryID && !sameEntry) this._pageTurn = turn;
     // 切换文章前记住当前阅读位置，回来时恢复
@@ -182,6 +183,7 @@ export class ReaderView {
     // 竞态守卫：_openBody 因切换文章提前返回时，不能拿新文章的 entryID 误触发自动摘要
     // （会与文章 B 自己的触发相撞，弹「已有 AI 摘要任务正在进行」误报）
     if (this.entryID !== entryID) return;
+    this._clockResume(); // F36 生物钟：本篇阅读时长计时开始（15s 心跳喂小时桶）
     // 自动摘要：无缓存、或上次生成被中断（isComplete=false）都自动重生成
     const llm = window.__robinLLM || {};
     const summaryMissing = !this.summary.artifact || this.summary.artifact.isComplete === false;
@@ -478,6 +480,7 @@ export class ReaderView {
   }
 
   clear() {
+    this._clockPause(); // F36 生物钟：清空阅读器时把最后一段阅读时长落账
     this._ttsStop(); // 清空阅读器：停朗读、清队、移除播放器
     document.getElementById('nj-translate-progress')?.remove(); // P2-3：翻译进度浮标随阅读区清空
     if (this.entryID && this.scrollEl) {
@@ -511,6 +514,34 @@ export class ReaderView {
   }
 
   // MARK: - 阅读位置持久化（localStorage 跨会话）
+
+  // MARK: - 阅读生物钟时长脉冲（F36）
+
+  /**
+   * 文章打开后启动 15s 心跳：把本段阅读时长（≥4s 才算）经 clock:pulse 喂入
+   * 主进程小时桶；换文/清空时 _clockPause 落账收表。窗口隐藏不清零——听电台/
+   * 挂后台读也算阅读，单脉冲上限由主进程钳制（防休眠虚增）。
+   */
+  _clockResume() {
+    this._clockMark = Date.now();
+    if (this._clockTimer) return;
+    this._clockTimer = setInterval(() => {
+      if (!this._clockMark) return;
+      const elapsed = Date.now() - this._clockMark;
+      this._clockMark = Date.now();
+      if (elapsed >= 4000) window.robin?.clockPulse?.(elapsed);
+    }, 15000);
+  }
+
+  /** 落账并收表（换文 / 清空阅读器）。 */
+  _clockPause() {
+    if (this._clockTimer) { clearInterval(this._clockTimer); this._clockTimer = null; }
+    if (this._clockMark) {
+      const elapsed = Date.now() - this._clockMark;
+      this._clockMark = 0;
+      if (elapsed >= 4000) window.robin?.clockPulse?.(elapsed);
+    }
+  }
 
   /** 构造时从 localStorage 恢复位置表（JSON 对象，键序即写入序）。 */
   _loadScrollPositions() {

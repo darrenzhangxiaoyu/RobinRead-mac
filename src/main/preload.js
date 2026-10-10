@@ -226,6 +226,20 @@ contextBridge.exposeInMainWorld('robin', {
   courseAbandon: (courseID) => invoke('course:abandon', courseID),
   courseCancel: () => invoke('course:cancel'),
 
+  // 语音指挥舱（F35：配置 / 口令表 / 模糊匹配（主进程单一事实源）；识别与浮球在渲染层）
+  voiceConfig: () => data('voice:config'),
+  voiceSetEnabled: (value) => invoke('voice:setEnabled', value === true),
+  voiceCommands: (lang) => data('voice:commands', lang),
+  voiceMatch: (text, lang) => data('voice:match', text, lang),
+
+  // 阅读生物钟（F36：高峰状态（24 桶热力条+高峰）/ 刷新调度建议 / 对齐动作开关 / 时长脉冲）
+  clockStatus: () => data('clock:status'),
+  clockAdvice: () => data('clock:advice'),
+  clockConfig: (patch) => data('clock:config', patch),
+  clockShouldPromptFocus: () => data('clock:shouldPromptFocus'),
+  clockMarkFocusPrompted: () => invoke('clock:markFocusPrompted'),
+  clockPulse: (ms) => ipcRenderer.send('clock:pulse', ms),
+
   // AI 自动标签（F15：开关读写（偏好持久化）/ 立即跑一批 / 诊断快照）
   tagsAutoConfig: (patch) => data('tags:autoConfig', patch),
   tagsAutoKick: () => invoke('tags:autoKick'),
