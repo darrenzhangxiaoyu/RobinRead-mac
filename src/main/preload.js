@@ -207,6 +207,25 @@ contextBridge.exposeInMainWorld('robin', {
   bundleExport: (payload) => invoke('bundle:export', payload),
   bundleImportPick: () => invoke('bundle:importPick'),
 
+  // AI 周刊编辑部（F29：生成 / 取消 / 列表 / 详情 / 导出 EPUB（保存对话框）；onWeeklyChanged 收后台生成完成）
+  weeklyAvailable: () => data('weekly:available'),
+  weeklyGenerate: (weekStart) => invoke('weekly:generate', weekStart),
+  weeklyCancel: (weekStart) => invoke('weekly:cancel', weekStart),
+  weeklyList: () => data('weekly:list'),
+  weeklyGet: (weeklyID) => data('weekly:get', weeklyID),
+  weeklyExport: (weeklyID) => invoke('weekly:export', weeklyID),
+  onWeeklyChanged: (listener) => subscribe('weekly:changed', listener),
+
+  // 自学课程引擎（F30：可用性 / 创建 / 列表 / 详情 / 今日课 / 完成打卡 / 放弃 / 取消）
+  courseAvailable: () => data('course:available').then((r) => Boolean(r && r.ai)),
+  courseCreate: (goal, days) => invoke('course:create', goal, days),
+  courseList: () => data('course:list'),
+  courseGet: (courseID) => data('course:get', courseID),
+  courseToday: (courseID) => data('course:today', courseID),
+  courseCompleteDay: (courseID, day) => invoke('course:completeDay', courseID, day),
+  courseAbandon: (courseID) => invoke('course:abandon', courseID),
+  courseCancel: () => invoke('course:cancel'),
+
   // AI 自动标签（F15：开关读写（偏好持久化）/ 立即跑一批 / 诊断快照）
   tagsAutoConfig: (patch) => data('tags:autoConfig', patch),
   tagsAutoKick: () => invoke('tags:autoKick'),

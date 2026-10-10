@@ -33,6 +33,8 @@ import { EvolutionView } from './views/evolution-view.js';
 import { AihotView } from './views/aihot-view.js';
 import { MediaView } from './views/media-view.js';
 import { GardenView } from './views/garden-view.js';
+import { WeeklyView } from './views/weekly-view.js';
+import { CourseView } from './views/course-view.js';
 import { MediaMiniPlayer } from './views/media-player.js';
 import { PicksTTSPlayer } from './views/picks-tts.js';
 import { RadioPlayer } from './views/radio-player.js';
@@ -125,6 +127,8 @@ async function bootstrap() {
     onOpenTopics: () => openTopicsView(),
     onOpenGarden: () => openGardenView(),
     onOpenCapsules: () => openCapsuleView(), // F27 时间胶囊：到期浮出兜底入口
+    onOpenWeekly: () => openWeeklyView(), // F29 知更周刊：每周一自动编辑上周阅读
+    onOpenCourse: () => openCourseView(), // F30 自学课程：目标 → 7/14 天课程推进
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -732,6 +736,8 @@ function buildPaletteCommands() {
     { label: t('AI 热点'), keywords: 'aihot 热点 趋势 open', icon: 'flame', action: openAihotView },
     { label: t('知识库'), keywords: 'knowledge 知识 高亮 复习 open', icon: 'bookOpen', hint: 'Ctrl+K', desc: t('高亮、笔记、复习与知识图谱的中心。'), action: openKnowledgeCenter },
     { label: t('时间胶囊'), keywords: 'capsule 时间胶囊 胶囊 封存 浮出 open', icon: 'clock', desc: t('封存给未来的批注，到期随简报浮出。'), action: () => openCapsuleView() },
+    { label: t('知更周刊'), keywords: 'weekly 周刊 杂志 编辑部 报纸 导语 金句 epub open', icon: 'newspaper', desc: t('每周一自动把上周阅读编成一期：导语 + 主题归纳 + 金句。'), action: () => openWeeklyView() },
+    { label: t('自学课程…'), keywords: 'course 课程 学习 目标 今日课 14 天 open', icon: 'bookOpen', desc: t('给一个学习目标，AI 从订阅库排出 7 或 14 天课程。'), action: () => openCourseView() },
     { label: t('导入批注包…'), keywords: 'bundle robin 导入 批注 包 漂流 分享 import', icon: 'import', desc: t('导入 .robin 批注包：读对方的划线与笔记，续写后可导回合并。'), action: () => importRobinBundle() },
     { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
@@ -2357,6 +2363,25 @@ function openGardenView() {
   gv.present();
 }
 
+/** 知更周刊（F29）：报纸版面浮层（报头 + 导语 + 板块 + 金句 + 历史期刊 + EPUB 导出）。 */
+function openWeeklyView() {
+  const wv = new WeeklyView({ toast: showToast, onOpenArticle: openFromOverlay });
+  wv.present();
+}
+
+/** 自学课程（F30）：课程浮层（课程卡 + 今日课面板 + 新目标表单）。 */
+function openCourseView() {
+  const cv = new CourseView({ toast: showToast, onOpenArticle: openFromOverlay });
+  cv.present();
+}
+
+/** 浮层内点文章 → 关浮层直达阅读（读完回到课程/周刊，isRead 勾选随之刷新）。 */
+function openFromOverlay(entryID) {
+  try { window.__robinWeeklyView?.dismiss(); } catch (_) { /* 已关 */ }
+  try { window.__robinCourseView?.dismiss(); } catch (_) { /* 已关 */ }
+  handleEntrySelect(entryID, { isRead: true, isStarred: false });
+}
+
 // MARK: - 时间胶囊（F27：到期浮出 + 开启仪式）
 
 /**
@@ -2807,6 +2832,13 @@ function bindEvents() {
 
   window.robin.onSelectionDelta((payload) => {
     views.reader.onSelectionDelta(payload);
+  });
+
+  // F29 知更周刊：后台自动生成完成 → toast（周刊浮层在场时由视图自身刷新）
+  window.robin.onWeeklyChanged?.((payload) => {
+    if (payload?.status === 'ready' && !document.querySelector('.nj-weekly-overlay')) {
+      showToast(t('本周刊已排好版，来看看吧。'), 4200);
+    }
   });
 
   window.robin.onThemeChanged(({ shouldUseDarkColors }) => {

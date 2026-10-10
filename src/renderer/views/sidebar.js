@@ -459,6 +459,24 @@ export class SidebarView {
     this.capsuleBtn = capsuleBtn;
     this._refreshCapsuleBadge();
 
+    // 知更周刊入口（F29）：每周一自动把上周阅读编成一期（与书架/目标同级的常用档）
+    const weeklyBtn = document.createElement('button');
+    weeklyBtn.className = 'footer-nav-btn footer-weekly-btn';
+    weeklyBtn.title = t('知更周刊');
+    weeklyBtn.innerHTML = `${icon('newspaper')}<span class="nav-label"></span>`;
+    weeklyBtn.querySelector('.nav-label').textContent = t('周刊');
+    weeklyBtn.addEventListener('click', () => this.handlers.onOpenWeekly?.());
+    nav.appendChild(weeklyBtn);
+
+    // 自学课程入口（F30）：学习目标 → 7/14 天课程，每日「今日课」推进
+    const courseBtn = document.createElement('button');
+    courseBtn.className = 'footer-nav-btn footer-course-btn';
+    courseBtn.title = t('自学课程');
+    courseBtn.innerHTML = `${icon('bookOpen')}<span class="nav-label"></span>`;
+    courseBtn.querySelector('.nav-label').textContent = t('课程');
+    courseBtn.addEventListener('click', () => this.handlers.onOpenCourse?.());
+    nav.appendChild(courseBtn);
+
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
     settingsBtn.title = t('设置');

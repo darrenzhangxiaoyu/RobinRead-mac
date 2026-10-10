@@ -7522,3 +7522,83 @@ mark.nj-hl.nj-hl-flash { animation: nj-hl-flash-pulse 1.1s ease-in-out 2; }
 /* ============ F28 批注漂流瓶 ============ */
 /* 无专属面板：导出走主进程保存对话框、导入走打开对话框，反馈统一 toast；
    漂流条目以 platform='drift' 合成源入侧栏，行卡样式与普通文章一致。 */
+
+/* ============ F29 知更周刊（报纸版面） ============ */
+/* 报头（衬线刊名+双细线）/ 导语 / 板块卡 / 金句卡流 / 历史期刊——radius/字号全部走令牌 */
+.nj-weekly-modal { width: min(760px, calc(100vw - 96px)); }
+.nj-weekly-head { gap: var(--space-2); }
+.nj-weekly-body { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); overflow-y: auto; }
+.nj-weekly-masthead { text-align: center; border-top: 2px solid var(--text-primary); border-bottom: 1px solid var(--separator); padding: var(--space-4) 0 var(--space-3); }
+.nj-weekly-name { font-family: var(--font-serif, Georgia, serif); font-size: 26px; font-weight: 700; letter-spacing: 0.14em; }
+.nj-weekly-issue { margin-top: var(--space-1); font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.08em; }
+.nj-weekly-range { margin-top: 3px; font-size: var(--fs-md); color: var(--text-tertiary); letter-spacing: 0.05em; }
+.nj-weekly-intro { background: color-mix(in oklch, var(--accent) 7%, transparent); border: 1px solid color-mix(in oklch, var(--accent) 30%, var(--note-border)); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); }
+.nj-weekly-intro-kicker { display: block; font-size: var(--fs-md); letter-spacing: 0.12em; color: var(--accent); font-weight: 700; margin-bottom: var(--space-1); }
+.nj-weekly-intro p { margin: 0; font-size: 13.5px; line-height: 1.9; }
+.nj-weekly-template-tag { align-self: center; font-size: var(--fs-md); color: var(--text-tertiary); border: 1px dashed var(--note-border); border-radius: var(--radius-full); padding: 2px var(--space-3); }
+.nj-weekly-section { border: 1px solid var(--separator); border-radius: var(--radius-xl); padding: var(--space-3) var(--space-4); background: var(--surface-1); }
+.nj-weekly-section-title { margin: 0 0 var(--space-1); font-family: var(--font-serif, Georgia, serif); font-size: 16.5px; font-weight: 700; border-bottom: 1px solid var(--separator); padding-bottom: var(--space-2); }
+.nj-weekly-section-summary { margin: 0 0 var(--space-2); font-size: 13px; line-height: 1.8; color: var(--text-secondary); }
+.nj-weekly-entry { display: flex; align-items: baseline; gap: var(--space-2); width: 100%; text-align: left; appearance: none; border: 0; border-top: 1px dashed var(--note-border); background: transparent; color: var(--text-primary); font-family: inherit; cursor: pointer; padding: var(--space-2) 2px; font-size: 13px; border-radius: 0; }
+.nj-weekly-entry:hover .nj-weekly-entry-title { color: var(--accent); }
+.nj-weekly-entry-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nj-weekly-entry-src { flex: 0 0 auto; font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-weekly-quotes { display: flex; flex-direction: column; gap: var(--space-2); }
+.nj-weekly-quote { margin: 0; border-left: 3px solid color-mix(in oklch, var(--accent) 55%, transparent); background: var(--note-background); border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); }
+.nj-weekly-quote.clickable { cursor: pointer; }
+.nj-weekly-quote-text { margin: 0; font-family: var(--font-serif, Georgia, serif); font-size: 14.5px; line-height: 1.9; }
+.nj-weekly-quote-src { display: block; margin-top: 3px; font-size: var(--fs-md); font-style: normal; color: var(--text-tertiary); }
+.nj-weekly-history { display: flex; flex-direction: column; }
+.nj-weekly-history-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; text-align: left; appearance: none; border: 0; border-top: 1px dashed var(--note-border); background: transparent; color: var(--text-primary); font-family: inherit; cursor: pointer; padding: var(--space-2) 2px; font-size: 13px; border-radius: 0; }
+.nj-weekly-history-row.is-failed { color: var(--text-tertiary); }
+.nj-weekly-history-state { font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-weekly-retry { flex: 0 0 auto; }
+.nj-weekly-empty, .nj-weekly-loading { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; padding: var(--space-8) 0; }
+.nj-weekly-empty-icon svg, .nj-weekly-loading-icon svg { width: 34px; height: 34px; color: var(--accent); opacity: 0.7; }
+.nj-weekly-empty h3 { margin: 0; font-size: 16px; }
+.nj-weekly-empty p { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 40em; }
+
+/* ============ F30 自学课程 ============ */
+/* 课程卡（目标+进度条）/ 今日课面板（要点+文章行+完成打卡）/ 新目标表单 */
+.nj-course-modal { width: min(640px, calc(100vw - 96px)); }
+.nj-course-body { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); overflow-y: auto; }
+.nj-course-form { display: flex; flex-direction: column; gap: var(--space-2); border: 1px solid var(--separator); border-radius: var(--radius-xl); padding: var(--space-4); background: var(--surface-1); }
+.nj-course-form-label { font-size: var(--fs-md); font-weight: 600; color: var(--text-secondary); }
+.nj-course-goal-input { appearance: none; border: 1px solid var(--note-border); border-radius: var(--radius-md); background: var(--page-background); color: var(--text-primary); font-family: inherit; font-size: 13px; padding: var(--space-2) var(--space-3); }
+.nj-course-goal-input:focus-visible { outline: none; box-shadow: var(--focus-ring); border-color: var(--accent); }
+.nj-course-days { display: flex; gap: var(--space-3); }
+.nj-course-day-opt { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+.nj-course-warn { margin: 0; font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-course-card { display: flex; flex-direction: column; gap: var(--space-2); border: 1px solid var(--separator); border-radius: var(--radius-xl); padding: var(--space-3) var(--space-4); background: var(--surface-1); }
+.nj-course-row { flex-direction: row; align-items: center; justify-content: space-between; cursor: pointer; appearance: none; text-align: left; font-family: inherit; color: var(--text-primary); width: 100%; }
+.nj-course-row.is-history { opacity: 0.66; }
+.nj-course-goal { font-size: 13.5px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nj-course-progress { display: flex; align-items: center; gap: var(--space-3); }
+.nj-course-progress-bar { flex: 1; height: 6px; border-radius: var(--radius-full); background: color-mix(in oklch, var(--accent) 14%, transparent); overflow: hidden; }
+.nj-course-progress-fill { height: 100%; border-radius: var(--radius-full); background: var(--accent); transition: width var(--dur-slow) var(--ease-out); }
+.nj-course-progress-nums { flex: 0 0 auto; font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-course-today { border: 1px solid color-mix(in oklch, var(--accent) 34%, var(--note-border)); border-radius: var(--radius-xl); padding: var(--space-3) var(--space-4); background: color-mix(in oklch, var(--accent) 6%, transparent); display: flex; flex-direction: column; gap: var(--space-2); }
+.nj-course-today-head { display: flex; align-items: baseline; gap: var(--space-2); }
+.nj-course-today-kicker { font-size: var(--fs-md); letter-spacing: 0.12em; color: var(--accent); font-weight: 700; }
+.nj-course-today-head b { font-size: 15px; }
+.nj-course-point { margin: 0; font-size: 13px; line-height: 1.8; }
+.nj-course-entries { display: flex; flex-direction: column; }
+.nj-course-entry { display: flex; align-items: center; gap: var(--space-2); width: 100%; text-align: left; appearance: none; border: 0; border-top: 1px dashed var(--note-border); background: transparent; color: var(--text-primary); font-family: inherit; cursor: pointer; padding: var(--space-2) 2px; font-size: 13px; border-radius: 0; }
+.nj-course-entry:hover .nj-course-entry-title { color: var(--accent); }
+.nj-course-entry.is-read { color: var(--text-tertiary); }
+.nj-course-entry.is-read .nj-course-entry-title { text-decoration: line-through; text-decoration-color: var(--note-border); }
+.nj-course-entry-check { display: inline-flex; color: var(--accent); flex: 0 0 auto; }
+.nj-course-entry-check svg { width: 15px; height: 15px; }
+.nj-course-entry-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nj-course-entry-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nj-course-entry-src { font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-course-entry-go { flex: 0 0 auto; font-size: 12px; color: var(--accent); font-weight: 600; }
+.nj-course-actions { display: flex; align-items: center; gap: var(--space-3); }
+.nj-course-hint { font-size: var(--fs-md); color: var(--text-tertiary); }
+.nj-course-abandon { flex: 0 0 auto; font-size: var(--fs-md); color: var(--text-tertiary); text-decoration: underline; text-underline-offset: 2px; }
+.nj-course-abandon:hover { color: var(--warm-accent, var(--accent)); }
+.nj-course-empty { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center; padding: var(--space-8) 0; }
+.nj-course-empty-icon svg { width: 34px; height: 34px; color: var(--accent); opacity: 0.7; }
+.nj-course-empty h3 { margin: 0; font-size: 16px; }
+.nj-course-empty p { margin: 0; font-size: 13px; color: var(--text-secondary); max-width: 40em; }
+

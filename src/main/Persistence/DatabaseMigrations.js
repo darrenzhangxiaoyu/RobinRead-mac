@@ -1064,6 +1064,69 @@ const MIGRATIONS = [
       db.exec('CREATE INDEX IF NOT EXISTS idx_notes_origin ON notes(origin_id);');
     },
   },
+  {
+    id: 'v26-weeklies-courses',
+    up: (db) => {
+      // ── F29 AI 周刊编辑部 ──
+      // weeklies：一期一行的周刊产物（AI 导语 + 主题板块 + 金句的 content_json）。
+      // - week_start：聚合窗口起点（该周周一的本地日期 YYYY-MM-DD），UNIQUE 防重——
+      //   同一周重复生成/自动触发重入都落同一行（失败可重试覆盖，ready 幂等返回）；
+      // - status: generating（生成中，可取消）| ready（可读可导出）| failed（可重试）；
+      // - content_json：版面数据 { intro, sections:[{title,summary,entries:[…]}],
+      //   quotes:[{text,entryID,title,sourceTitle}], template, generatedAt }；
+      // - error：failed 时的原因（取消/解析失败/空窗口），渲染层据此给重试按钮。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS weeklies (
+            id           TEXT PRIMARY KEY NOT NULL,
+            week_start   TEXT NOT NULL,
+            status       TEXT NOT NULL DEFAULT 'generating'
+                CHECK (status IN ('generating','ready','failed')),
+            content_json TEXT,
+            error        TEXT,
+            created_at   REAL NOT NULL,
+            updated_at   REAL NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_weeklies_week ON weeklies(week_start);
+        CREATE INDEX IF NOT EXISTS idx_weeklies_created ON weeklies(created_at DESC);
+      `);
+
+      // ── F30 自学课程引擎 ──
+      // courses：学习目标 → 7/14 天课程大纲（plan_json 承载 LLM 大纲原始合同）。
+      // - status: active（进行中）| done（毕业）| abandoned（放弃）；重建 = 新行。
+      // - days_total：7 或 14（进度条分母）；plan_json 存生成侧账（候选/耗时/模型），
+      //   每日事实以 course_days 为准（day 可独立完成/勾选）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS courses (
+            id          TEXT PRIMARY KEY NOT NULL,
+            goal        TEXT NOT NULL,
+            plan_json   TEXT,
+            status      TEXT NOT NULL DEFAULT 'active'
+                CHECK (status IN ('active','done','abandoned')),
+            days_total  INTEGER NOT NULL DEFAULT 14,
+            error       TEXT,
+            created_at  REAL NOT NULL,
+            updated_at  REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_courses_created ON courses(status, created_at DESC);
+      `);
+      // course_days：一天一行，PK(course_id, day) 即 UNIQUE 约束（同课同天唯一）。
+      // - point：当日学习要点一句话；entry_ids_json：当日文章 ID 数组（真实存在校验后落库）；
+      // - completed_at：完成打卡时间（NULL=未完成）——「完成本日才解锁下一天」的判定列。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS course_days (
+            course_id      TEXT NOT NULL,
+            day            INTEGER NOT NULL,
+            point          TEXT,
+            entry_ids_json TEXT NOT NULL DEFAULT '[]',
+            completed_at   REAL,
+            PRIMARY KEY (course_id, day),
+            FOREIGN KEY(course_id)
+                REFERENCES courses(id)
+                ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

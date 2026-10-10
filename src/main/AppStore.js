@@ -49,6 +49,8 @@ const { DebateService } = require('./DebateService'); // AI 反方辩手（F25�
 const { QuizService } = require('./QuizService'); // 读后点亮测验（F26）：3 题判分 + 图谱点亮 + 错题入复习
 const { CapsuleService } = require('./CapsuleService'); // 时间胶囊（F27）：批注封存到期浮出（懒结算）
 const { RobinBundleService } = require('./RobinBundleService'); // 批注漂流瓶（F28）：.robin 包导出/导入/合并
+const { WeeklyService } = require('./WeeklyService'); // AI 周刊编辑部（F29）：上周阅读 → 导语+板块+金句+EPUB
+const { CourseService } = require('./CourseService'); // 自学课程引擎（F30）：目标 → 7/14 天课程 + 今日课推进
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -184,6 +186,8 @@ class AppStore extends EventEmitter {
     this.quiz = new QuizService(this); // 读后点亮测验（F26）：3 题判分 + 图谱点亮 + 错题入复习
     this.capsule = new CapsuleService(this); // 时间胶囊（F27）：批注封存 30/90/365 天后随简报浮出（懒结算）
     this.bundles = new RobinBundleService(this, userDataPath); // 批注漂流瓶（F28）：.robin 包导出/导入/双端合并
+    this.weekly = new WeeklyService(this); // AI 周刊编辑部（F29）：每周一自动把上周阅读编成《知更周刊》
+    this.course = new CourseService(this); // 自学课程引擎（F30）：学习目标 → 7/14 天课程 + 今日课推进
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -989,6 +993,9 @@ class AppStore extends EventEmitter {
    */
   _fetchForFeed(feed, { force = false } = {}) {
     if (PageMonitorService.isMonitorFeed(feed)) return this.monitor.fetchFeed(feed, { force });
+    // 漂流合成源（F28）永不刷新：正文已在导入时落缓存，刷新必走 platforms 分派→adapter=null 报错
+    //（批 D 审查 P1：导入过包后每轮刷新 failedFeedCount≥1 + 源体检误标死源）
+    if (feed.platform === 'drift') return { notModified: true };
     if (PlatformService.isPlatformFeed(feed)) {
       if (feed.platform === 'mail') return this.mail.fetchFeed(feed, { force });
       return this.platforms.fetchFeed(feed, { force });
@@ -2286,6 +2293,13 @@ class AppStore extends EventEmitter {
     if (this.sync) this.sync.kick('refresh');
     // 个人文集自动成书（F12）：auto 文集刷新落地后异步成书（≥24h 节流 + 有新文章才成；串行链、逐书容错）
     if (this.books) this.books.kick().catch(() => { /* 成书失败不影响刷新 */ });
+    // AI 周刊编辑部（F29）：刷新完成后检查（周一且上周刊未生成才起后台生成，周内一次节流；静默失败不影响刷新）
+    if (this.weekly) {
+      try {
+        const kick = this.weekly.autoCheck();
+        if (kick && kick.promise) kick.promise.catch(() => { /* 周刊生成失败静默，周内不再重试 */ });
+      } catch (_) { /* 周刊检查失败不阻塞刷新 */ }
+    }
     this._emitState();
   }
 

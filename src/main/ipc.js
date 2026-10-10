@@ -781,6 +781,9 @@ function registerIPCHandlers(store, window) {
   handle('garden:report', () => store.garden.weeklyReport());
   store.on('garden:changed', (payload) => send('garden:changed', payload));
 
+  // MARK: AI 周刊编辑部（F29）：后台自动生成完成 → 渲染层 toast（静默不打扰）
+  store.on('weekly:changed', (payload) => send('weekly:changed', payload));
+
   // MARK: 观点对照镜（F24：按需判定（点按钮才跑）/ 取消 / 已判三组）
   handle('perspectives:available', () => ({ ai: store.hasAIAPIKey() }));
   handle('perspectives:mirror', async (entryID) => store.perspectives.mirror(String(entryID || '')));
@@ -838,6 +841,39 @@ function registerIPCHandlers(store, window) {
     if (result.canceled || !result.filePaths.length) return null;
     return RB().importFromFile(result.filePaths[0]);
   });
+
+  // MARK: AI 周刊编辑部（F29：生成 / 取消 / 列表 / 详情 / 导出 EPUB（保存对话框→主进程落盘））
+  const WK = () => store.weekly;
+  handle('weekly:available', () => WK().available());
+  handle('weekly:generate', (weekStart) => WK().generateWeek(weekStart ? String(weekStart) : null));
+  handle('weekly:cancel', (weekStart) => store.cancelAI(`weekly:${String(weekStart || WK().snapshot().running[0] || '')}`));
+  handle('weekly:list', () => ({ weeklies: WK().list() }));
+  handle('weekly:get', (weeklyID) => WK().get(String(weeklyID || '')));
+  handle('weekly:export', async (weeklyID) => {
+    const weekly = WK().get(String(weeklyID || ''));
+    if (!weekly || weekly.status !== 'ready') throw new Error('周刊尚未生成完成，无法导出。');
+    const safeName = `知更周刊 第 ${weekly.issue || 1} 期`.replace(/[\\/:*?"<>|]/g, ' ').trim();
+    const result = await dialog.showSaveDialog(window, {
+      title: '导出周刊 EPUB',
+      defaultPath: `${safeName}.epub`,
+      filters: [{ name: 'EPUB 电子书', extensions: ['epub'] }, { name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    const buffer = WK().buildEpub(weekly.id);
+    fs.writeFileSync(result.filePath, buffer);
+    return { path: result.filePath, bytes: buffer.length, title: `${safeName}` };
+  });
+
+  // MARK: 自学课程引擎（F30：可用性 / 创建 / 列表 / 详情 / 今日课 / 完成打卡 / 放弃 / 取消）
+  const CS = () => store.course;
+  handle('course:available', () => CS().available());
+  handle('course:create', (goal, days) => CS().createCourse(String(goal || ''), { days }));
+  handle('course:list', () => ({ courses: CS().list() }));
+  handle('course:get', (courseID) => CS().get(String(courseID || '')));
+  handle('course:today', (courseID) => CS().todayCourse(String(courseID || '')));
+  handle('course:completeDay', (courseID, day) => CS().completeDay(String(courseID || ''), Number(day)));
+  handle('course:abandon', (courseID) => CS().abandon(String(courseID || '')));
+  handle('course:cancel', () => CS().cancelCreate());
 
   // MARK: AI 自动标签（F15：开关（偏好持久化）/ 立即跑一批 / 诊断快照）
   handle('tags:autoConfig', (patch) => {

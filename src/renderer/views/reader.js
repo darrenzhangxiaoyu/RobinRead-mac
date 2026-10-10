@@ -2702,7 +2702,10 @@ export class ReaderView {
   async _sealSelectionIntoCapsule(payload) {
     if (!this.entryID || !payload?.selection) return;
     const hl = await this._createHighlightQuietly(payload, 'yellow');
-    if (!hl) return;
+    if (!hl) {
+      this.handlers.onFeedback?.(t('高亮保存失败')); // 批 D 审查 P2：失败不再全程静默
+      return;
+    }
     this._openCapsuleSealDialog({ annotationID: hl.id, annotationKind: 'highlight' });
   }
 
@@ -3070,13 +3073,16 @@ export class ReaderView {
       this._refreshAnnotationsPanel();
       // F27 时间胶囊：保存时可选一并封存（kind=highlight，正文=划线原文）
       const capsuleDays = Number(layer.querySelector('.nj-note-editor-capsule')?.value) || 0;
+      let capsuleFailed = false;
       if (capsuleDays > 0) {
-        await window.robin.capsuleSeal({
+        const seal = await window.robin.capsuleSeal({
           entryID: this.entryID, annotationID: hl.id, annotationKind: 'highlight', days: capsuleDays,
         }).catch(() => null);
+        capsuleFailed = !(seal && seal.ok); // 批 D 审查 P2：失败不得谎报「已封存」
       }
       close();
-      this.handlers.onFeedback?.(capsuleDays > 0 ? tf('已封存，%lld 天后与你重逢', capsuleDays) : (content ? t('笔记已保存') : t('笔记已清空')));
+      this.handlers.onFeedback?.(capsuleFailed ? t('封存失败：批注可能已被删除或已在胶囊中')
+        : capsuleDays > 0 ? tf('已封存，%lld 天后与你重逢', capsuleDays) : (content ? t('笔记已保存') : t('笔记已清空')));
     });
     layer.querySelector('.nj-note-editor-del').addEventListener('click', async () => {
       hl.note = null;
@@ -3133,10 +3139,15 @@ export class ReaderView {
         // F27 时间胶囊：锚定笔记保存时可选一并封存（kind=note）
         const capsuleDays = Number(layer.querySelector('.nj-note-editor-capsule')?.value) || 0;
         if (capsuleDays > 0) {
-          await window.robin.capsuleSeal({
+          const seal = await window.robin.capsuleSeal({
             entryID: this.entryID, annotationID: note.id, annotationKind: 'note', days: capsuleDays,
           }).catch(() => null);
-          if (capsuleDays > 0) this.handlers.onFeedback?.(tf('已封存，%lld 天后与你重逢', capsuleDays));
+          if (!(seal && seal.ok)) { // 批 D 审查 P2：失败不谎报成功
+            this.handlers.onFeedback?.(t('封存失败：批注可能已被删除或已在胶囊中'));
+            close();
+            return;
+          }
+          this.handlers.onFeedback?.(tf('已封存，%lld 天后与你重逢', capsuleDays));
           close();
           return;
         }
