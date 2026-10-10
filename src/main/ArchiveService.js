@@ -121,7 +121,8 @@ class ArchiveService {
    * 存档馆列表：标题/来源/存档时间/大小，captured_at 倒序；query 对标题+来源 LIKE。
    */
   list({ query = '', limit = LIST_LIMIT, offset = 0 } = {}) {
-    const like = `%${String(query || '').trim()}%`;
+    const q = String(query || '').trim().replace(/[%_\\]/g, (c) => `\\${c}`); // LIKE 转义（批 G 审查 P2：搜「100%」不再全表命中）
+    const like = `%${q}%`;
     const rows = this.store.database.prepare(`
       SELECT ar.item_id, ar.captured_at, ar.html_size,
              COALESCE(a.title, '') AS title, a.url AS url,
@@ -130,10 +131,10 @@ class ArchiveService {
       INNER JOIN items i ON i.id = ar.item_id
       LEFT JOIN articles a ON a.item_id = ar.item_id
       LEFT JOIN feeds f ON f.id = i.feed_id
-      WHERE (? = '' OR COALESCE(a.title, '') LIKE ? OR COALESCE(f.title, '') LIKE ?)
+      WHERE (? = '' OR COALESCE(a.title, '') LIKE ? ESCAPE '\\' OR COALESCE(f.title, '') LIKE ? ESCAPE '\\')
       ORDER BY ar.captured_at DESC
       LIMIT ? OFFSET ?
-    `).all(String(query || '').trim(), like, like, Math.max(1, Number(limit) || LIST_LIMIT), Math.max(0, Number(offset) || 0));
+    `).all(q, like, like, Math.max(1, Number(limit) || LIST_LIMIT), Math.max(0, Number(offset) || 0));
     return rows.map((r) => ({
       entryID: r.item_id,
       title: r.title || r.entryID,

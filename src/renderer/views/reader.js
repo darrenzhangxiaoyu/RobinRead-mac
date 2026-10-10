@@ -873,6 +873,7 @@ export class ReaderView {
       this._ttsAppendHeaderButton(actions);
       this._appendLaterHeaderButton(actions);
       this._appendMirrorHeaderButton(actions);
+      this._appendSpectrumHeaderButton(actions); // F38 来源立场光谱：当前源已有画像时显（对照镜旁小图标）
       this._appendDebateHeaderButton(actions); // F25 反方辩手（与对照镜并列）
       this._appendQuizHeaderButton(actions); // F26 读后测验（正文 ≥500 字才显）
       this._appendTranslationHeaderButton(actions); // F33 外文源自动译：整篇译文切换（有译文切换/无译文生成）
@@ -4193,6 +4194,75 @@ export class ReaderView {
   }
 
   // MARK: - 观点对照镜（F24：从读过的旧文里找矛盾/互补/呼应）
+
+  // MARK: - 来源立场光谱（F38：当前源在光谱上的位置小图标 + popover）
+
+  /**
+   * 头部「光谱」小图标（F38）：仅当前源已有立场画像时显示（异步探测，会话级缓存）。
+   * 点击弹出 popover：光谱轴 + 当前源位置标记 + 一句话画像 + 风格 tag。
+   */
+  _appendSpectrumHeaderButton(actions) {
+    const entryID = String(this.entryID || '');
+    if (!entryID) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn-text bordered nj-spectrum-header-btn';
+    btn.dataset.role = 'spectrum';
+    btn.innerHTML = `${icon('spectrum')}<span style="margin-left:4px"></span>`;
+    btn.querySelector('span').textContent = t('光谱');
+    btn.title = t('这个源在立场光谱上的位置');
+    btn.hidden = true; // 无画像不显示（探测后亮出）
+    btn.addEventListener('click', () => this._toggleSpectrumPopover(btn));
+    actions.appendChild(btn);
+    window.robin.spectrumForEntry?.(entryID).then((profile) => {
+      if (!profile || !btn.isConnected || this.entryID !== entryID) return; // 无画像/换文：保持隐藏
+      this._spectrumProfile = profile;
+      btn.hidden = false;
+    }).catch(() => { /* 探测失败保持隐藏 */ });
+  }
+
+  /** 光谱 popover 显隐：按钮下方浮出（再点收起；换文随头部重建自然消失）。 */
+  _toggleSpectrumPopover(btn) {
+    const existing = document.getElementById('nj-spectrum-popover');
+    if (existing) {
+      existing.remove();
+      return;
+    }
+    const profile = this._spectrumProfile;
+    if (!profile) return;
+    const pop = document.createElement('div');
+    pop.id = 'nj-spectrum-popover';
+    pop.className = 'nj-spectrum-popover';
+    const x = Math.max(0, Math.min(100, Math.round(((Number(profile.spectrum) || 0) + 100) / 2)));
+    const head = document.createElement('div');
+    head.className = 'nj-spectrum-popover-head';
+    head.innerHTML = `<span class="nj-spectrum-popover-title"></span>${profile.style ? `<span class="nj-spectrum-style-tag"></span>` : ''}`;
+    head.querySelector('.nj-spectrum-popover-title').textContent = profile.title || t('当前来源');
+    if (profile.style) head.querySelector('.nj-spectrum-style-tag').textContent = profile.style;
+    pop.appendChild(head);
+    const meter = document.createElement('div');
+    meter.className = 'nj-spectrum-popover-meter';
+    meter.innerHTML = `<span class="nj-spectrum-end">技术实用</span><div class="nj-spectrum-popover-track"><span class="nj-spectrum-popover-dot" style="left:${x}%"></span></div><span class="nj-spectrum-end">观点人文</span>`;
+    pop.appendChild(meter);
+    if (profile.portrait) {
+      const portrait = document.createElement('p');
+      portrait.className = 'nj-spectrum-portrait';
+      portrait.textContent = profile.portrait;
+      pop.appendChild(portrait);
+    }
+    // 点外部收起（一次性；popover 随头部重排自然清理）
+    setTimeout(() => {
+      const dismiss = (event) => {
+        if (event.target.closest?.('#nj-spectrum-popover') || event.target.closest?.('.nj-spectrum-header-btn')) return;
+        document.getElementById('nj-spectrum-popover')?.remove();
+        document.removeEventListener('mousedown', dismiss);
+      };
+      document.addEventListener('mousedown', dismiss);
+    }, 0);
+    const rect = btn.getBoundingClientRect();
+    pop.style.left = `${Math.max(8, rect.left - 120)}px`;
+    pop.style.top = `${rect.bottom + 6}px`;
+    document.body.appendChild(pop);
+  }
 
   /**
    * 头部「对照镜」按钮。显隐规则：正文含观点词 或 AI 可用（按需异步探测，

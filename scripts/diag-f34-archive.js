@@ -207,6 +207,7 @@ app.whenReady().then(async () => {
       new Promise((r) => setTimeout(() => r({ uiSkipped: true, booted: null }), 150000)),
     ]);
     if (ui.uiSkipped) {
+    try { fs.writeFileSync(path.join(__dirname, '.ci-skip-marker'), 'scripts/diag-f34-archive.js'); } catch (_) { /* 标记失败仅丢连击计数 */ }
       for (const m of ['UI 探针窗口启动（index.html + preload + 真 IPC）', 'UI 右键菜单含「存档此文」', 'UI 侧栏存档馆入口 → 浮层打开（列表行）',
         'UI 存档馆搜索命中过滤', 'UI 导出 MHTML：mock 保存对话框真写盘（MIME 头在位）', 'UI 取消存档：行消失', 'UI 存档模式徽记：回落文章头部横条浮出']) {
         console.log('SKIP ' + m);

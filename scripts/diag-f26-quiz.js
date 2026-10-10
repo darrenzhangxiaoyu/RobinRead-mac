@@ -234,6 +234,7 @@ const ui = await Promise.race([
   new Promise((r) => setTimeout(() => r({ uiSkipped: true, booted: null }), 150000)),
 ]);
 if (ui.uiSkipped) {
+    try { fs.writeFileSync(path.join(__dirname, '.ci-skip-marker'), 'scripts/diag-f26-quiz.js'); } catch (_) { /* 标记失败仅丢连击计数 */ }
   for (const m of ['附 UI 探针窗口启动（index.html + preload + 真 IPC）', '8 浮层三题逐答（对/错/对选项高亮）', '8 出分：2 / 3', '8 点亮反馈：点亮了 1 个标签', '8 错题提示：已加入复习队列', '8 历史最高分展示', '8 每题解析回显（3 条）', '8 再测一次按钮在位', '8 关闭浮层']) {
     console.log('SKIP ' + m);
   }

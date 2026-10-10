@@ -818,6 +818,23 @@ function registerIPCHandlers(store, window) {
   handle('quiz:cancel', (entryID) => QZ().cancel(String(entryID || '')));
   handle('quiz:latest', (entryID) => QZ().latest(String(entryID || '')));
 
+  // MARK: 深读重访（F37：每日温和提示 / 到期懒结算列表 / 回应推迟 / AI 重读指引（缓存））
+  const RV = () => store.revisit;
+  handle('revisit:nudge', () => RV().nudge());
+  handle('revisit:due', () => RV().due());
+  handle('revisit:respond', (revisitID, action) => RV().respond(String(revisitID || ''), String(action || '')));
+  handle('revisit:guidance', (revisitID) => RV().guidance(String(revisitID || '')));
+  handle('revisit:cancel', (revisitID) => RV().cancel(String(revisitID || '')));
+  store.on('revisit:changed', (payload) => send('revisit:changed', payload));
+
+  // MARK: 来源立场光谱（F38：可用性 / 光谱视图投影 / 手动批量分析 / 单源画像 / 文章级联动）
+  const SPECT = () => store.spectrum;
+  handle('spectrum:available', () => SPECT().available());
+  handle('spectrum:view', () => SPECT().view());
+  handle('spectrum:analyze', (opts) => SPECT().analyze({ force: Boolean(opts && opts.force) }));
+  handle('spectrum:cancel', () => SPECT().cancel());
+  handle('spectrum:forEntry', (entryID) => SPECT().forEntry(String(entryID || '')));
+
   // MARK: 外文源自动译（F33：手动整篇翻译 / 读回 / 取消 / 订阅级开关 / 可用性 / 诊断；
   //   分块进度走推送通道 translate:progress（阅读器进度提示），终态走信封返回）
   const TR = () => store.translation;

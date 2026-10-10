@@ -9,6 +9,7 @@ import { promptBox, confirmBox } from '../ui-prompt.js';
 import { emptyArtSVG } from './empty-art.js';
 import { renderMarkdown } from '../markdown.js';
 import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline, onResolutionChange } from './chart-kit.js'; /* U16 */
+import { renderSpectrum } from './spectrum-view.js'; /* F38 来源立场光谱 */
 
 const TABS = [
   { id: 'dashboard', label: '看板', icon: 'general' },
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'research', label: 'AI 研究', icon: 'spark' },
   { id: 'threads', label: '线索', icon: 'search' },
   { id: 'dash', label: '源体检', icon: 'flame' },
+  { id: 'spectrum', label: '光谱', icon: 'spectrum' },
 ];
 
 // F15 复核过滤 chips：标签云按来源过滤展示（只过滤，不改数据）
@@ -57,8 +59,8 @@ function downloadText(filename, content, mime = 'text/plain') {
 }
 
 export class KnowledgeCenter {
-  constructor({ onOpenArticle, onOpenSmartFolder, onFilterTag, onOpenURL }) {
-    this.handlers = { onOpenArticle, onOpenSmartFolder, onFilterTag, onOpenURL };
+  constructor({ onOpenArticle, onOpenSmartFolder, onFilterTag, onOpenURL, toast = null }) {
+    this.handlers = { onOpenArticle, onOpenSmartFolder, onFilterTag, onOpenURL, toast };
     this.tab = 'highlights';
     this.data = {};
     // AI 研究（F8）会话态：流式运行标记 + 订阅退订器
@@ -126,6 +128,7 @@ export class KnowledgeCenter {
       research: async () => window.robin.researchList(),
       threads: async () => window.robin.threadsList(), // F13：线索聚类（_renderThreads 自取详情）
       dash: async () => window.robin.dashOverview(), // F16：源体检总览（60s 缓存）
+      spectrum: async () => window.robin.spectrumView(), // F38：来源立场光谱（画像缓存 + 布点投影）
     };
     // P1-5：await 前快照 tab——快速切 tab 时旧载荷不得写错键/错渲染；
     // 落地时已切走则按快照键入缓存（回到该 tab 仍可用），但不渲染当前视图
@@ -222,6 +225,7 @@ export class KnowledgeCenter {
       case 'research': this._renderResearch(Array.isArray(data) ? data : []); break;
       case 'threads': this._renderThreads(); break;
       case 'dash': this._renderDash(data || {}); break;
+      case 'spectrum': this._renderSpectrum(data || null); break;
     }
   }
 
@@ -2276,6 +2280,11 @@ export class KnowledgeCenter {
     { id: 'silent', label: '沉默源' },
     { id: 'failing', label: '失败源' },
   ];
+
+  /** 来源立场光谱（F38）：轴 + 源点布点 + 右侧详情（spectrum-view.js 渲染）。 */
+  _renderSpectrum(data) {
+    renderSpectrum(this.contentHost, data, { toast: this.handlers?.toast });
+  }
 
   _renderDash(data) {
     const feeds = Array.isArray(data.feeds) ? data.feeds : [];

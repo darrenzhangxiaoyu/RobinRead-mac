@@ -220,6 +220,21 @@ contextBridge.exposeInMainWorld('robin', {
   capsuleList: (opts) => data('capsule:list', opts),
   capsuleDigest: () => data('capsule:digest'),
 
+  // 深读重访（F37：每日温和提示 / 到期列表 / 回应推迟 / AI 重读指引 / 取消；onRevisitChanged 收徽章刷新）
+  revisitNudge: () => data('revisit:nudge'),
+  revisitDue: () => data('revisit:due'),
+  revisitRespond: (revisitID, action) => invoke('revisit:respond', revisitID, action),
+  revisitGuidance: (revisitID) => invoke('revisit:guidance', revisitID),
+  revisitCancel: (revisitID) => invoke('revisit:cancel', revisitID),
+  onRevisitChanged: (listener) => subscribe('revisit:changed', listener),
+
+  // 来源立场光谱（F38：可用性 / 光谱视图投影 / 手动批量分析 / 取消 / 文章级联动）
+  spectrumAvailable: () => data('spectrum:available').then((r) => Boolean(r && r.ai)),
+  spectrumView: () => data('spectrum:view'),
+  spectrumAnalyze: (opts) => invoke('spectrum:analyze', opts || {}),
+  spectrumCancel: () => invoke('spectrum:cancel'),
+  spectrumForEntry: (entryID) => data('spectrum:forEntry', entryID),
+
   // 批注漂流瓶（F28：导出（保存对话框）/ 导入（打开对话框））
   bundleExport: (payload) => invoke('bundle:export', payload),
   bundleImportPick: () => invoke('bundle:importPick'),

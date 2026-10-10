@@ -55,6 +55,8 @@ const { ReadingClockService } = require('./ReadingClockService'); // 阅读生�
 const { VoiceCommandService } = require('./VoiceCommandService'); // 语音指挥舱（F35）：口令表 + 模糊匹配（识别在渲染层）
 const { TranslationService } = require('./TranslationService'); // 外文源自动译（F33）：订阅级开关 + 整篇译文缓存 + 原文/译文切换
 const { ArchiveService } = require('./ArchiveService'); // 网页存档馆（F34）：永久快照 + 存档模式回落 + MHTML 导出
+const { RevisitService } = require('./RevisitService'); // 深读重访（F37）：长文遗忘曲线回顾卡 + AI 重读指引
+const { SpectrumService } = require('./SpectrumService'); // 来源立场光谱（F38）：源画像批量分析 + 光谱布点
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -196,6 +198,8 @@ class AppStore extends EventEmitter {
     this.voice = new VoiceCommandService(this); // 语音指挥舱（F35）：口令表 + 模糊匹配（零 AI，识别在渲染层）
     this.translation = new TranslationService(this); // 外文源自动译（F33）：订阅级开关 + 整篇译文缓存（原文/译文一键切换）
     this.archive = new ArchiveService(this); // 网页存档馆（F34）：永久快照 + 存档模式回落 + MHTML 导出
+    this.revisit = new RevisitService(this); // 深读重访（F37）：长文 30 天回顾卡 + AI 重读指引（懒结算）
+    this.spectrum = new SpectrumService(this); // 来源立场光谱（F38）：Top 源画像批量分析 + 光谱布点投影
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -1307,6 +1311,8 @@ class AppStore extends EventEmitter {
       try { this.garden.onComplete({ entryID }); } catch (_) { /* 花园钩子不阻塞阅读 */ }
       // F36 生物钟：真实完读事件喂入当前小时桶（重复已读不重复计）
       try { this.clock.onRead(); } catch (_) { /* 生物钟钩子不阻塞阅读 */ }
+      // F37 深读重访：长文（正文 ≥1500 字）首次读完登记 30 天回顾卡（短文/已有 SM-2 卡跳过）
+      try { this.revisit.onCompleted({ entryID }); } catch (_) { /* 重访钩子不阻塞阅读 */ }
     }
     if (entry) this.evolution.recordBehavior({ itemID: entryID, feedID: entry.feedID, action: read ? 'read' : 'skip' });
     this._noteEntryChange(entryID, read, entry ? entry.isStarred : false);
@@ -2363,6 +2369,10 @@ class AppStore extends EventEmitter {
         const kick = this.weekly.autoCheck();
         if (kick && kick.promise) kick.promise.catch(() => { /* 周刊生成失败静默，周内不再重试 */ });
       } catch (_) { /* 周刊检查失败不阻塞刷新 */ }
+    }
+    // 来源立场光谱（F38）：画像过期（7 天）时后台单飞重析（无 Key 零调用；静默失败不影响刷新）
+    if (this.spectrum && this.spectrum.available().ai && this.spectrum.needsReanalyze()) {
+      this.spectrum.analyze().catch(() => { /* 光谱重析失败静默，下次刷新再试 */ });
     }
     this._emitState();
   }

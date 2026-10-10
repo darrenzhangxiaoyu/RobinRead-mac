@@ -286,6 +286,7 @@ app.whenReady().then(async () => {
       new Promise((r) => setTimeout(() => r({ uiSkipped: true, booted: null }), 150000)),
     ]);
     if (ui.uiSkipped) {
+    try { fs.writeFileSync(path.join(__dirname, '.ci-skip-marker'), 'scripts/diag-f25-debate.js'); } catch (_) { /* 标记失败仅丢连击计数 */ }
       for (const m of ['附 UI 探针窗口启动（index.html + preload + 真 IPC）', '12 无 Key → 反方辩手按钮灰置（disabled + 说明）', '12 配 Key 后按钮启用', '12 开场气泡渲染（AI 左，含钢人开场标签）', '12 引用原句芯片 + 点击高亮跳转正文', '12 用户气泡右侧（发言落流）', '12 发言后 AI 回合气泡出现（回合流推进）', '12 裁决定格：verdict_down 徽记 + 气泡流定格', '12 存为批注按钮 → 已存为批注', '12 定格后输入行移除（不可再发言）']) {
         console.log('SKIP ' + m);
       }

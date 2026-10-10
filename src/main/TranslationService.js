@@ -273,6 +273,7 @@ class TranslationService {
       if (this._isCancelled(err, entryID)) {
         this.queuedIDs.delete(entryID);
         this.counters.cancelled += 1;
+        this._emitProgress(entryID, 0, 1, 'cancelled'); // 批 G 审查 P2：阅读器按钮复位
         return;
       }
       // 单篇失败：同篇至多重试 1 次（重试插队首尽快出结果）；再失败记入 failed（进度保留可续译）
@@ -287,6 +288,7 @@ class TranslationService {
       this.failed.set(entryID, String((err && err.message) || err));
       if (this.failed.size > FAILED_CAP) this.failed.delete(this.failed.keys().next().value);
       this.counters.failed += 1;
+      this._emitProgress(entryID, 0, 1, 'failed'); // 批 G 审查 P2：阅读器按钮复位
     } finally {
       if (!this.queuedIDs.has(entryID)) this._flushWaiters(entryID); // 终态（完成/取消/最终失败）唤醒等待方
     }

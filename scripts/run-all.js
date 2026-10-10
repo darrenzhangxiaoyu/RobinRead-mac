@@ -118,6 +118,8 @@ const OFFLINE = [
   { file: 'scripts/diag-f36-clock.js', runner: 'electron', desc: 'F36 阅读生物钟：v27迁移reading_clock(PK(day,hour)/hour CHECK 0-23/count+total_ms)/小时桶累计(onRead喂count重复已读幂等/pulse喂total_ms超限钳制噪声丢弃)/markRead钩子注入时钟定桶/高峰判定(7天窗口/加权纯函数近一天胜6天前30次/Top2确定性/相邻合并窗口HH:00-HH:00)/冷启动样本<20不判定/窗口边界8天前不进窗+35天惰性清理/对齐动作(刷新锚点偏峰建议HH:00/锚点在峰不提示/无锚点给建议/无峰静默/峰内专注提示一次性每天/开关关不提示)/三开关跨重启读回+快照preferences.clock投影/热力条UI 24桶+高峰cell+样本注记+对齐三开关/简报生物钟行浮出与开关关隐藏/刷新设置页建议条/专注提示条浅色主题+进入专注模式+同日一次/reader脉冲clockPulse通道静态锚点/CSS零字面量/注入时钟确定性（离线）' },
   { file: 'scripts/diag-f33-autotrans.js', runner: 'electron', desc: 'F33 外文源自动译：v28迁移translations(PK item_id/lang/translated_html/segments_json/is_complete/FK级联)与archives同批/分段切分(块级边界/碎块合并/单巨块不硬切)/mock LLM多块逐块译按序拼接/消毒(LLM输出script-iframe-onerror-onclick剥除后才落库/进LLM输入已消毒)/幂等(完整译文零请求cached=true/hasTranslations批量探测)/单飞并发≤2队列排队重复入队防重/订阅开关(默认关/中文条目不入队/开开关kick灌文入队后台译完/关开关登记失效)/失败重试断点续译(块2连败failed登记segments保留0-1/重试不重译已完成块/修好后续译完成)/取消队列摘除等待方唤醒/无Key灰置拒绝/列表译徽标投影与UI/阅读器译文按钮双容器切换与进度/设置自动翻译分区/i18n（离线）' },
   { file: 'scripts/diag-f34-archive.js', runner: 'electron', desc: 'F34 网页存档馆：v28迁移archives(PK item_id/html_captured/captured_at/html_size/FK级联)与translations同批/存档落行体积字节口径/重存档覆盖更新/空正文拒绝/6MB超限拒绝rejected计数/列表搜索(标题/来源LIKE/倒序/来源时间体积投影)/统计篇数字节与取消存档联动/MHTML结构(MIME-Version/multipart+boundary开合配对/charset-TransferEncoding-ContentLocation/RFC2047标题/正文撞边界轮换/未存档报错)/回落判定(无缓存无正文回落fromArchive/缓存空壳回落/健康缓存不回落/取消存档回落失效)/追更自动存档(默认关/开关持久化/灌文钩子快照/关闭不快照)/存储统计接入/右键存档此文/侧栏存档馆入口/存档馆浮层列表搜索导出(mock保存对话框真写盘)取消/存档模式徽记横条/i18n（离线）' },
+  { file: 'scripts/diag-f37-revisit.js', runner: 'electron', timeout: 480000, desc: 'F37 深读重访：v29迁移revisits(entry_id UNIQUE/status CHECK/guidance_json)与source_profiles同批与重启无损/登记三道闸(markRead钩子长文≥1500字 due=read_at+30d/短文跳过/已有SM-2复习卡跳过同文不重复登记/UNIQUE防重/不存在拒绝)/30d到期懒结算(未到期零浮出/到期浮现标题来源距上次天数/多卡due升序)/done-skipped推迟语义(done终态不复浮/skipped新due过后结算翻回pending再浮出/max(原due,回应时刻)起算晚回应不瞬到/非法动作与缺卡拒绝/revisit:changed推送)/每日一次温和提示(nudge当天呼吸一次同日不重复次日再呼吸空计数不呼吸)/AI重读指引(mock生成3条落库/缓存防重烧二次零LLM/批注进prompt/解析容错围栏杂文坏JSON纯数字剔除超量截3/points备用合同/坏输出拒绝不落缓存/无Key降级degraded零LLM/单飞互斥canceller取消)/注入时钟确定性/侧栏徽章+浮层到期卡+指引卡片流+已读过了退场+Esc/UI阶段150s竞速SKIP（离线）' },
+  { file: 'scripts/diag-f38-spectrum.js', runner: 'electron', timeout: 480000, desc: 'F38 来源立场光谱：v29迁移source_profiles(feed_id PK/profile_json/analyzed_at/FK级联)与revisits同批与重启无损/批量画像JSON合同容错(围栏杂文/profiles对象与裸数组双合同/单元素裸数组形状/越界index剔除/缺index顺位兜底/重复index先到先得/非法spectrum剔条badSpectrum计数/越界钳位±100/非法风格置空画像保留/全无效null可重析)/布点投影(-100→0/+100→1/0→0.5/同值近邻抖动错开次序保持/22点同值压缩回收轴内/超容量不越界)/Top20源选取(近90天完读计数排序/窗外不进/LIMIT/删除源不进)/批量分析一批prompt/缺槽不落下次补判/无Key灰置grey+说明零LLM/7天过期重析(expired计数/needsReanalyze刷新钩子/profile过期视同无)/force全量重析/forEntry文章级联动(有画像带画像/无画像null)/单飞锁canceller取消/注入时钟确定性/阅读器光谱小图标显隐有画像显无画像隐+popover位置标记画像风格tag/知识中心光谱tab轴+布点+点源详情+分析按钮过期重析真IPC（离线）' },
   { file: 'scripts/diag-phase10-export.js', runner: 'node', desc: '导出工厂：EPUB 结构 + 对照版式/自定义CSS 链路（离线）' },
   { file: 'scripts/e2e-card-export.js', runner: 'electron', desc: '精读卡片导出 E2E：真 IPC 链路+预览弹窗（离线）' },
 ];
@@ -133,12 +135,21 @@ const ci = process.argv.includes('--ci');
 const suite = ci ? OFFLINE : OFFLINE.concat(ONLINE);
 const results = [];
 
+// SKIP 治理（批 G 审查 P2）：环境降级 SKIP（exit 0）不可无限连击——同一探针连续 2 次
+// SKIP（服务级/UI 级）判 FAIL，防真回归被环境噪声永久漏成绿。探针 SKIP 时写标记文件。
+const SKIP_STATE_FILE = path.join(__dirname, '.ci-skip-state.json');
+const SKIP_MARKER = path.join(__dirname, '.ci-skip-marker');
+let skipState = {};
+try { skipState = JSON.parse(fs.readFileSync(SKIP_STATE_FILE, 'utf8')) || {}; } catch (_) { skipState = {}; }
+
 for (const probe of suite) {
   const runner = probe.runner === 'node' ? 'node' : 'npx';
   const args = probe.runner === 'node'
     ? [probe.file]
     : ['electron', probe.file];
   process.stdout.write(`\n===== ${probe.desc} (${probe.file}) =====\n`);
+  const probeStart = Date.now();
+  try { fs.rmSync(SKIP_MARKER, { force: true }); } catch (_) { /* 无旧标记即可 */ }
   // electron 探针被看门狗击杀（exit=null，Desktop Heap 耗尽致新窗口创建同步死锁）→
   // 新进程重试一次：堆配额随进程重置，环境性偶发自此自愈（非代码回归，不复现即过）
   let result = null;
@@ -162,8 +173,32 @@ for (const probe of suite) {
       console.log(`>>> RETRY ${probe.file}（看门狗击杀=环境性挂起，新进程重试一次）`);
     } else break;
   }
-  const ok = result.status === 0;
-  results.push({ ...probe, ok, status: result.status, retried });
+  let ok = result.status === 0;
+  // SKIP 门限：探针本次运行期间写过 SKIP 标记（mtime 晚于探针启动且内容为本探针）→ 连击 +1；≥2 判 FAIL
+  let skippedThisRun = false;
+  try {
+    const marker = fs.readFileSync(SKIP_MARKER, 'utf8');
+    const st = fs.statSync(SKIP_MARKER);
+    if (st.mtimeMs >= probeStart && marker.trim() === probe.file) {
+      skippedThisRun = true;
+      skipState[probe.file] = (skipState[probe.file] || 0) + 1;
+      try { fs.writeFileSync(SKIP_STATE_FILE, JSON.stringify(skipState, null, 2)); } catch (_) { /* 状态丢失仅重置连击 */ }
+      if (skipState[probe.file] >= 2) {
+        ok = false;
+        console.log(`>>> SKIP-GATE ${probe.file} 连续 ${skipState[probe.file]} 次 SKIP（UI 探针长期被环境降级），判 FAIL 防真回归漏成绿`);
+      } else {
+        console.log(`>>> SKIP-1 ${probe.file}（连续第 ${skipState[probe.file]} 次 SKIP，下次再 SKIP 即判 FAIL）`);
+      }
+    } else if (skipState[probe.file]) {
+      delete skipState[probe.file];
+      try { fs.writeFileSync(SKIP_STATE_FILE, JSON.stringify(skipState, null, 2)); } catch (_) { /* 忽略 */ }
+    }
+  } catch (_) { /* 标记不存在：非 SKIP，重置在下方 } */ }
+  if (!skippedThisRun && skipState[probe.file]) {
+    delete skipState[probe.file];
+    try { fs.writeFileSync(SKIP_STATE_FILE, JSON.stringify(skipState, null, 2)); } catch (_) { /* 忽略 */ }
+  }
+  results.push({ ...probe, ok, status: result.status, retried, skipped: skippedThisRun });
   console.log(ok ? `>>> PASS ${probe.file}${retried ? '（重试自愈）' : ''}` : `>>> FAIL ${probe.file} (exit=${result.status})`);
 }
 

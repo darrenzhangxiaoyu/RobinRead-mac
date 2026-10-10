@@ -36,6 +36,7 @@ import { GardenView } from './views/garden-view.js';
 import { WeeklyView } from './views/weekly-view.js';
 import { CourseView } from './views/course-view.js';
 import { ArchiveHallView } from './views/archive-hall.js';
+import { RevisitView } from './views/revisit-view.js'; // F37 深读重访浮层
 import { MediaMiniPlayer } from './views/media-player.js';
 import { PicksTTSPlayer } from './views/picks-tts.js';
 import { RadioPlayer } from './views/radio-player.js';
@@ -132,6 +133,7 @@ async function bootstrap() {
     onOpenWeekly: () => openWeeklyView(), // F29 知更周刊：每周一自动编辑上周阅读
     onOpenCourse: () => openCourseView(), // F30 自学课程：目标 → 7/14 天课程推进
     onOpenArchive: () => openArchiveHall(), // F34 网页存档馆：永久本地快照 + MHTML 导出
+    onOpenRevisit: () => openRevisitView(), // F37 深读重访：到期长文回顾卡温和浮出
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -760,6 +762,8 @@ function buildPaletteCommands() {
     { label: t('知更周刊'), keywords: 'weekly 周刊 杂志 编辑部 报纸 导语 金句 epub open', icon: 'newspaper', desc: t('每周一自动把上周阅读编成一期：导语 + 主题归纳 + 金句。'), action: () => openWeeklyView() },
     { label: t('自学课程…'), keywords: 'course 课程 学习 目标 今日课 14 天 open', icon: 'bookOpen', desc: t('给一个学习目标，AI 从订阅库排出 7 或 14 天课程。'), action: () => openCourseView() },
     { label: t('网页存档馆'), keywords: 'archive 存档 快照 馆 mhtml snapshot export open', icon: 'docText', desc: t('重要文章与追更快照的永久本地档案馆：原文失效也能读，可导出 MHTML。'), action: () => openArchiveHall() },
+    { label: t('深读重访'), keywords: 'revisit 重访 回顾 长文 遗忘曲线 复习 open', icon: 'revisit', desc: t('读过的长文 30 天后温和重现，AI 标出今天的你该重看哪段。'), action: () => openRevisitView() },
+    { label: t('来源立场光谱'), keywords: 'spectrum 光谱 立场 源 画像 媒介素养 open', icon: 'spectrum', desc: t('常读的订阅源按立场/风格排成光谱，读文章时标出当前源的位置。'), action: () => openKnowledgeCenter('spectrum') },
     { label: t('导入批注包…'), keywords: 'bundle robin 导入 批注 包 漂流 分享 import', icon: 'import', desc: t('导入 .robin 批注包：读对方的划线与笔记，续写后可导回合并。'), action: () => importRobinBundle() },
     { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
@@ -2325,8 +2329,9 @@ async function confirmDeleteFeeds(feeds, countOverride = null) {
 
 // MARK: - 设置
 
-function openKnowledgeCenter() {
+function openKnowledgeCenter(initialTab = null) {
   const kc = new KnowledgeCenter({
+    toast: showToast, // F38 光谱 tab「分析我的订阅源」结果提示
     onOpenArticle: (itemID) => {
       kc.dismiss();
       handleEntrySelect(itemID, { isRead: true, isStarred: false });
@@ -2346,7 +2351,8 @@ function openKnowledgeCenter() {
       openLinkReader(url);
     },
   });
-  kc.present();
+  kc.present(initialTab);
+  return kc;
 }
 
 /** AI 深度研究（F8）：知识中心「AI 研究」标签页直达（主题输入 + 历史研究）。 */
@@ -2431,11 +2437,18 @@ function openArchiveHall() {
   av.present();
 }
 
+/** 深读重访（F37）：到期长文回顾卡 + AI 重读指引（遗忘曲线温和重现）。 */
+function openRevisitView() {
+  const rv = new RevisitView({ toast: showToast, onOpenArticle: openFromOverlay });
+  rv.present();
+}
+
 /** 浮层内点文章 → 关浮层直达阅读（读完回到课程/周刊，isRead 勾选随之刷新）。 */
 function openFromOverlay(entryID) {
   try { window.__robinWeeklyView?.dismiss(); } catch (_) { /* 已关 */ }
   try { window.__robinCourseView?.dismiss(); } catch (_) { /* 已关 */ }
   try { window.__robinArchiveHall?.dismiss(); } catch (_) { /* 已关 */ }
+  try { window.__robinRevisitView?.dismiss(); } catch (_) { /* 已关 */ }
   // 不传 isRead:true（批 E 审查 P1：短路 markRead 使课程「完成本日」永远差一篇）——
   // 走 handleEntrySelect 既有语义：打开即标已读，课程勾选自然达成
   handleEntrySelect(entryID, { isRead: false, isStarred: false });

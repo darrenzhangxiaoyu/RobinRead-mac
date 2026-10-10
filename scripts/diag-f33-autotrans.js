@@ -248,6 +248,7 @@ app.whenReady().then(async () => {
       new Promise((r) => setTimeout(() => r({ uiSkipped: true, booted: null }), 150000)),
     ]);
     if (ui.uiSkipped) {
+    try { fs.writeFileSync(path.join(__dirname, '.ci-skip-marker'), 'scripts/diag-f33-autotrans.js'); } catch (_) { /* 标记失败仅丢连击计数 */ }
       for (const m of ['UI 探针窗口启动（index.html + preload + 真 IPC）', 'UI 列表行「译」徽标渲染', 'UI 阅读器「译文」按钮在位且可用',
         'UI 点击译文：生成→译文容器切换（原文隐藏）', 'UI 按钮切换态显示「原文」', 'UI 再点切回原文（双容器不叠加）', 'UI 无 Key 按钮灰置']) {
         console.log('SKIP ' + m);

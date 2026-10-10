@@ -487,6 +487,18 @@ export class SidebarView {
     archiveBtn.addEventListener('click', () => this.handlers.onOpenArchive?.());
     nav.appendChild(archiveBtn);
 
+    // 深读重访徽章（F37）：到期长文回顾卡温和浮出（徽章计数 + 每日一次呼吸动画）
+    const revisitBtn = document.createElement('button');
+    revisitBtn.className = 'footer-nav-btn footer-revisit-btn';
+    revisitBtn.dataset.role = 'revisit';
+    revisitBtn.title = t('深读重访');
+    revisitBtn.innerHTML = `${icon('revisit')}<span class="nav-label"></span><span class="nj-revisit-badge" hidden>0</span>`;
+    revisitBtn.querySelector('.nav-label').textContent = t('重访');
+    revisitBtn.addEventListener('click', () => this.handlers.onOpenRevisit?.());
+    nav.appendChild(revisitBtn);
+    this.revisitBtn = revisitBtn;
+    this._refreshRevisitBadge();
+
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
     settingsBtn.title = t('设置');
@@ -538,6 +550,33 @@ export class SidebarView {
       badge.hidden = n <= 0;
       btn.title = n > 0 ? tf('%lld 枚时间胶囊已到期', n) : t('时间胶囊');
     }).catch(() => { /* 胶囊计数不可得：徽章保持静默 */ });
+  }
+
+  /**
+   * 深读重访徽章刷新（F37）：到期长文数；呼吸动画每日至多一次
+   * （服务端 nudge 记账，breathe=true 才挂 breathing 类，reduced-motion 豁免）。
+   * revisit:changed 推送在场即热更（懒订阅一次）。
+   */
+  _refreshRevisitBadge() {
+    const btn = this.revisitBtn;
+    if (!btn) return;
+    window.robin.revisitNudge?.().then((nudge) => {
+      if (!nudge || !btn.isConnected) return;
+      const badge = btn.querySelector('.nj-revisit-badge');
+      if (!badge) return;
+      const n = Number(nudge.count) || 0;
+      badge.textContent = String(n);
+      badge.hidden = n <= 0;
+      btn.title = n > 0 ? tf('%lld 篇长文该重访了', n) : t('深读重访');
+      if (nudge.breathe) {
+        badge.classList.add('breathing');
+        setTimeout(() => badge.classList.remove('breathing'), 3200); // 呼吸一轮即止（每日一次的温和提示）
+      }
+    }).catch(() => { /* 重访计数不可得：徽章保持静默 */ });
+    if (!this._revisitSubscribed && window.robin.onRevisitChanged) {
+      this._revisitSubscribed = true;
+      window.robin.onRevisitChanged(() => this._refreshRevisitBadge());
+    }
   }
 
   /** 账号入口按钮：未登录=人形图标；已登录=头像（会员加金圈）。昵称与状态放 title。 */

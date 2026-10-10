@@ -1201,6 +1201,56 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v29-revisits-source-profiles',
+    up: (db) => {
+      // ── F37 深读重访 ──
+      // revisits：长文（正文 ≥1500 字）首次读完时登记的重访计划（遗忘曲线温和重现）。
+      // - entry_id UNIQUE：同一篇文章终身至多一条重访计划（登记侧 INSERT OR IGNORE，
+      //   防重复登记；文章删除随 items 级联清行）；
+      // - due：到期时刻（read_at + 30d 起算；done/skipped 推迟时 += DEFER_DAYS）；
+      // - status: pending（待重访）| done（已读过了，终态不再浮出）|
+      //   skipped（稍后再说，due 过后由读取侧懒结算翻回 pending 再浮出）；
+      // - guidance_json：AI 重读指引缓存（3 条指引一次一存，重开零 token——防重复烧钱）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS revisits (
+            id            TEXT PRIMARY KEY NOT NULL,
+            entry_id      TEXT NOT NULL UNIQUE,
+            read_at       REAL NOT NULL,
+            due           REAL NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'pending'
+                CHECK (status IN ('pending','done','skipped')),
+            guidance_json TEXT,
+            created_at    REAL NOT NULL,
+
+            FOREIGN KEY(entry_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_revisits_due
+        ON revisits(status, due);
+      `);
+
+      // ── F38 来源立场光谱 ──
+      // source_profiles：订阅源的立场/风格画像缓存（LLM 批量分析的持久化产物）。
+      // - feed_id PK：一源一画像（重析覆盖）；FK 级联随源删除清行；
+      // - profile_json：{spectrum, style, portrait}（-100 技术实用 … +100 观点人文）；
+      // - analyzed_at：分析时刻（7 天过期重析的判定列；过期与否纯读取侧对比）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS source_profiles (
+            feed_id      TEXT PRIMARY KEY NOT NULL,
+            profile_json TEXT NOT NULL DEFAULT '{}',
+            analyzed_at  REAL NOT NULL,
+
+            FOREIGN KEY(feed_id)
+                REFERENCES feeds(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_source_profiles_analyzed
+        ON source_profiles(analyzed_at);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */
