@@ -150,6 +150,8 @@ export function progressElement({ percent = null, note = '' } = {}) {
   const noteEl = document.createElement('span');
   noteEl.className = 'nj-progress-note';
   noteEl.textContent = String(note || '');
+  bar.setAttribute('role', 'progressbar'); // 批 3 审查 P2：aria 属性需 role 才对辅助技术生效
+  bar.setAttribute('aria-label', t('进度'));
   bar.append(fill, dot);
   el.append(bar, pct, noteEl);
 

@@ -568,7 +568,9 @@ export class KnowledgeCenter {
   }
 
   _emptyIn(host, title, desc) {
-    host.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`; // U31 空态二期
+    host.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3></h3><p></p></div>`;
+    host.querySelector('h3').textContent = t(title);
+    host.querySelector('p').textContent = t(desc); // U31 空态二期
   }
 
   _renderHighlights(items) {
@@ -2516,7 +2518,9 @@ export class KnowledgeCenter {
   }
 
   _empty(title, desc) {
-    this.contentHost.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`; // U31 空态二期
+    this.contentHost.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3></h3><p></p></div>`; // U31 空态二期：壳自带空槽位，填槽不追加
+    this.contentHost.querySelector('h3').textContent = t(title);
+    this.contentHost.querySelector('p').textContent = t(desc);
   }
 }
 

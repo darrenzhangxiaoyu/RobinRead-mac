@@ -123,6 +123,15 @@ export class ReaderView {
       clearTimeout(this._marginResizeTimer);
       this._marginResizeTimer = setTimeout(() => this._renderMarginNotes(), 180);
     });
+    // U34 边注重排统一兜底（批 3 审查 P2-3）：图片加载/字号变更/双语注入等一切正文回流
+    // 都会改变锚段纵向位置——ResizeObserver 单点覆盖，300ms 节流
+    if (typeof ResizeObserver !== 'undefined') {
+      this._marginRO = new ResizeObserver(() => {
+        if (!this._marginNotesOn()) return;
+        clearTimeout(this._marginROTimer);
+        this._marginROTimer = setTimeout(() => this._renderMarginNotes(), 300);
+      });
+    }
 
     this.entryID = null;
     this.entry = null;
@@ -180,6 +189,14 @@ export class ReaderView {
     this.progressEl = document.getElementById('reading-progress');
     // 阅读进度线：轨道满宽，填充宽度写在子元素上（端点气泡 data-pct 仍挂轨道）
     this.progressFill = this.progressEl ? this.progressEl.querySelector('.reading-progress-fill') : null;
+    // U39 专注进度线：聚焦模式（body.rp-focus）顶部的细进度线——非当前段落渐暗后，
+    // 本篇读到哪了一眼可辨。与 reading-progress 同源滚动比率，仅样式与可见门不同。
+    this.focusProgressEl = document.createElement('div');
+    this.focusProgressEl.className = 'nj-focus-progress';
+    this.focusProgressEl.id = 'nj-focus-progress';
+    this.focusProgressEl.innerHTML = '<i class="nj-focus-progress-fill"></i>';
+    this.focusProgressFill = this.focusProgressEl.querySelector('.nj-focus-progress-fill');
+    this.progressEl?.parentElement?.insertBefore(this.focusProgressEl, this.progressEl.nextSibling);
     // mouseup 兜底：部分场景 selectionchange 不触发（合成选区/快速点击）
     document.addEventListener('mouseup', () => setTimeout(() => this._onSelectionChange(), 10));
     // F33 外文源自动译：整篇译文状态（原文/译文双容器切换，不叠加）
@@ -744,6 +761,8 @@ export class ReaderView {
     this.body = document.createElement('div');
     this.body.className = 'robin-body';
     article.appendChild(this.body);
+    // U34 边注重排统一兜底：观察正文容器尺寸回流（图片加载/字号/双语注入均改变高度）
+    this._marginRO?.observe(this.body);
     // F33 整篇译文容器（双容器切换，不叠加）：默认隐藏，「译文」按钮切换显示
     this.translatedBody = document.createElement('div');
     this.translatedBody.className = 'robin-body robin-body-translated';
@@ -2004,6 +2023,8 @@ export class ReaderView {
       img.closest('.nj-img-failed-wrap')?.replaceWith(img);
       if (img.dataset.altBackup != null) { img.alt = img.dataset.altBackup; delete img.dataset.altBackup; }
       img.classList.remove('nj-img-loading', 'nj-img-retrying', 'nj-img-failed');
+      // U34 边注：图片加载后锚段全体下移——重排边注列（批 3 审查 P2-3）
+      document.dispatchEvent(new CustomEvent('robinread:margin-notes-changed'));
     });
     img.addEventListener('error', () => {
       // 图片失败自动重试（借鉴上游 v1.4.5）：首次失败经代理通道重取一次，仍失败才标记
@@ -2393,9 +2414,11 @@ export class ReaderView {
         if (label) label.textContent = `${t('翻译完成')} · ${doneUnits}`;
         else pill.textContent = `${t('翻译完成')} · ${doneUnits}`; // 兼容旧结构
         pill.classList.add('is-done');
-        setTimeout(() => document.getElementById('nj-translate-progress')?.remove(), 1800);
+        clearTimeout(this._translateDoneTimer); // 批 3 审查 P3-5：双语重开时取消旧摘除
+        this._translateDoneTimer = setTimeout(() => document.getElementById('nj-translate-progress')?.remove(), 1800);
       } else {
         pill?.remove();
+        clearTimeout(this._translateDoneTimer);
       }
       return;
     }
@@ -4271,6 +4294,8 @@ export class ReaderView {
         if (this.progressFill) this.progressFill.style.width = `${ratio0 * 100}%`;
         this.progressEl.dataset.pct = `${Math.round(ratio0 * 100)}%`; // 端点气泡显示阅读百分比
       }
+      // U39 专注进度线：聚焦模式下同比率填充（CSS 门控只在 body.rp-focus 显形）
+      if (this.focusProgressFill) this.focusProgressFill.style.width = `${ratio0 * 100}%`;
       if (this.entryID && max0 > 0) this._trackResume(Math.round(ratio0 * 100));
     }
     if (this._scrollTick) return;

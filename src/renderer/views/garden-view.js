@@ -165,7 +165,7 @@ export class GardenView {
     if (this.tab === 'challenge') { this._renderChallenge(); return; }
     if (!this.state) {
       // U31 空态二期：插画空态 + 错峰入场
-      this.bodyEl.innerHTML = `<div class="nj-garden-empty list-empty stagger">${staggerEmptyHTML('spark')}<h3></h3><p></p></div>`;
+      this.bodyEl.innerHTML = `<div class="nj-garden-empty list-empty stagger">${staggerEmptyHTML('spark')}</div>`;
       this.bodyEl.querySelector('h3').textContent = t('花园还在整理土壤');
       this.bodyEl.querySelector('p').textContent = t('稍后再来看看。');
       return;

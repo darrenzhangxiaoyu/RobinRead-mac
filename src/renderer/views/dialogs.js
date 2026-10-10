@@ -15,6 +15,7 @@ import { bookMetaLine, showCreateBookDialog } from './bookshelf.js';
 import { Toast } from './toast.js';
 import { focusArrowSiblings } from './kbd-nav.js'; /* U18：设置分区导航 ↑↓ */
 import { playSfx } from './sfx.js'; /* U27 微交互音效：开关开启瞬间试听 */
+import { resetOnboarding, presentOnboarding } from './onboarding.js'; /* U38 首启引导：设置→通用重开入口（onboarding 不反 imported dialogs，无环） */
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -108,6 +109,44 @@ export function settingsSearch(query) {
 
 // 产品官网（关于 / 反馈页入口，主进程更新检查源同源）
 const WEBSITE_URL = 'https://ronbinread-d9gmsqi2vc0a18f04-1401273698.tcloudbaseapp.com/';
+
+// ── U37 规则字段/操作符单一数据源（编辑器下拉与规则表格共用，原先两处字面量分叉）──
+const RULE_FIELD_OPTIONS = [
+  ['title', t('标题')], ['summary', t('摘要')], ['author', t('作者')],
+  ['url', t('URL')], ['body', t('正文')],
+];
+const RULE_OP_OPTIONS = [
+  ['contains', t('包含')], ['notContains', t('不包含')], ['regex', t('正则匹配')],
+  ['notRegex', t('正则不匹配')], ['startsWith', t('以…开头')], ['endsWith', t('以…结尾')],
+];
+const ruleFieldLabel = (key) => (RULE_FIELD_OPTIONS.find(([v]) => v === key) || [null, key])[1];
+const ruleOpLabel = (key) => (RULE_OP_OPTIONS.find(([v]) => v === key) || [null, key])[1];
+
+/** U38：设置分区直开「添加订阅」所需的文件夹清单（与 app.js collectFolders 同口径）。 */
+function dialogsCollectFolders(state) {
+  const folders = [];
+  for (const account of state?.sidebar || []) {
+    for (const folder of account.folders || []) folders.push(folder);
+  }
+  return folders;
+}
+/** U37 规则条件摘要（表格「操作符」列）：`标题 包含「周报」且 正文 不包含「广告」`。 */
+export function ruleConditionSummary(rule) {
+  const joiner = rule?.match === 'any' ? t(' 或 ') : t(' 且 ');
+  return (rule?.conditions || [])
+    .map((c) => `${ruleFieldLabel(c.field)} ${ruleOpLabel(c.op)}「${String(c.value ?? '')}」`)
+    .join(joiner);
+}
+/** U37 规则动作摘要（表格「动作」列）：`标为已读、收藏、打标签「周报」`。 */
+export function ruleActionSummary(rule) {
+  return (rule?.actions || []).map((a) => {
+    if (a === 'read') return t('标为已读');
+    if (a === 'star') return t('收藏');
+    if (a === 'later') return t('加入稍后读');
+    if (String(a).startsWith('tag:')) return tf('打标签「%@」', String(a).slice(4));
+    return String(a);
+  }).join('、');
+}
 
 function websiteButton(labelKey, url = WEBSITE_URL) {
   const button = document.createElement('button');
@@ -774,6 +813,25 @@ export class SettingsView {
       sfxRowEl.dataset.role = 'sfx-row'; // 探针定位（设置搜索索引同键）
       sfxRowEl.querySelector('.toggle')?.setAttribute('data-role', 'sfx-toggle');
     }
+
+    // ── 新手引导（U38）：清记账重开三步引导浮层 ──
+    const onboardingGroup = group(t('新手引导'), t('添加订阅、AI 配置与快捷键的三步引导。错过或想再看一遍，从这里重开。'), [
+      row(t('重看新手引导'), t('重开后按当前状态呈现：已有订阅源时可直接跳到 AI 配置或快捷键卡。'), (() => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-text bordered';
+        btn.dataset.role = 'onboarding-replay';
+        btn.textContent = t('重看引导');
+        btn.addEventListener('click', () => {
+          resetOnboarding(); // 清 localStorage 记账 → 引导可再次自动弹
+          presentOnboarding({
+            onAddFeed: () => showAddFeed(dialogsCollectFolders(this.state), () => this.handlers.onReload?.()),
+            onOpenAI: () => { this.dismiss(); this.present('ai'); },
+          });
+        });
+        return btn;
+      })()),
+    ]);
+    container.appendChild(onboardingGroup);
     container.appendChild(sfxGroup);
 
     // ── 阅读生物钟（F36）：24 桶热力条 + 高峰标注 + 对齐动作开关 ──
@@ -975,37 +1033,43 @@ export class SettingsView {
       }
     });
 
-    for (const account of accounts) {
+    // U37 表格化：账号列表改四列表格（账号/同步状态/操作/启停），多账号按列扫读。
+    // 同步状态行保留 .account-sync-line/.sync-ok/.sync-err 合同（getSyncStates 异步回填锚点）。
+    const acctRows = accounts.map((account) => {
       const isLocal = account.type === 'local';
-      const card = document.createElement('div');
-      card.style.padding = '12px 16px';
-      if (!isLocal) card.style.borderTop = '1px solid var(--separator)';
-      card.innerHTML = `
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span class="setting-icon">${icon(isLocal ? 'macDevices' : 'server')}</span>
-          <div style="flex:1;min-width:0;">
-            <div class="acct-row-title" style="font-size:13.5px;font-weight:600;"></div>
-            <div class="acct-row-desc" style="font-size:11.5px;color:var(--text-secondary);"></div>
-          </div>
-        </div>
-      `;
-      card.querySelector('.acct-row-title').textContent = isLocal ? t('我的 Mac (本地账号)') : account.displayName;
-      card.querySelector('.acct-row-desc').textContent = isLocal ? t('本机独立存储与离线阅读') : `${account.username || ''} @ ${account.endpointURL || ''}`;
 
-      const toggle = toggleControl(account.isEnabled, async (value) => {
-        await window.robin.setAccountEnabled(account.id, value);
-        this.handlers.onReload?.();
-      });
-      card.firstElementChild.appendChild(toggle);
+      const acctCell = document.createElement('div');
+      acctCell.className = 'nj-acct-id';
+      const acctIcon = document.createElement('span');
+      acctIcon.className = 'setting-icon';
+      acctIcon.innerHTML = icon(isLocal ? 'macDevices' : 'server');
+      const acctText = document.createElement('div');
+      acctText.className = 'nj-acct-text';
+      const acctTitle = document.createElement('div');
+      acctTitle.className = 'acct-row-title';
+      acctTitle.style.cssText = 'font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      acctTitle.textContent = isLocal ? t('我的 Mac (本地账号)') : account.displayName;
+      const acctDesc = document.createElement('div');
+      acctDesc.className = 'acct-row-desc';
+      acctDesc.style.cssText = 'font-size:11.5px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      acctDesc.textContent = isLocal ? t('本机独立存储与离线阅读') : `${account.username || ''} @ ${account.endpointURL || ''}`;
+      acctText.append(acctTitle, acctDesc);
+      acctCell.append(acctIcon, acctText);
 
+      // 同步状态格（本地账号留空占位，保持列对齐）
+      const syncCell = document.createElement('div');
+      syncCell.className = 'nj-acct-sync';
       if (!isLocal) {
-        const sub = document.createElement('div');
-        sub.style.cssText = 'display:flex;align-items:center;gap:8px;padding-left:40px;margin-top:8px;';
-        sub.innerHTML = `
-          <div class="account-sync-line" data-account-id="${attr(account.id)}" style="flex:1;min-width:0;display:flex;gap:12px;font-size:11px;color:var(--text-secondary);">
+        syncCell.innerHTML = `
+          <div class="account-sync-line" data-account-id="${attr(account.id)}">
             <span class="sync-ok" style="display:none;color:#4e9c51;"></span>
             <span class="sync-err" style="display:none;color:#dd8a1e;"></span>
           </div>`;
+      }
+
+      const manageCell = document.createElement('div');
+      manageCell.className = 'nj-acct-manage';
+      if (!isLocal) {
         const syncBtn = document.createElement('button');
         syncBtn.className = 'btn-text';
         syncBtn.textContent = t('立即同步');
@@ -1020,7 +1084,7 @@ export class SettingsView {
         const removeBtn = document.createElement('button');
         removeBtn.className = 'btn icon-only';
         removeBtn.innerHTML = icon('trash');
-        removeBtn.style.color = '#c93b3b';
+        removeBtn.style.color = 'var(--danger)';
         removeBtn.title = t('移除账号');
         removeBtn.addEventListener('click', async () => {
           const ok = await confirmBox(t('确认移除账号？'), { message: t('移除此账号将清除其在 RobinRead 本地同步的数据与凭据，但不会从 FreshRSS 服务器删除或退订您的 Feed。'), okLabel: t('移除'), danger: true });
@@ -1030,11 +1094,32 @@ export class SettingsView {
             this.render();
           }
         });
-        sub.append(syncBtn, removeBtn);
-        card.appendChild(sub);
+        manageCell.append(syncBtn, removeBtn);
       }
-      host.appendChild(card);
-    }
+
+      return {
+        key: account.id,
+        className: account.isEnabled ? '' : 'acct-disabled',
+        cells: {
+          acct: acctCell,
+          sync: syncCell,
+          manage: manageCell,
+          toggle: toggleControl(account.isEnabled, async (value) => {
+            await window.robin.setAccountEnabled(account.id, value);
+            this.handlers.onReload?.();
+          }),
+        },
+      };
+    });
+    host.appendChild(settingsTable({
+      columns: [
+        { key: 'acct', label: t('账号'), track: 'minmax(0, 1.5fr)' },
+        { key: 'sync', label: t('同步状态'), track: 'minmax(0, 1fr)' },
+        { key: 'manage', label: t('操作'), track: 'auto' },
+        { key: 'toggle', label: t('启停'), track: '44px' },
+      ],
+      rows: acctRows,
+    }));
 
     const addAction = document.createElement('button');
     addAction.className = 'btn-text primary';
@@ -1153,34 +1238,14 @@ export class SettingsView {
       return;
     }
 
+    // U37 表格化：邮箱账户列表改四列表格（邮箱/上次同步/操作/启停）；
+    // 每账户的自签名开关与发件人白名单留在表格下方的明细卡（详情多于表格一行的内容）。
+    const mailTableRows = [];
+    const mailPanels = [];
     for (const account of accounts) {
-      const card = document.createElement('div');
-      card.className = 'settings-group';
-      const head = document.createElement('div');
-      head.style.cssText = 'display:flex;align-items:center;gap:12px;padding:12px 16px;';
-      const iconEl = document.createElement('span');
-      iconEl.className = 'setting-icon';
-      iconEl.innerHTML = icon('envelopeClosed');
-      const title = document.createElement('div');
-      title.style.flex = '1';
-      title.style.minWidth = '0';
-      const titleLine = document.createElement('div');
-      titleLine.style.cssText = 'font-size:13.5px;font-weight:600;';
-      titleLine.textContent = account.username;
-      const descLine = document.createElement('div');
-      descLine.style.cssText = 'font-size:11.5px;color:var(--text-secondary);';
-      const lastSyncText = account.lastSync
-        ? tf('上次同步：%@', new Date(account.lastSync * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
-        : t('尚未同步');
-      descLine.textContent = `${account.host}:${account.port} · ${lastSyncText}`;
-      title.append(titleLine, descLine);
-      head.append(iconEl, title, toggleControl(account.enabled, async (value) => {
-        await window.robin.mailSetEnabled(account.id, value);
-      }));
-
-      // 测试连接（用已存凭据）
-      const actions = document.createElement('div');
-      actions.style.cssText = 'display:flex;align-items:center;gap:8px;padding:0 16px 10px;flex-wrap:wrap;';
+      // 操作格：测试连接（用已存凭据）/ 添加发件人 / 删除
+      const manageCell = document.createElement('div');
+      manageCell.className = 'nj-mail-manage';
       const testBtn = document.createElement('button');
       testBtn.className = 'btn-text bordered';
       testBtn.textContent = t('测试连接');
@@ -1231,11 +1296,46 @@ export class SettingsView {
         this.handlers.onRefreshState?.();
         this.render();
       });
-      actions.append(testBtn, addSenderBtn, removeBtn);
+      manageCell.append(testBtn, addSenderBtn, removeBtn);
 
-      // 自签名开关（风险明示）
+      const mailCell = document.createElement('div');
+      mailCell.className = 'nj-acct-id';
+      const mailIcon = document.createElement('span');
+      mailIcon.className = 'setting-icon';
+      mailIcon.innerHTML = icon('envelopeClosed');
+      const mailText = document.createElement('div');
+      mailText.className = 'nj-acct-text';
+      const mailTitle = document.createElement('div');
+      mailTitle.className = 'acct-row-title';
+      mailTitle.style.cssText = 'font-weight:600;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      mailTitle.textContent = account.username;
+      const mailDesc = document.createElement('div');
+      mailDesc.className = 'acct-row-desc';
+      mailDesc.style.cssText = 'font-size:11.5px;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      mailDesc.textContent = `${account.host}:${account.port}`;
+      mailText.append(mailTitle, mailDesc);
+      mailCell.append(mailIcon, mailText);
+
+      mailTableRows.push({
+        key: account.id,
+        className: account.enabled ? '' : 'acct-disabled',
+        cells: {
+          acct: mailCell,
+          sync: account.lastSync
+            ? tf('上次同步：%@', new Date(account.lastSync * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+            : t('尚未同步'),
+          manage: manageCell,
+          toggle: toggleControl(account.enabled, async (value) => {
+            await window.robin.mailSetEnabled(account.id, value);
+          }),
+        },
+      });
+
+      // 明细卡：自签名开关（风险明示）+ 白名单发件人列表（异步填充）
+      const panel = document.createElement('div');
+      panel.className = 'nj-mail-panel';
       const selfSignedRow = document.createElement('div');
-      selfSignedRow.style.cssText = 'display:flex;align-items:center;gap:10px;padding:0 16px 10px;font-size:12px;';
+      selfSignedRow.className = 'nj-mail-selfsigned';
       const selfSignedToggle = toggleControl(account.allowSelfSigned, async (value) => {
         if (value) {
           const confirmed = await confirmBox(t('允许自签名证书？'), {
@@ -1253,15 +1353,14 @@ export class SettingsView {
       selfSignedLabel.textContent = t('允许自签名证书（有安全风险）');
       selfSignedRow.append(selfSignedToggle, selfSignedLabel);
 
-      // 白名单发件人列表（异步填充）
       const senderHost = document.createElement('div');
-      senderHost.style.cssText = 'border-top:1px solid var(--separator);';
+      senderHost.className = 'nj-mail-senders';
       const senderHead = document.createElement('div');
-      senderHead.style.cssText = 'padding:10px 16px 4px;font-size:12px;font-weight:600;color:var(--text-secondary);';
+      senderHead.className = 'nj-mail-senders-head';
       senderHead.textContent = t('发件人白名单');
       senderHost.appendChild(senderHead);
       window.robin.mailSenders(account.id).then((senders) => {
-        if (!card.isConnected) return;
+        if (!panel.isConnected) return;
         const list = Array.isArray(senders) ? senders : [];
         if (!list.length) {
           const empty = document.createElement('div');
@@ -1298,9 +1397,19 @@ export class SettingsView {
         }
       });
 
-      card.append(head, actions, selfSignedRow, senderHost);
-      container.appendChild(card);
+      panel.append(selfSignedRow, senderHost);
+      mailPanels.push(panel);
     }
+    container.appendChild(settingsTable({
+      columns: [
+        { key: 'acct', label: t('邮箱'), track: 'minmax(0, 1.4fr)' },
+        { key: 'sync', label: t('上次同步'), track: 'minmax(0, 0.8fr)' },
+        { key: 'manage', label: t('操作'), track: 'auto' },
+        { key: 'toggle', label: t('启停'), track: '44px' },
+      ],
+      rows: mailTableRows,
+    }));
+    for (const panel of mailPanels) container.appendChild(panel);
   }
 
   // MARK: 知识（F15 AI 自动标签）
@@ -1958,23 +2067,30 @@ export class SettingsView {
       countNote.textContent = t('%lld / 50 条规则').replace('%lld', String(list.length));
       toolbar.appendChild(countNote);
 
-      list.forEach((rule, index) => {
+      // U37 表格化：规则列表改六列表格（优先级/名称/操作符/动作/命中数/启停 + 行尾管理钮），
+      // 规则多时按列扫读不再逐卡上下文切换。行保留 .rule-row 类（既有探针/样式锚点）。
+      const ruleRows = list.map((rule, index) => {
         const scopeText = rule.scope.kind === 'all'
           ? t('全部订阅源')
           : rule.scope.ids.slice(0, 2).map(feedTitle).join('、') + (rule.scope.ids.length > 2 ? ` +${rule.scope.ids.length - 2}` : '');
-        const rowEl = document.createElement('div');
-        rowEl.className = 'rule-row';
-        const label = document.createElement('div');
-        label.className = 'rule-row-label';
-        const title = document.createElement('div');
-        title.className = 'rule-row-title';
-        title.textContent = rule.name; // textContent：不可信回显安全
-        const desc = document.createElement('div');
-        desc.className = 'rule-row-desc';
-        desc.textContent = `${scopeText} · ${t('已命中 %lld 次').replace('%lld', String(rule.hitCount))}`;
-        label.append(title, desc);
-        const controls = document.createElement('div');
-        controls.className = 'rule-row-controls';
+        const nameCell = document.createElement('div');
+        nameCell.className = 'nj-rule-name';
+        const nameLine = document.createElement('div');
+        nameLine.className = 'rule-row-title';
+        nameLine.textContent = rule.name; // textContent：不可信回显安全
+        const scopeLine = document.createElement('div');
+        scopeLine.className = 'rule-row-desc';
+        scopeLine.textContent = scopeText;
+        nameCell.append(nameLine, scopeLine);
+
+        // 优先级格：序号 + 上下移微钮（上下移就是改优先级，与列语义同址）
+        const priCell = document.createElement('div');
+        priCell.className = 'nj-rule-pri';
+        const priNum = document.createElement('span');
+        priNum.className = 'nj-rule-pri-num';
+        priNum.textContent = String(index + 1);
+        const priBtns = document.createElement('span');
+        priBtns.className = 'nj-rule-pri-btns';
         const up = document.createElement('button');
         up.className = 'btn icon-only';
         up.title = t('上移');
@@ -1989,6 +2105,12 @@ export class SettingsView {
         down.innerHTML = icon('chevronDown');
         down.disabled = index === list.length - 1;
         down.addEventListener('click', async () => { await window.robin.rulesMove(rule.id, 'down'); this.render(); });
+        priBtns.append(up, down);
+        priCell.append(priNum, priBtns);
+
+        // 管理格：编辑/删除（原行内控件原位保留）
+        const manageCell = document.createElement('div');
+        manageCell.className = 'nj-rule-manage';
         const edit = document.createElement('button');
         edit.className = 'btn icon-only';
         edit.title = t('编辑');
@@ -2009,13 +2131,37 @@ export class SettingsView {
           await window.robin.rulesDelete(rule.id);
           this.render();
         });
-        controls.append(toggleControl(rule.enabled, async (v) => {
-          await window.robin.rulesSetEnabled(rule.id, v);
-          this.render();
-        }), up, down, edit, del);
-        rowEl.append(label, controls);
-        listEl.appendChild(rowEl);
+        manageCell.append(edit, del);
+
+        return {
+          key: rule.id,
+          className: `rule-row ${rule.enabled ? '' : 'rule-disabled'}`,
+          cells: {
+            pri: priCell,
+            name: nameCell,
+            ops: ruleConditionSummary(rule),
+            act: ruleActionSummary(rule),
+            hits: String(rule.hitCount || 0),
+            toggle: toggleControl(rule.enabled, async (v) => {
+              await window.robin.rulesSetEnabled(rule.id, v);
+              this.render();
+            }),
+            manage: manageCell,
+          },
+        };
       });
+      listEl.appendChild(settingsTable({
+        columns: [
+          { key: 'pri', label: t('优先级'), track: '72px' },
+          { key: 'name', label: t('名称'), track: 'minmax(0, 1.2fr)' },
+          { key: 'ops', label: t('操作符'), track: 'minmax(0, 1.7fr)' },
+          { key: 'act', label: t('动作'), track: 'minmax(0, 1.1fr)' },
+          { key: 'hits', label: t('命中数'), track: '56px' },
+          { key: 'toggle', label: t('启停'), track: '44px' },
+          { key: 'manage', label: t('操作'), track: '64px' },
+        ],
+        rows: ruleRows,
+      }));
     }).catch(() => { /* 列表拉取失败：保持空态文案 */ });
   }
 
@@ -3541,14 +3687,7 @@ export function showRuleEditor({ feeds = [], rule = null, onSaved }) {
 
   const body = modal.querySelector('.sheet-body');
 
-  const FIELD_OPTIONS = [
-    ['title', t('标题')], ['summary', t('摘要')], ['author', t('作者')],
-    ['url', t('URL')], ['body', t('正文')],
-  ];
-  const OP_OPTIONS = [
-    ['contains', t('包含')], ['notContains', t('不包含')], ['regex', t('正则匹配')],
-    ['notRegex', t('正则不匹配')], ['startsWith', t('以…开头')], ['endsWith', t('以…结尾')],
-  ];
+  // U37：字段/操作符选项表提升为模块级单一数据源（与规则表格共用）
 
   // ── 名称 ──
   const nameInput = field(body, t('规则名称'), 'pencil', t('例如：周报自动已读'));
@@ -3633,7 +3772,7 @@ export function showRuleEditor({ feeds = [], rule = null, onSaved }) {
     row.className = 'rule-cond-row';
     const fieldSel = document.createElement('select');
     fieldSel.className = 'control';
-    for (const [value, text] of FIELD_OPTIONS) {
+    for (const [value, text] of RULE_FIELD_OPTIONS) {
       const option = document.createElement('option');
       option.value = value; option.textContent = text;
       fieldSel.appendChild(option);
@@ -3641,7 +3780,7 @@ export function showRuleEditor({ feeds = [], rule = null, onSaved }) {
     fieldSel.value = condition.field;
     const opSel = document.createElement('select');
     opSel.className = 'control';
-    for (const [value, text] of OP_OPTIONS) {
+    for (const [value, text] of RULE_OP_OPTIONS) {
       const option = document.createElement('option');
       option.value = value; option.textContent = text;
       opSel.appendChild(option);
@@ -3819,8 +3958,8 @@ export function showRuleEditor({ feeds = [], rule = null, onSaved }) {
     result.conditions.forEach((condition) => {
       const item = document.createElement('div');
       item.className = `rule-test-cond ${condition.hit ? 'hit' : 'miss'}`;
-      const fieldText = (FIELD_OPTIONS.find(([v]) => v === condition.field) || ['', condition.field])[1];
-      const opText = (OP_OPTIONS.find(([v]) => v === condition.op) || ['', condition.op])[1];
+      const fieldText = (RULE_FIELD_OPTIONS.find(([v]) => v === condition.field) || ['', condition.field])[1];
+      const opText = (RULE_OP_OPTIONS.find(([v]) => v === condition.op) || ['', condition.op])[1];
       item.innerHTML = `${icon(condition.hit ? 'checkCircle' : 'close')}<span class="cond"></span>`;
       const condEl = item.querySelector('.cond');
       condEl.textContent = `${fieldText} ${opText} ${condition.value}`;
@@ -4039,6 +4178,57 @@ function staticText(text) {
   el.style.cssText = 'font-size:12px;color:var(--text-secondary);max-width:240px;text-align:right;';
   el.textContent = text;
   return el;
+}
+
+/**
+ * U37 表格化高级设置：设置分区通用表格（列头 + 数据行；行内控件原位保留）。
+ * columns: [{ key, label, track }]，track 为 grid-template-columns 轨道（inline 变量下发）；
+ * rows: [{ key, className, cells: { [colKey]: Node|String } }]。全部 textContent/子节点装配，
+ * 用户数据（规则名/条件值/账号名）永不走 innerHTML。
+ */
+function settingsTable({ columns, rows = [], emptyText = '' }) {
+  const table = document.createElement('div');
+  table.className = 'nj-settings-table';
+  table.setAttribute('role', 'table');
+  table.style.setProperty('--nj-table-cols', columns.map((c) => c.track).join(' '));
+  const head = document.createElement('div');
+  head.className = 'nj-settings-table-head';
+  head.setAttribute('role', 'row');
+  for (const col of columns) {
+    const cell = document.createElement('span');
+    cell.className = 'nj-settings-table-cell';
+    cell.setAttribute('role', 'columnheader');
+    cell.textContent = col.label;
+    head.appendChild(cell);
+  }
+  table.appendChild(head);
+  const body = document.createElement('div');
+  body.className = 'nj-settings-table-body';
+  for (const r of rows) {
+    const line = document.createElement('div');
+    line.className = `nj-settings-table-row${r.className ? ` ${r.className}` : ''}`;
+    line.setAttribute('role', 'row');
+    if (r.key != null) line.dataset.rowKey = String(r.key);
+    for (const col of columns) {
+      const cell = document.createElement('span');
+      cell.className = `nj-settings-table-cell cell-${col.key}`;
+      cell.setAttribute('role', 'cell');
+      const content = r.cells[col.key];
+      if (content == null) cell.textContent = '';
+      else if (typeof content === 'string') cell.textContent = content;
+      else cell.appendChild(content);
+      line.appendChild(cell);
+    }
+    body.appendChild(line);
+  }
+  table.appendChild(body);
+  if (!rows.length && emptyText) {
+    const empty = document.createElement('div');
+    empty.className = 'nj-settings-table-empty';
+    empty.textContent = emptyText;
+    table.appendChild(empty);
+  }
+  return table;
 }
 
 function linkBtn(label, onClick, bordered = false) {

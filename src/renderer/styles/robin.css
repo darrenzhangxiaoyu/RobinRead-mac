@@ -8400,7 +8400,7 @@ html.theme-transition * {
   height: var(--space-2);
   border-radius: var(--radius-full);
   background: var(--accent);
-  animation: nj-progress-breathe 1.6s var(--ease-in-out) infinite;
+  animation: nj-progress-breathe var(--dur-slow) var(--ease-in-out) infinite; /* 批 3 审查 P3-9：裸时长归 --dur-slow 令牌 */
 }
 @keyframes nj-progress-breathe {
   0%, 100% { opacity: 0.35; transform: scale(0.72); }
@@ -8552,4 +8552,308 @@ html.theme-transition * {
   font-size: var(--fs-sm);
   font-weight: 600;
   line-height: 1;
+}
+
+/* ==========================================================================
+   视觉批 4（U36–U40）：杂志卡 2.0 / 设置表格化 / 首启引导 / 全屏仪式感 / 终局一致性
+   护栏口径：本段零裸字号 / 零裸圆角 / 零裸时长（一律令牌）。
+   ========================================================================== */
+
+/* ── U36 杂志卡三变体（classic 经典居中 / split 左图右文 / immersive 全幅沉浸）
+   选型 pickMagCardVariant（list.js 纯函数）：无图走纯排版、有图走图版（长标题→沉浸）。
+   悬停视差：封面图消费 --nj-par-x/--nj-par-y（JS 钳位 ±6px；CSS no-preference 门 +
+   JS matchMedia 双门，reduced-motion 完全静止）。── */
+.nj-mag-card--classic .mag-cover { display: none; } /* 无图：封面槽隐去 */
+.nj-mag-card--classic .mag-body {
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  text-align: center;
+}
+.nj-mag-card--classic .mag-title { padding-right: 0; padding-left: var(--space-4); }
+.nj-mag-card--classic .mag-meta { justify-content: center; }
+
+.nj-mag-card--split { flex-direction: row; }
+.nj-mag-card--split .mag-cover {
+  width: 44%;
+  aspect-ratio: auto;
+  flex: 0 0 auto;
+}
+.nj-mag-card--split .mag-body { flex: 1 1 auto; }
+
+.nj-mag-card--immersive {
+  position: relative;
+  min-height: calc(var(--space-8) * 5);
+}
+.nj-mag-card--immersive .mag-cover {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: auto;
+}
+.nj-mag-card--immersive .mag-body {
+  position: relative;
+  margin-top: auto;
+  padding-top: var(--space-8);
+  background: linear-gradient(180deg, transparent, var(--surface-1) 62%);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nj-mag-card--split .mag-cover img,
+  .nj-mag-card--immersive .mag-cover img {
+    transform: translate(calc(var(--nj-par-x, 0) * 1px), calc(var(--nj-par-y, 0) * 1px)) scale(1.06);
+    transition: transform var(--dur-fast) var(--ease-out);
+    will-change: transform;
+  }
+}
+
+/* ── U37 表格化高级设置：规则 / 账号 / 邮箱列表按列扫读（settingsTable 通用表格）──
+   列轨道由 JS 按表下发（--nj-table-cols）；本块零裸字号/零裸圆角/零裸时长。── */
+.nj-settings-table { display: flex; flex-direction: column; }
+.nj-settings-table-head,
+.nj-settings-table-row {
+  display: grid;
+  grid-template-columns: var(--nj-table-cols, none);
+  align-items: center;
+  column-gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+}
+.nj-settings-table-head {
+  border-bottom: 1px solid var(--hairline);
+  color: var(--text-tertiary);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.nj-settings-table-row { border-top: 1px solid var(--hairline); min-width: 0; }
+.nj-settings-table-row:first-of-type { border-top: none; }
+.nj-settings-table-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nj-settings-table-cell.cell-hits,
+.nj-settings-table-cell.cell-sync { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: var(--fs-lg); }
+.nj-settings-table-cell.cell-ops,
+.nj-settings-table-cell.cell-act { color: var(--text-secondary); font-size: var(--fs-md); line-height: 1.5; }
+.nj-settings-table-cell.cell-toggle,
+.nj-settings-table-cell.cell-manage { overflow: visible; }
+.nj-settings-table-empty { padding: var(--space-3) var(--space-4); font-size: var(--fs-lg); color: var(--text-tertiary); }
+/* 表格行禁用态：整行褪色（启停关），启停/管理钮保持可触达 */
+.nj-settings-table-row.rule-disabled .cell-name,
+.nj-settings-table-row.rule-disabled .cell-ops,
+.nj-settings-table-row.rule-disabled .cell-act,
+.nj-settings-table-row.acct-disabled .cell-acct { opacity: 0.55; }
+/* 规则表：优先级格（序号 + 上下移微钮纵叠）与名称格（名称 + 作用域副行） */
+.nj-rule-pri { display: inline-flex; align-items: center; gap: var(--space-2); }
+.nj-rule-pri-num {
+  min-width: var(--space-4);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.nj-rule-pri-btns { display: inline-flex; flex-direction: column; gap: 0; }
+.nj-rule-pri-btns .btn.icon-only { width: var(--space-5); height: var(--space-4); }
+.nj-rule-pri-btns .btn.icon-only svg { width: var(--icon-sm); height: var(--icon-sm); }
+.nj-rule-name { display: flex; flex-direction: column; gap: 2px; }
+.nj-rule-manage, .nj-acct-manage, .nj-mail-manage {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+/* 账号表：身份格（图标 + 名称/描述双行，字号沿内联原值）与同步状态格 */
+.nj-acct-id { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.nj-acct-text { flex: 1; min-width: 0; }
+.nj-acct-sync .account-sync-line {
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+  font-size: var(--fs-md);
+  color: var(--text-secondary);
+}
+/* 邮箱表下方的每账户明细卡（自签名 + 发件人白名单） */
+.nj-mail-panel { border-top: 1px solid var(--separator); }
+.nj-mail-selfsigned {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) 0;
+  font-size: var(--fs-md);
+}
+.nj-mail-senders { border-top: 1px solid var(--separator); }
+.nj-mail-senders-head {
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* ── U38 首启引导三步浮层（①欢迎+添加订阅 ②AI 配置可跳过 ③完成揭示快捷键卡）──
+   记账 localStorage robinread.onboardingSeen；设置→通用可重开。本块零裸字号/零裸圆角/零裸时长。 */
+.nj-onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 960;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--paper, #14100c) 45%, transparent);
+  animation: materialize var(--dur-mid) var(--ease-out) both;
+}
+.nj-onboarding-card {
+  position: relative;
+  width: min(440px, calc(100vw - 72px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 1px solid var(--note-border);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-3);
+  box-shadow: var(--shadow-3);
+  text-align: center;
+}
+.nj-onboarding-skip {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-md);
+}
+.nj-onboarding-skip:hover { color: var(--text-primary); }
+.nj-onboarding-head { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
+.nj-onboarding-badge {
+  display: inline-flex;
+  padding: var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.nj-onboarding-badge svg { width: var(--icon-lg); height: var(--icon-lg); }
+.nj-onboarding-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-display);
+  color: var(--text-primary);
+}
+.nj-onboarding-desc { margin: 0; font-size: var(--fs-md); color: var(--text-secondary); line-height: 1.6; }
+.nj-onboarding-actions { display: flex; justify-content: center; min-height: var(--space-8); }
+.nj-onboarding-card.step-keys .nj-onboarding-actions {
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 var(--space-2);
+}
+.nj-onboarding-dots { display: flex; justify-content: center; gap: var(--space-2); }
+.nj-onboarding-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--row-selected);
+  transition: background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.nj-onboarding-dot.active { background: var(--accent); transform: scale(1.15); }
+.nj-onboarding-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+.nj-onboarding-keys { display: flex; flex-direction: column; gap: var(--space-2); width: 100%; text-align: left; }
+.nj-onboarding-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--fs-md);
+  color: var(--text-secondary);
+}
+.nj-onboarding-key-chips { display: inline-flex; gap: var(--space-1); }
+.nj-onboarding-key-chips kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--space-5);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--note-border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--note-background);
+  font-family: inherit;
+  font-size: var(--fs-md);
+  color: var(--text-primary);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nj-onboarding-card { animation: nj-empty-rise var(--dur-slow) var(--ease-out) both; }
+}
+
+/* ── U39 全屏阅读仪式感：禅模式进入/退出的呼吸编舞（遮罩→标题→正文 0/60/120ms 三级 stagger）
+   与聚焦模式顶部细进度线。reduced-motion 由全局收敛块停表直达终态。── */
+body.zen-ritual::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--page-background);
+  pointer-events: none;
+  animation: nj-zen-veil var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--nj-stagger-1);
+}
+body.zen-ritual .robin-header-container {
+  animation: nj-zen-rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--nj-stagger-2);
+}
+body.zen-ritual .robin-body {
+  animation: nj-zen-rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--nj-stagger-3);
+}
+body.zen-ritual-exit::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--page-background);
+  pointer-events: none;
+  animation: nj-zen-veil-return var(--dur-mid) var(--ease-out) both;
+}
+@keyframes nj-zen-veil {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes nj-zen-veil-return {
+  0% { opacity: 0; }
+  40% { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+@keyframes nj-zen-rise {
+  from { opacity: 0; transform: translateY(var(--space-2)); }
+  to { opacity: 1; transform: none; }
+}
+/* 专注进度线：body.rp-focus（聚焦模式）显形的顶部细线，随本篇滚动比率填充 */
+.nj-focus-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--space-1);
+  z-index: 6;
+  background: transparent;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.nj-focus-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width var(--dur-instant) var(--ease-out);
+}
+body.rp-focus .nj-focus-progress { opacity: 1; }
+@media print {
+  .nj-focus-progress { display: none !important; }
 }

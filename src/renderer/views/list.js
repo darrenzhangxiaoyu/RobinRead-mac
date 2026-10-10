@@ -1094,6 +1094,10 @@ export class ListView {
   magCard(item) {
     const card = document.createElement('article');
     card.className = `entry-row nj-mag-card ${item.isRead ? 'read' : 'unread'} ${item.isStarred ? 'starred' : ''} ${item.isLater ? 'later' : ''} ${this._markNew && !this._knownIds.has(item.id) ? 'row-new' : ''}`;
+    // U36 杂志卡三变体：按图片有无与标题体量自动选型（有图走图版，无图走纯排版）
+    const variant = pickMagCardVariant(item);
+    card.classList.add(`nj-mag-card--${variant}`);
+    card.dataset.magVariant = variant;
     card.dataset.entryId = item.id;
     card.dataset.isLater = item.isLater ? '1' : '0';
     card.tabIndex = -1;
@@ -1103,6 +1107,7 @@ export class ListView {
     const imageURL = firstImageURL(item.contentHead);
     if (imageURL) {
       const img = document.createElement('img');
+      img.className = 'mag-cover-img'; // U36 悬停视差作用面
       img.loading = 'lazy';
       img.decoding = 'async';
       img.fetchPriority = 'low'; // 封面让位于正文与视口内容（R31）
@@ -1158,7 +1163,27 @@ export class ListView {
       this.handlers.onContext(event, item);
     });
     this._bindEntryDragSource(card, item); // U28 拖拽体系：杂志卡同样可拖入收藏/稍后读
+    this._bindCoverParallax(card, cover.querySelector('img.mag-cover-img')); // U36 悬停视差
     return card;
+  }
+
+  /**
+   * U36 悬停视差：指针在卡面移动时写 --nj-par-x/--nj-par-y（±6px 钳位），
+   * 封面图 transform translate 微视差（CSS 端 no-preference 门 + 此处 matchMedia 双保险）。
+   * 仅图版（split/immersive）生效；reduced-motion 用户完全不动。
+   */
+  _bindCoverParallax(card, img) {
+    if (!img) return;
+    card.addEventListener('pointermove', (event) => {
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      const offset = magCardParallax(card.getBoundingClientRect(), event.clientX, event.clientY);
+      card.style.setProperty('--nj-par-x', String(offset.x));
+      card.style.setProperty('--nj-par-y', String(offset.y));
+    });
+    card.addEventListener('pointerleave', () => {
+      card.style.setProperty('--nj-par-x', '0');
+      card.style.setProperty('--nj-par-y', '0');
+    });
   }
 
   markSelected(entryID) {
@@ -1835,4 +1860,32 @@ function nearestMagCard(cards, from, key) {
     if (score < bestScore) { bestScore = score; best = card; }
   }
   return best;
+}
+
+/**
+ * U36 杂志卡三变体选型（纯函数，探针可直测）：
+ * - 无图 → classic（经典居中：隐去封面槽，纯排版居中版式）
+ * - 有图 + 标题 ≤28 字 → split（左图右文）
+ * - 有图 + 标题 >28 字 → immersive（全幅沉浸：封面满卡、标题叠底部渐变）
+ */
+export function pickMagCardVariant(item) {
+  const hasImage = Boolean(firstImageURL(item?.contentHead));
+  if (!hasImage) return 'classic';
+  const titleLength = stripHtml(item?.title || '').length;
+  return titleLength > MAG_TITLE_IMMERSIVE_AT ? 'immersive' : 'split';
+}
+
+/** U36 immersive 变体门槛（字数）：超过即封面满卡压标题。 */
+const MAG_TITLE_IMMERSIVE_AT = 28;
+
+/**
+ * U36 悬停视差偏移（纯函数，探针可直测）：指针相对卡面中心的归一偏移，
+ * 钳位到 ±max（px）。CSS 消费 --nj-par-x/--nj-par-y 做封面 translate 微视差。
+ */
+export function magCardParallax(rect, clientX, clientY, max = 6) {
+  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  if (!rect || rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+  const nx = clamp(((clientX - rect.left) / rect.width) * 2 - 1);
+  const ny = clamp(((clientY - rect.top) / rect.height) * 2 - 1);
+  return { x: Math.round(nx * max), y: Math.round(ny * max) };
 }

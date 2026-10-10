@@ -49,6 +49,7 @@ import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 import { syncPaletteCommand } from './views/sync-command.js';
 import { Toast } from './views/toast.js';
+import { onboardingShouldRun, presentOnboarding, resetOnboarding, onboardingSeen } from './views/onboarding.js'; /* U38 首启引导流 */
 
 let customThemeTokens = null; // null = 使用内置纸感默认
 const state = {
@@ -296,8 +297,28 @@ async function bootstrap() {
 
   await reloadAll();
   setActiveColumn(1, { autoSelect: false });
+  maybeRunOnboarding(); // U38 首启引导：无订阅源且未看过 → 三步引导浮层
   setTimeout(checkUpdateQuietly, 6000);
 }
+
+/**
+ * U38 首启引导流：无订阅源判定（各账户合计为 0）+ localStorage 未记账 →
+ * 呈现三步引导（①欢迎+添加订阅 ②AI 配置可跳过 ③完成揭示快捷键卡）。
+ * 设置 → 通用「重看新手引导」经 resetOnboarding 后走同一入口。
+ */
+function maybeRunOnboarding() {
+  if (!onboardingShouldRun(countAllFeeds())) return;
+  presentOnboarding({
+    onAddFeed: () => showAddFeed(collectFolders(), reloadAll),
+    onOpenAI: () => showSettings('ai'),
+  });
+}
+window.__robinOnboarding = { // E2E 测试句柄
+  maybeRun: maybeRunOnboarding,
+  present: (deps = {}) => presentOnboarding(deps),
+  reset: resetOnboarding,
+  seen: onboardingSeen,
+};
 
 /** U24 触控板/触屏手势：阅读器捏合缩放字号；触屏长按派发合成 contextmenu（走既有右键管线）。 */
 function bindGestures() {
@@ -321,6 +342,8 @@ function applyTheme(snapshot) {
 
 function applyFontSize(size) {
   document.documentElement.style.setProperty('--article-font-size', `${size || 17}px`);
+  // U34 边注：字号变更改变锚段纵向位置——重排边注列（批 3 审查 P2-3）
+  document.dispatchEvent(new CustomEvent('robinread:margin-notes-changed'));
 }
 
 /** 自定义 CSS（方向 24）：注入 <style id="nj-custom-css">，空值时移除（幂等）。 */
@@ -732,9 +755,24 @@ function findFeed(feedID) {
 
 // MARK: - 禅模式 / 侧栏折叠
 
+let zenRitualTimer = null;
 function toggleZenMode() {
   state.zenMode = !state.zenMode;
   document.body.classList.toggle('zen', state.zenMode);
+  // U39 全屏阅读仪式感：进入/退出的呼吸过渡编舞（遮罩→标题→正文三级 stagger；
+  // reduced-motion 由全局收敛块停表直达终态）。旧编舞类先摘再强制重排，连切也能重放。
+  document.body.classList.remove('zen-ritual', 'zen-ritual-exit');
+  if (state.zenMode) {
+    void document.body.offsetWidth; // 强制 reflow：让动画类重放
+    document.body.classList.add('zen-ritual');
+    clearTimeout(zenRitualTimer);
+    zenRitualTimer = setTimeout(() => document.body.classList.remove('zen-ritual'), 1300);
+  } else {
+    void document.body.offsetWidth;
+    document.body.classList.add('zen-ritual-exit');
+    clearTimeout(zenRitualTimer);
+    zenRitualTimer = setTimeout(() => document.body.classList.remove('zen-ritual-exit'), 700);
+  }
   if (state.zenMode) showToast(t('ESC 退出，按下 Ctrl+/ 查看快捷键'));
   updateToolbarState();
   syncToolbarZones();

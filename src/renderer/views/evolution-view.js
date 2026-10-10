@@ -306,7 +306,9 @@ export class EvolutionView {
 
   _empty(host, title, desc) {
     // U31 空态二期：插画空态（未命中线稿回退 .glyph）+ 错峰入场
-    host.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3>${escapeHTML(t(title))}</h3><p>${escapeHTML(t(desc))}</p></div>`;
+    host.innerHTML = `<div class="list-empty stagger">${staggerEmptyHTML('spark')}<h3></h3><p></p></div>`;
+    host.querySelector('h3').textContent = t(title);
+    host.querySelector('p').textContent = t(desc);
   }
 }
 
