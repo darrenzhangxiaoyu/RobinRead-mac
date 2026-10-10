@@ -851,6 +851,42 @@ function registerIPCHandlers(store, window) {
   handle('api:regenerateToken', () => ({ token: store.api.regenerateToken(), status: store.api.status() }));
   store.on('api:changed', (payload) => send('api:changed', payload));
 
+  // MARK: 口袋知更（F31：局域网轻量 Web 阅读服务——配置读回 / 变更（开关即时启停/
+  //   端口校验 / 绑定模式须显式确认 confirmLan）/ 访问二维码 SVG）
+  handle('pocket:config', () => ({ config: store.pocket.getConfig(), status: store.pocket.status() }));
+  handle('pocket:setConfig', (patch) => store.pocket.configure(patch || {}));
+  handle('pocket:qr', () => store.pocket.qrSVG() || { url: null, svg: null });
+  store.on('pocket:changed', (payload) => send('pocket:changed', payload));
+
+  // MARK: 知更实验室 · 用户脚本（F32：账本管理全在主进程；沙箱执行在渲染层）
+  const US = () => store.userScripts;
+  handle('userScripts:list', () => ({ scripts: US().list() }));
+  handle('userScripts:enabled', () => ({ scripts: US().enabledScripts() }));
+  handle('userScripts:get', (id) => US().get(String(id || '')));
+  handle('userScripts:import', (payload) => US().importScript(payload)); // 载荷=JSON 字符串或对象（文件导入走 importPick 对话框）
+  handle('userScripts:importPick', async () => {
+    const result = await dialog.showOpenDialog(window, {
+      title: '导入用户脚本（.ruser）',
+      filters: [{ name: 'RobinRead 用户脚本', extensions: ['ruser', 'json'] }, { name: 'All Files', extensions: ['*'] }],
+      properties: ['openFile'],
+    });
+    if (result.canceled || !result.filePaths.length) return null;
+    return US().importFromFile(result.filePaths[0]);
+  });
+  handle('userScripts:setEnabled', (id, enabled) => US().setEnabled(String(id || ''), enabled === true));
+  handle('userScripts:remove', (id) => US().remove(String(id || '')));
+  handle('userScripts:exportExample', async () => {
+    const json = US().exportExample();
+    const result = await dialog.showSaveDialog(window, {
+      title: '导出示例脚本',
+      defaultPath: '段落间距压缩.ruser',
+      filters: [{ name: 'RobinRead 用户脚本', extensions: ['ruser'] }, { name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    fs.writeFileSync(result.filePath, json, 'utf8');
+    return { path: result.filePath, bytes: Buffer.byteLength(json, 'utf8') };
+  });
+
   // MARK: 外文源自动译（F33：手动整篇翻译 / 读回 / 取消 / 订阅级开关 / 可用性 / 诊断；
   //   分块进度走推送通道 translate:progress（阅读器进度提示），终态走信封返回）
   const TR = () => store.translation;

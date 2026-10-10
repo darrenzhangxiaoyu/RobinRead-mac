@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <!-- F32 知更实验室 · 用户脚本沙箱宿主页（唯一允许 unsafe-eval 的文档）。
+       应用主页面 CSP 保持 script-src 'self' 不放松；用户脚本的 new Function 只在
+       这个专用帧里求值——帧内没有任何应用数据与特权 API，脚本死循环也只挂起
+       本帧（阅读器走超时降级零脚本），UI 卡死风险自此收窄到帧内。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file: 'unsafe-eval'; style-src 'none'" />
+  <title>RobinRead Sandbox</title>
+</head>
+<body>
+  <script type="module" src="./views/user-script-sandbox-host.js"></script>
+</body>
+</html>

@@ -59,6 +59,8 @@ const { RevisitService } = require('./RevisitService'); // 深读重访（F37）
 const { SpectrumService } = require('./SpectrumService'); // 来源立场光谱（F38）：源画像批量分析 + 光谱布点
 const { ChallengeService } = require('./ChallengeService'); // 挑战赛季（F40）：主题阅读挑战 + 花园限定装饰 + 挑战卡
 const { LocalApiService } = require('./LocalApiService'); // 阅读数据开放 API（F39）：本地只读 REST + Bearer 鉴权
+const { PocketWebService } = require('./PocketWebService'); // 口袋知更（F31）：局域网轻量 Web 阅读服务（手机扫码，已读回传）
+const { UserScriptService } = require('./UserScriptService'); // 知更实验室（F32）：沙箱用户脚本（.ruser 导入/启停/权限声明制）
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -207,6 +209,11 @@ class AppStore extends EventEmitter {
     if (this.api.getConfig().enabled) {
       try { this.api.start(); } catch (err) { this.api.lastError = String((err && err.message) || err); } // 启动失败状态徽标可见，不阻塞主流程
     }
+    this.pocket = new PocketWebService(this); // 口袋知更（F31）：默认关闭；开启时按绑定模式监听（手机扫码轻量 Web 阅读）
+    if (this.pocket.getConfig().enabled) {
+      try { this.pocket.start(); } catch (err) { this.pocket.lastError = String((err && err.message) || err); } // 启动失败状态徽标可见，不阻塞主流程
+    }
+    this.userScripts = new UserScriptService(this); // 知更实验室（F32）：脚本账本（导入/启停/删），执行在渲染层沙箱
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -2761,6 +2768,7 @@ class AppStore extends EventEmitter {
     if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; } // 批 H 审查 P2：30 分钟自动刷新 interval 同为关库后弹窗源
     if (this._emitTimer) { clearTimeout(this._emitTimer); this._emitTimer = null; } // 80ms 状态推送防抖：关库后触发即 snapshot 抛错弹窗（用户实见）
     try { this.api?.stop(); } catch (_) { /* F39 开放 API：退出自动停服释放端口 */ }
+    try { this.pocket?.stop(); } catch (_) { /* F31 口袋知更：退出自动停服释放端口 */ }
   }
 
   async _drainOutbox(accountID) {

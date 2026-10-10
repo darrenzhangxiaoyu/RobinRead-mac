@@ -17,6 +17,7 @@ import { renderMarkdown } from '../markdown.js';
 import { ContextMenu } from './context-menu.js';
 import * as CJKMicro from './cjk-micro.js';
 import { ArticleSearch } from './article-search.js';
+import { runUserScriptsViaFrame, runUserActionViaFrame } from './user-script-sandbox-client.js'; // F32 知更实验室：沙箱桥（专用帧执行）
 import { parseArtifactToCard, extractFirstImage, base64ImageToDataURI } from '../card-export/parse.js';
 import { openCardExportModal } from '../card-export/preview.js';
 
@@ -175,6 +176,9 @@ export class ReaderView {
       this._archivedAt = null;
       // F38 光谱 popover 随换文复位（批 H 审查 P2：popover 挂 body，头部重建不会带它走）
       document.getElementById('nj-spectrum-popover')?.remove();
+      // F32 用户脚本随换文重取（本篇渲染前由 _openBody 拉启用清单）
+      this._userScripts = null;
+      this._userScriptActions = [];
     }
     this._showLoading();
     // 渲染期任何异常（怪异 DOM 结构等）都不能让「正在准备正文…」遮罩永久卡死——
@@ -266,6 +270,7 @@ export class ReaderView {
       }
     }
     if (this.entryID !== entryID) return;
+    await this._applyUserScripts(entryID); // F32：启用脚本变换（专用沙箱帧；超时/异常恒等降级）
     this._render();
 
     // 翻译策略：默认不翻译（手动点击翻译按钮触发）；仅当设置里显式开启「自动精读」才自动翻译。
@@ -723,6 +728,7 @@ export class ReaderView {
     }
 
     // 正文：注入段落 ID + 版面重排 + 句子包裹 + 缓存译文 + 恢复划词注释锚点
+    // F32 用户脚本的正文变换已在 _applyUserScripts（沙箱帧）完成——此处 this.html 即最终正文
     this._setBodyHTML(this.html);
     this._normalizeArticle();
     this._restructureArticle();
@@ -741,6 +747,7 @@ export class ReaderView {
     this._renderNoteMarkers();
     this._interceptLinks();
     this._bindImages();
+    this._renderUserScriptActions(); // F32：脚本声明的按钮渲染为正文底部（点击→同一沙箱执行）
 
     // F33：重排后若处于译文模式（原文精读重排等不换文的重建），按缓存译文重建译文容器
     if (this._fullTranslationMode === 'translated' && this._fullTranslation?.html) {
@@ -1128,6 +1135,63 @@ export class ReaderView {
     this.body.innerHTML = html;
     this._normalizeArticle();
     // 段落收集移至 _render（需先完成句子包裹，保证句级单元口径一致）
+  }
+
+  /**
+   * F32 知更实验室：启用脚本 transform-body 管线（专用沙箱帧执行——主页面 CSP
+   * 不放松 unsafe-eval；帧超时/异常恒等降级零脚本）。脚本声明的按钮（add-actions）
+   * 存入 _userScriptActions，由 _render 尾端 _renderUserScriptActions 渲染。
+   */
+  async _applyUserScripts(entryID) {
+    this._userScriptActions = [];
+    this._userScripts = (await window.robin.userScriptsEnabled?.().catch(() => null))?.scripts || [];
+    if (this.entryID !== entryID) return;
+    if (!this._userScripts.length) return; // 无脚本零开销（连沙箱帧都不建）
+    try {
+      const usResult = await runUserScriptsViaFrame({
+        scripts: this._userScripts,
+        title: this.entry?.title || '', url: this.entry?.url || '', body: this.html || '',
+      });
+      if (this.entryID !== entryID) return;
+      if (typeof usResult.body === 'string' && usResult.body) this.html = usResult.body;
+      this._userScriptActions = usResult.actions || [];
+      for (const err of usResult.errors || []) {
+        console.warn('[reader] user script skipped:', err.scriptID, err.message);
+      }
+    } catch (_) { /* 沙箱帧异常：零脚本降级 */ }
+  }
+
+  /**
+   * F32 知更实验室：脚本声明的自定义按钮（add-actions）渲染为正文底部按钮行。
+   * 点击 → fn（函数体字符串）在专用沙箱帧执行（context = 当前正文/标题/URL）→
+   * 返回字符串则以 toast 显示结果；异常/超时提示且不冒泡。
+   */
+  _renderUserScriptActions() {
+    const actions = this._userScriptActions || [];
+    if (!actions.length || !this.body) return;
+    const bar = document.createElement('div');
+    bar.className = 'nj-user-actions';
+    bar.setAttribute('role', 'group');
+    bar.setAttribute('aria-label', t('用户脚本按钮'));
+    for (const action of actions) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nj-user-action-btn';
+      btn.dataset.userScript = action.scriptID || '';
+      btn.textContent = action.label;
+      btn.addEventListener('click', async () => {
+        const outcome = await runUserActionViaFrame(action.fn, {
+          title: this.entry?.title || '', url: this.entry?.url || '', body: this.html || '',
+        });
+        if (!outcome || !outcome.ok) {
+          this.handlers.onFeedback?.(`${t('脚本执行失败')}：${(outcome && outcome.error) || t('脚本沙箱无响应，请重试。')}`);
+          return;
+        }
+        this.handlers.onFeedback?.(typeof outcome.value === 'string' && outcome.value ? outcome.value : t('脚本已执行'));
+      });
+      bar.appendChild(btn);
+    }
+    this.body.appendChild(bar);
   }
 
   /**

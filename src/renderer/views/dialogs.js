@@ -31,6 +31,8 @@ const SECTIONS = [
   { id: 'obsidian', title: 'Obsidian', icon: 'bookOpen' },
   { id: 'bookshelf', title: '书架', icon: 'books' },
   { id: 'openapi', title: '开放 API', icon: 'server' },
+  { id: 'pocket', title: '口袋知更', icon: 'globe' },
+  { id: 'lab', title: '知更实验室', icon: 'wand' },
   { id: 'feedback', title: '反馈', icon: 'heart' },
   { id: 'about', title: '关于', icon: 'info' },
 ];
@@ -55,6 +57,8 @@ const SECTION_INTRO = {
   obsidian: '把文章与高亮导出成 Obsidian 知识库。',
   bookshelf: '把文集成书（EPUB）并管理书目。',
   openapi: '在本机开放只读 REST 端点，把自己的阅读数据接进自建仪表盘。',
+  pocket: '一键起局域网服务，手机扫码读轻量 Web 版，零云零账号。',
+  lab: '沙箱用户脚本：正文净化规则与自定义按钮，可导入 .ruser 社区脚本。',
   feedback: '喜欢知更的话，这里可以帮到我们。',
   about: '版本、更新与开源致谢。',
 };
@@ -77,6 +81,8 @@ const SECTION_SEARCH_INDEX = {
   obsidian: ['导出目录', '导出文章', '导出高亮与批注', '立即导出', '全量重导'],
   bookshelf: ['新建文集'],
   openapi: ['开启开放 API', '监听端口', '只读令牌', '重新生成令牌', '请求日志'],
+  pocket: ['开启口袋知更', '绑定模式', '监听端口', '访问二维码', '访问说明'],
+  lab: ['导入脚本', '示例导出', '脚本列表', '沙箱安全'],
   feedback: ['前往官网'],
   about: ['检查更新'],
 };
@@ -263,6 +269,8 @@ export class SettingsView {
       case 'obsidian': this._obsidian(scroll); break;
       case 'bookshelf': this._bookshelf(scroll); break;
       case 'openapi': this._openapi(scroll); break;
+      case 'pocket': this._pocket(scroll); break;
+      case 'lab': this._lab(scroll); break;
       case 'feedback': this._feedback(scroll); break;
       case 'about': this._about(scroll); break;
       default: break;
@@ -2412,6 +2420,259 @@ export class SettingsView {
       row('GET /api/v1/reading-clock', t('阅读生物钟 24 小时桶与高峰时段。')),
       row('GET /api/v1/capsules · /api/v1/weeklies', t('时间胶囊与周刊的元数据清单。')),
     ]));
+  }
+
+  // MARK: 口袋知更（F31 局域网轻量 Web 阅读服务）
+
+  /**
+   * 口袋知更分区：开关（默认关，即时启停）/ 绑定模式（仅本机 / 局域网——切局域网
+   * 必须显式确认「同网络任何人可访问」）/ 端口 / 访问二维码（重新显示）/ 状态与
+   * 停止按钮 / 访问说明。
+   */
+  async _pocket(container) {
+    const cfg = (await window.robin.pocketConfig?.().catch(() => null)) || {};
+    const conf = cfg.config || {};
+    const st = cfg.status || {};
+
+    // 状态徽标（监听中 / 已停止；带绑定与端口）
+    const badge = document.createElement('span');
+    badge.className = `nj-api-badge ${st.running ? 'on' : 'off'}`;
+    badge.dataset.role = 'pocket-status';
+    badge.textContent = st.running
+      ? `${t('监听中')} · ${st.bind === 'lan' ? '0.0.0.0' : '127.0.0.1'}:${st.port}`
+      : t('已停止');
+
+    // 停止按钮（运行中可见；关开关即停）
+    const stopButton = document.createElement('button');
+    stopButton.className = 'btn-text bordered';
+    stopButton.dataset.role = 'pocket-stop';
+    stopButton.textContent = t('停止服务');
+    stopButton.addEventListener('click', async () => {
+      await window.robin.pocketSetConfig?.({ enabled: false });
+      this.render();
+    });
+
+    // 绑定模式（segmented）：切到局域网必须显式确认安全提示
+    const bindSeg = segmented(
+      [['loopback', t('仅本机')], ['lan', t('局域网')]],
+      conf.bind === 'lan' ? 'lan' : 'loopback',
+      async (value) => {
+        if (value === 'lan' && conf.bind !== 'lan') {
+          const go = await confirmBox(t('开启局域网访问？'), {
+            message: t('服务将绑定 0.0.0.0：同一网络内的任何人都可能用地址访问你的文章正文。请确认当前 Wi-Fi 是可信的私人网络。'),
+            okLabel: t('我已知晓，仍要开启'),
+            danger: true,
+          });
+          if (!go) { this.render(); return; }
+        }
+        const res = await window.robin.pocketSetConfig?.({ bind: value, confirmLan: value === 'lan' }).catch(() => null);
+        if (res && res.ok === false) showToast(String(res.error || t('设置失败')));
+        this.render();
+      },
+    );
+
+    // 端口输入（change 时校验落库；运行中改端口 → 提示重启生效）
+    const portInput = document.createElement('input');
+    portInput.className = 'control';
+    portInput.type = 'number';
+    portInput.min = '1024';
+    portInput.max = '65535';
+    portInput.style.minWidth = '110px';
+    portInput.value = String(conf.port ?? 7963);
+    portInput.setAttribute('aria-label', t('监听端口'));
+    portInput.addEventListener('change', async () => {
+      const next = Number(portInput.value);
+      const res = await window.robin.pocketSetConfig?.({ port: next }).catch(() => null);
+      if (res && res.ok === false) {
+        showToast(String(res.error || t('设置失败')));
+        portInput.value = String(conf.port ?? 7963);
+      } else if (st.running && next !== st.port) {
+        showToast(t('端口已保存——重启应用或关闭再开启开关后生效。'));
+      }
+    });
+
+    // 访问二维码（确定性 SVG；可重新显示）
+    const qrData = (await window.robin.pocketQR?.().catch(() => null)) || {};
+    const qrHost = document.createElement('div');
+    qrHost.className = 'nj-pocket-qr';
+    qrHost.dataset.role = 'pocket-qr';
+    if (qrData.svg) qrHost.innerHTML = qrData.svg;
+    const qrUrl = document.createElement('div');
+    qrUrl.className = 'nj-pocket-url';
+    qrUrl.textContent = qrData.url || t('开启服务后生成访问地址。');
+    const qrReshow = document.createElement('button');
+    qrReshow.className = 'btn-text bordered';
+    qrReshow.textContent = t('重新显示二维码');
+    qrReshow.addEventListener('click', async () => {
+      const next = (await window.robin.pocketQR?.().catch(() => null)) || {};
+      if (next.svg) { qrHost.innerHTML = next.svg; qrUrl.textContent = next.url || ''; }
+      else showToast(t('服务未运行，开启开关后生成二维码。'));
+    });
+
+    container.appendChild(group(t('口袋知更'), t('一键起服务，手机扫码读轻量 Web 版：文章列表、正文阅读与「标为已读」回传。零云零账号，数据始终在你的设备之间。'), [
+      toggleRow(t('开启口袋知更'), t('默认关闭。开启后按下方绑定模式监听；应用退出自动停服。'), conf.enabled === true,
+        async (v) => { await window.robin.pocketSetConfig?.({ enabled: v === true }); this.render(); }),
+      row(t('监听状态'), st.running ? t('服务正在监听，关闭开关或退出应用即停。') : t('服务未运行。'), (() => {
+        const wrap = document.createElement('div');
+        wrap.className = 'setting-control';
+        wrap.style.gap = '8px';
+        wrap.append(badge, stopButton);
+        return wrap;
+      })()),
+      row(t('绑定模式'), t('仅本机（127.0.0.1）只有这台电脑能访问；局域网（0.0.0.0）手机可访问，但同网络的任何人也可能访问——切换时需确认。'), bindSeg),
+      row(t('监听端口'), t('1024-65535；默认 7963。修改已保存，重启后生效。'), portInput),
+      row(t('访问二维码'), t('手机扫码自带令牌直接进入；或把地址输入手机浏览器。'), (() => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:8px;';
+        wrap.append(qrHost, qrUrl, qrReshow);
+        return wrap;
+      })()),
+    ]));
+
+    container.appendChild(group(t('访问说明'), t('所有页面都需访问令牌（无令牌只看到登录页）；写操作仅限「标为已读」回传，其余全部只读；每个地址每分钟最多 60 次请求，超出会暂时限流。'), [
+      row('GET / · /read/<id>', t('文章列表（分页 / 未读过滤）与正文阅读页（上一页 / 下一页）。')),
+      row('POST /api/read', t('「标为已读」回传——唯一写通道，走应用既有已读管线。')),
+      row(t('正文安全'), t('正文出服务前再过一次白名单消毒（script / iframe / 事件属性剥除），标题与来源全部转义。')),
+    ]));
+  }
+
+  // MARK: 知更实验室（F32 沙箱用户脚本）
+
+  /** 权限钩子 → 展示名。 */
+  _usPermLabel(p) {
+    if (p === 'transform-body') return t('正文变换');
+    if (p === 'add-actions') return t('自定义按钮');
+    return String(p);
+  }
+
+  async _lab(container) {
+    const result = (await window.robin.userScriptsList?.().catch(() => null)) || {};
+    const scripts = Array.isArray(result.scripts) ? result.scripts : [];
+    const refresh = () => { if (this.overlay) this.render(); };
+
+    // 导入（打开对话框 → 大小闸/JSON 校验/语法预检在主进程）
+    const importBtn = document.createElement('button');
+    importBtn.className = 'btn-text primary';
+    importBtn.textContent = t('导入脚本…');
+    importBtn.addEventListener('click', async () => {
+      const res = await window.robin.userScriptsImportPick?.().catch(() => null);
+      if (!res) return;
+      if (res.ok === false) { showToast(String(res.error || t('导入失败'))); return; }
+      if (res.data?.script) { showToast(tf('已导入「%@」', res.data.script.name)); refresh(); }
+    });
+
+    // 示例导出（.ruser 社区脚本格式的活样板）
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn-text bordered';
+    exportBtn.textContent = t('示例导出');
+    exportBtn.addEventListener('click', async () => {
+      const res = await window.robin.userScriptsExportExample?.().catch(() => null);
+      if (res && res.ok === false) showToast(String(res.error || t('导出失败')));
+    });
+
+    container.appendChild(group(t('知更实验室'), t('用户脚本在沙箱里跑：无文件、无网络、无 DOM——只能「输入正文 → 输出正文」与「声明正文底部按钮」。异常全隔离，坏脚本只会被跳过并计数。'), [
+      row(t('导入脚本'), t('选择 .ruser 文件（JSON 合同：名称 / 版本 / 权限声明 / 代码；文件 ≤256KB，代码 ≤64KB）。'), importBtn),
+      row(t('示例导出'), t('导出内置示例「段落间距压缩」——照着它写你的第一个脚本。'), exportBtn),
+    ]));
+
+    if (!scripts.length) {
+      container.appendChild(group(t('脚本列表'), t('还没有脚本。点上方「导入脚本…」，或先「示例导出」看看结构。'), []));
+    } else {
+      const listGroup = group(t('脚本列表'), t('按列表顺序依次执行；禁用的脚本不参与渲染管线。'), []);
+      container.appendChild(listGroup);
+      const host = listGroup.querySelector('.group-rows');
+
+      for (const script of scripts) {
+        const item = document.createElement('div');
+        item.className = 'nj-us-item';
+        item.dataset.userScript = script.id;
+
+        const head = document.createElement('div');
+        head.className = 'nj-us-head';
+        const nameEl = document.createElement('span');
+        nameEl.className = 'nj-us-name';
+        nameEl.textContent = script.name;
+        const verEl = document.createElement('span');
+        verEl.className = 'nj-us-version';
+        verEl.textContent = `v${script.version || '1.0.0'}`;
+        const stateEl = document.createElement('span');
+        stateEl.className = `nj-us-state ${script.enabled ? 'on' : 'off'}`;
+        stateEl.textContent = script.enabled ? t('已启用') : t('已禁用');
+        head.append(nameEl, verEl, stateEl);
+
+        const perms = document.createElement('div');
+        perms.className = 'nj-us-perms';
+        perms.dataset.role = 'us-permissions';
+        const permList = Array.isArray(script.permissions) ? script.permissions : [];
+        perms.textContent = permList.length
+          ? `${t('权限')}：${permList.map((p) => this._usPermLabel(p)).join(' · ')}`
+          : t('权限：未声明（脚本不会参与任何钩子）');
+
+        const actions = document.createElement('div');
+        actions.className = 'nj-us-actions';
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'btn-text bordered';
+        toggleBtn.textContent = script.enabled ? t('禁用') : t('启用');
+        toggleBtn.addEventListener('click', async () => {
+          await window.robin.userScriptsSetEnabled?.(script.id, !script.enabled);
+          refresh();
+        });
+        const sourceBtn = document.createElement('button');
+        sourceBtn.className = 'btn-text bordered';
+        sourceBtn.textContent = t('查看源码');
+        sourceBtn.addEventListener('click', () => this._usShowSource(script));
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-text bordered';
+        deleteBtn.textContent = t('删除');
+        deleteBtn.addEventListener('click', async () => {
+          const go = await confirmBox(t('删除脚本？'), {
+            message: tf('将删除「%@」，此操作不可撤销。', script.name),
+            okLabel: t('删除'),
+            danger: true,
+          });
+          if (!go) return;
+          await window.robin.userScriptsRemove?.(script.id);
+          refresh();
+        });
+        actions.append(toggleBtn, sourceBtn, deleteBtn);
+
+        item.append(head, perms, actions);
+        host.appendChild(item);
+      }
+    }
+
+    container.appendChild(group(t('沙箱安全'), t('权限声明制：脚本只用它声明过的钩子（正文变换 / 自定义按钮）；执行环境不提供 document、window、网络与存储；按钮点击也在同一沙箱内执行。纯字符串处理与内置代码同级风险。'), [
+      row('transform-body', t('正文变换：拿到消毒后的正文 HTML 字符串，返回修改版（按列表顺序依次执行）。')),
+      row('add-actions', t('自定义按钮：声明正文底部按钮（label + 函数体），点击时以同一沙箱执行，返回字符串则以提示条显示。')),
+    ]));
+  }
+
+  /** 查看脚本源码（只读浮层，<pre> 原样展示）。 */
+  _usShowSource(script) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.addEventListener('mousedown', (event) => { if (event.target === overlay) overlay.remove(); });
+    const modal = document.createElement('div');
+    modal.className = 'modal nj-us-source-modal';
+    const header = document.createElement('div');
+    header.className = 'modal-header';
+    header.innerHTML = `<h3></h3>`;
+    header.querySelector('h3').textContent = `${script.name} · v${script.version || '1.0.0'}`;
+    const close = document.createElement('button');
+    close.className = 'btn icon-only';
+    close.innerHTML = icon('close');
+    close.addEventListener('click', () => overlay.remove());
+    header.appendChild(close);
+    const scroll = document.createElement('div');
+    scroll.className = 'modal-scroll';
+    const pre = document.createElement('pre');
+    pre.className = 'nj-us-source';
+    pre.dataset.role = 'us-source';
+    pre.textContent = String(script.code || '');
+    scroll.appendChild(pre);
+    modal.append(header, scroll);
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
   }
 
   // MARK: 书架（F12 个人文集自动成书）

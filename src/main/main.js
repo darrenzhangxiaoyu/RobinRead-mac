@@ -273,6 +273,9 @@ if (!IS_PROBE) {
       store.api?.stop(); // F39 开放 API：应用退出自动停服（端口立即释放）
     } catch (_) { /* 退出路径不抛错 */ }
     try {
+      store.pocket?.stop(); // F31 口袋知更：应用退出自动停服（端口立即释放）
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
       store.fulltext?.dispose(); // F1：全文抓取队列清空，退出不再发起新提取
     } catch (_) { /* 退出路径不抛错 */ }
     try {

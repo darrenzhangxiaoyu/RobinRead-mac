@@ -249,6 +249,22 @@ contextBridge.exposeInMainWorld('robin', {
   apiSetConfig: (patch) => invoke('api:setConfig', patch || {}),
   apiRegenerateToken: () => invoke('api:regenerateToken'),
 
+  // 口袋知更（F31：配置读回 / 变更（开关/端口/绑定模式——局域网须传 confirmLan）/ 访问二维码 SVG）
+  pocketConfig: () => data('pocket:config'),
+  pocketSetConfig: (patch) => invoke('pocket:setConfig', patch || {}),
+  pocketQR: () => data('pocket:qr'),
+  onPocketChanged: (listener) => subscribe('pocket:changed', listener),
+
+  // 知更实验室 · 用户脚本（F32：列表/启用投影/详情/导入/启停/删除/示例导出；执行在渲染层沙箱）
+  userScriptsList: () => data('userScripts:list'),
+  userScriptsEnabled: () => data('userScripts:enabled'),
+  userScriptsGet: (id) => data('userScripts:get', id),
+  userScriptsImport: (payload) => invoke('userScripts:import', payload),
+  userScriptsImportPick: () => invoke('userScripts:importPick'),
+  userScriptsSetEnabled: (id, enabled) => invoke('userScripts:setEnabled', id, enabled === true),
+  userScriptsRemove: (id) => invoke('userScripts:remove', id),
+  userScriptsExportExample: () => invoke('userScripts:exportExample'),
+
   // 批注漂流瓶（F28：导出（保存对话框）/ 导入（打开对话框））
   bundleExport: (payload) => invoke('bundle:export', payload),
   bundleImportPick: () => invoke('bundle:importPick'),

@@ -7157,6 +7157,26 @@ body.nj-win-drag .nj-snap-edge { opacity: 0.85; }
 .nj-api-badge.on::before { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 22%, transparent); }
 .nj-api-token { font-family: ui-monospace, monospace; font-size: var(--fs-xs, 11px); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: copy; padding: 3px 8px; border: 1px dashed var(--note-border); border-radius: var(--radius-sm); color: var(--text-secondary); }
 
+/* ── F31 口袋知更（设置分区二维码 / 访问地址）── */
+.nj-pocket-qr { width: 172px; height: 172px; padding: 8px; background: #fff; border: 1px solid var(--note-border); border-radius: var(--radius-md, 10px); }
+.nj-pocket-qr svg { display: block; width: 100%; height: 100%; }
+.nj-pocket-url { max-width: 220px; font-family: ui-monospace, monospace; font-size: var(--fs-xs, 11px); color: var(--text-secondary); overflow-wrap: anywhere; text-align: right; }
+
+/* ── F32 知更实验室（脚本列表 / 源码浮层）与阅读器脚本按钮 ── */
+.nj-us-item { display: flex; flex-direction: column; gap: 7px; padding: 13px 16px; border-bottom: 1px solid var(--separator); }
+.nj-us-head { display: flex; align-items: center; gap: 8px; }
+.nj-us-name { font-size: 13.5px; font-weight: 600; }
+.nj-us-version { font-size: var(--fs-xs, 11px); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.nj-us-state { font-size: var(--fs-xs, 11px); padding: 1px 8px; border-radius: 99px; border: 1px solid var(--note-border); color: var(--text-secondary); }
+.nj-us-state.on { border-color: color-mix(in oklch, var(--accent) 55%, transparent); color: var(--accent); }
+.nj-us-perms { font-size: var(--fs-xs, 11px); color: var(--text-secondary); }
+.nj-us-actions { display: flex; gap: 8px; }
+.nj-us-source-modal { width: min(720px, 92vw); height: min(78vh, 640px); }
+.nj-us-source { margin: 0; padding: 16px 18px; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-primary); }
+.robin-body .nj-user-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 8px; padding: 0; }
+.robin-body .nj-user-action-btn { font: inherit; font-size: var(--fs-xs, 11.5px); padding: 4px 14px; border: 1px solid var(--note-border); border-radius: 99px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.robin-body .nj-user-action-btn:hover { border-color: color-mix(in oklch, var(--accent) 55%, transparent); color: var(--accent); }
+
 /* ── F24 观点对照镜 ── */
 .nj-mirror-panel {
   max-width: var(--reader-page-width, 820px);

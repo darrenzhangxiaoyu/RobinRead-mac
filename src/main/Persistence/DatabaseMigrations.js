@@ -1288,6 +1288,32 @@ const MIGRATIONS = [
       catch (_) { /* 列已存在：幂等重入 */ }
     },
   },
+  {
+    id: 'v31-user-scripts',
+    up: (db) => {
+      // ── F32 知更实验室 · 用户脚本 ──
+      // user_scripts：沙箱用户脚本（.ruser 社区脚本 = JSON 合同 name/version/permissions/code）。
+      // - permissions_json：声明制权限（["transform-body","add-actions"] 子集）——
+      //   沙箱只放行声明过的钩子，设置分区如实展示；
+      // - code：脚本源码（纯字符串变换 + 声明式按钮；导入闸 ≤256KB，执行闸 ≤64KB）；
+      // - enabled：启停（禁用脚本不参与渲染管线）；
+      // - 内置示例脚本随服务构造幂等落库（固定 id，用户删除后不再复活）。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS user_scripts (
+            id               TEXT PRIMARY KEY NOT NULL,
+            name             TEXT NOT NULL,
+            version          TEXT NOT NULL DEFAULT '1.0.0',
+            permissions_json TEXT NOT NULL DEFAULT '[]',
+            code             TEXT NOT NULL,
+            enabled          INTEGER NOT NULL DEFAULT 1,
+            created_at       REAL NOT NULL,
+            updated_at       REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_user_scripts_enabled
+        ON user_scripts(enabled, updated_at DESC);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */
