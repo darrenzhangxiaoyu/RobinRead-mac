@@ -24,7 +24,7 @@ const os = require('node:os');
 const { app, dialog, BrowserWindow } = require('electron');
 app.disableHardwareAcceleration(); // 沙箱内 GPU 合成偶发死锁：探针窗口纯 DOM 断言，禁用硬件加速
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'robinread-f28-')));
-setTimeout(() => { console.error('WATCHDOG'); app.exit(3); }, 300 * 1000).unref();
+setTimeout(() => { console.error('WATCHDOG'); process.exit(3); }, 300 * 1000).unref();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
 const ok = (c, l) => { if (c) console.log('PASS ' + l); else { failed += 1; console.error('FAIL ' + l); } };
@@ -265,10 +265,10 @@ app.whenReady().then(async () => {
     try { fs.rmSync(roundPath, { force: true }); } catch (_) { /* 留给系统清理 */ }
     try { fs.rmSync(uiImportPath, { force: true }); } catch (_) { /* 留给系统清理 */ }
     console.log(failed === 0 ? 'ALL PASSED' : `FAILED ${failed}`);
-    app.exit(failed === 0 ? 0 : 1);
+    process.exit(failed === 0 ? 0 : 1);
   } catch (err) {
     console.error('ERR', String((err && err.stack) || err).slice(0, 1600));
-    app.exit(1);
+    process.exit(1);
   }
 });
 

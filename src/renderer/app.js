@@ -35,6 +35,7 @@ import { MediaView } from './views/media-view.js';
 import { GardenView } from './views/garden-view.js';
 import { WeeklyView } from './views/weekly-view.js';
 import { CourseView } from './views/course-view.js';
+import { ArchiveHallView } from './views/archive-hall.js';
 import { MediaMiniPlayer } from './views/media-player.js';
 import { PicksTTSPlayer } from './views/picks-tts.js';
 import { RadioPlayer } from './views/radio-player.js';
@@ -130,6 +131,7 @@ async function bootstrap() {
     onOpenCapsules: () => openCapsuleView(), // F27 时间胶囊：到期浮出兜底入口
     onOpenWeekly: () => openWeeklyView(), // F29 知更周刊：每周一自动编辑上周阅读
     onOpenCourse: () => openCourseView(), // F30 自学课程：目标 → 7/14 天课程推进
+    onOpenArchive: () => openArchiveHall(), // F34 网页存档馆：永久本地快照 + MHTML 导出
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
@@ -757,6 +759,7 @@ function buildPaletteCommands() {
     { label: t('时间胶囊'), keywords: 'capsule 时间胶囊 胶囊 封存 浮出 open', icon: 'clock', desc: t('封存给未来的批注，到期随简报浮出。'), action: () => openCapsuleView() },
     { label: t('知更周刊'), keywords: 'weekly 周刊 杂志 编辑部 报纸 导语 金句 epub open', icon: 'newspaper', desc: t('每周一自动把上周阅读编成一期：导语 + 主题归纳 + 金句。'), action: () => openWeeklyView() },
     { label: t('自学课程…'), keywords: 'course 课程 学习 目标 今日课 14 天 open', icon: 'bookOpen', desc: t('给一个学习目标，AI 从订阅库排出 7 或 14 天课程。'), action: () => openCourseView() },
+    { label: t('网页存档馆'), keywords: 'archive 存档 快照 馆 mhtml snapshot export open', icon: 'docText', desc: t('重要文章与追更快照的永久本地档案馆：原文失效也能读，可导出 MHTML。'), action: () => openArchiveHall() },
     { label: t('导入批注包…'), keywords: 'bundle robin 导入 批注 包 漂流 分享 import', icon: 'import', desc: t('导入 .robin 批注包：读对方的划线与笔记，续写后可导回合并。'), action: () => importRobinBundle() },
     { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
     { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
@@ -2156,6 +2159,7 @@ function fulltextMenuItems(feed) {
  * feedURL（monitor://hash）并立即重抓基线；停止追更：转 monitor-stopped 不再自动抓取。
  */
 function monitorFeedMenuItems(feed) {
+  const autoArchiveOn = (state.snapshot?.preferences?.archiveAutoFeeds || {})[feed.id] === true;
   return [
     {
       label: t('更改选择器…'), icon: 'pencil',
@@ -2171,6 +2175,17 @@ function monitorFeedMenuItems(feed) {
           await refreshState();
         } else {
           showToast(String(result.error || t('更新失败')));
+        }
+      },
+    },
+    {
+      // F34 存档馆：该追更源检出变更落新文时自动快照（默认关，勾选态回显）
+      label: t('追更快照自动存档'), icon: 'docText', checked: autoArchiveOn,
+      onClick: async () => {
+        const result = await window.robin.archiveAutoConfig({ feedID: feed.id, enabled: !autoArchiveOn });
+        if (result?.ok !== false) {
+          showToast(!autoArchiveOn ? t('已开启：变更快照自动进存档馆') : t('已关闭自动存档'));
+          await refreshState();
         }
       },
     },
@@ -2238,7 +2253,21 @@ async function showListRowContext(event, item) {
       // 批注漂流瓶（F28）：文章 + 批注打包 .robin 分享，主进程保存对话框落盘
       label: t('打包批注分享…'), icon: 'export', onClick: () => exportRobinBundle(item.id),
     },
+    {
+      // 网页存档馆（F34）：把当前正文快照进存档馆（原文失效也能读，可导 MHTML）
+      label: t('存档此文'), icon: 'docText', onClick: () => archiveEntry(item.id),
+    },
   ]);
+}
+
+/**
+ * 网页存档馆 · 存档（F34）：主进程把文章当前正文 HTML 原样快照（≤6MB 闸）。
+ * 完成 toast 回执；取消存档走存档馆列表（右键不再叠第二个开关项，保持菜单精简）。
+ */
+async function archiveEntry(entryID) {
+  const result = await window.robin.archiveAdd(entryID).catch((err) => ({ ok: false, error: String(err) }));
+  if (result?.ok) showToast(t('已存档，原文失效也能读'));
+  else if (result && result.ok === false) showToast(String(result.error || t('这篇文章还没有可存档的正文。')));
 }
 
 /**
@@ -2396,10 +2425,17 @@ function openCourseView() {
   cv.present();
 }
 
+/** 网页存档馆（F34）：永久本地快照列表 + 搜索 + MHTML 导出 + 取消存档。 */
+function openArchiveHall() {
+  const av = new ArchiveHallView({ toast: showToast, onOpenArticle: openFromOverlay });
+  av.present();
+}
+
 /** 浮层内点文章 → 关浮层直达阅读（读完回到课程/周刊，isRead 勾选随之刷新）。 */
 function openFromOverlay(entryID) {
   try { window.__robinWeeklyView?.dismiss(); } catch (_) { /* 已关 */ }
   try { window.__robinCourseView?.dismiss(); } catch (_) { /* 已关 */ }
+  try { window.__robinArchiveHall?.dismiss(); } catch (_) { /* 已关 */ }
   // 不传 isRead:true（批 E 审查 P1：短路 markRead 使课程「完成本日」永远差一篇）——
   // 走 handleEntrySelect 既有语义：打开即标已读，课程勾选自然达成
   handleEntrySelect(entryID, { isRead: false, isStarred: false });

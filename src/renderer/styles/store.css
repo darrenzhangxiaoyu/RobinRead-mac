@@ -190,9 +190,10 @@
 }
 .fs-topic-banner-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
 
-/* ── 侧栏底栏（账号/商店/热点/知识/进化/设置 六入口，单行紧凑图标条）── */
+/* ── 侧栏底栏（账号/商店/热点/知识/进化/花园/胶囊/周刊/课程/设置 十入口，5×2 网格）──
+   批 F 审查 P2：6 列 × 10 键折成参差双行且高度翻倍，改 5 列两整行 */
 .footer-nav {
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   gap: 2px; flex: 1; min-width: 0;
 }
 .footer-nav-btn {

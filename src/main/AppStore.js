@@ -53,6 +53,8 @@ const { WeeklyService } = require('./WeeklyService'); // AI 周刊编辑部（F2
 const { CourseService } = require('./CourseService'); // 自学课程引擎（F30）：目标 → 7/14 天课程 + 今日课推进
 const { ReadingClockService } = require('./ReadingClockService'); // 阅读生物钟（F36）：小时桶统计 + 7 天加权高峰 + 对齐动作
 const { VoiceCommandService } = require('./VoiceCommandService'); // 语音指挥舱（F35）：口令表 + 模糊匹配（识别在渲染层）
+const { TranslationService } = require('./TranslationService'); // 外文源自动译（F33）：订阅级开关 + 整篇译文缓存 + 原文/译文切换
+const { ArchiveService } = require('./ArchiveService'); // 网页存档馆（F34）：永久快照 + 存档模式回落 + MHTML 导出
 const { TagAutoService } = require('./TagAutoService'); // AI 自动标签（F15）：继承打标钩子 + AI 批量打标
 const { FeedDashboardService } = require('./FeedDashboardService'); // 订阅源体检仪表盘（F16）
 const { PageMonitorService } = require('./PageMonitorService'); // 网页追更（F18）：URL+选择器 diff 合成源
@@ -192,6 +194,8 @@ class AppStore extends EventEmitter {
     this.course = new CourseService(this); // 自学课程引擎（F30）：学习目标 → 7/14 天课程 + 今日课推进
     this.clock = new ReadingClockService(this); // 阅读生物钟（F36）：小时桶 + 高峰判定 + 对齐动作（markRead/时长脉冲喂入）
     this.voice = new VoiceCommandService(this); // 语音指挥舱（F35）：口令表 + 模糊匹配（零 AI，识别在渲染层）
+    this.translation = new TranslationService(this); // 外文源自动译（F33）：订阅级开关 + 整篇译文缓存（原文/译文一键切换）
+    this.archive = new ArchiveService(this); // 网页存档馆（F34）：永久快照 + 存档模式回落 + MHTML 导出
     this.tagAuto = new TagAutoService(this); // AI 自动标签（F15）：入库继承打标 + 可选 AI 批量打标（每小时）
     this.tagAuto.start();
     this.dash = new FeedDashboardService(this); // 源体检仪表盘（F16）：聚合指标 + 健康分（60s 缓存）
@@ -496,6 +500,10 @@ class AppStore extends EventEmitter {
       voiceEnabled: this.preferences.get('RobinRead.voice.enabled', false) === true,
       // 阅读生物钟（F36）：对齐动作三开关（热力条数据走 clock:status 通道）
       clock: this.clock.getConfig(),
+      // 外文源自动译（F33）：订阅级「自动翻译」开关（设置页按源开关 + 列表徽标）
+      autoTranslateFeedModes: this.translation.feedModes(),
+      // 网页存档馆（F34）：追更源自动存档开关（默认关；存档馆列表走 archive:list 通道）
+      archiveAutoFeeds: this.archive.autoFeeds(),
     };
   }
 
@@ -896,6 +904,7 @@ class AppStore extends EventEmitter {
     this.feedsRepo.updateFeed(feed.id, (f) => ({ ...f, lastRefreshedAt: nowSeconds() }));
     this._invalidatePrepared(); // 订阅结构变更：宁可多失效
     this.fulltext.kick(); // 新订阅首批文章按源设置后台补抓全文
+    this.translation.kick(); // F33 外文源自动译：新订阅首批按源开关入队
     this._emitState();
     return this.feedsRepo.feed(feed.id);
   }
@@ -1084,9 +1093,10 @@ class AppStore extends EventEmitter {
     // 「新增段高亮」标记；isSanitized=true 语义成立：内容是本服务组装的转义文本。
     if (PageMonitorService.isMonitorFeed(feed) && parsedEntries.length) {
       for (const parsed of parsedEntries) {
+        const monitorEntryID = `local:${feed.id}:${stableDigest(parsed.id)}`;
         try {
           this.cachesRepo.saveCache({
-            entryID: `local:${feed.id}:${stableDigest(parsed.id)}`,
+            entryID: monitorEntryID,
             text: String(parsed.summary || ''),
             html: parsed.contentHTML || null,
             imageURLs: [],
@@ -1094,6 +1104,11 @@ class AppStore extends EventEmitter {
             isSanitized: true,
           });
         } catch (_) { /* 高亮缓存失败不影响入库主流程 */ }
+        // F34 网页存档馆：追更源自动存档开关开启时，检出变更落新文顺带快照（默认关）
+        if (newUnread.includes(monitorEntryID)) {
+          try { this.archive.autoArchiveIfEnabled(feed.id, monitorEntryID, parsed.contentHTML || null); }
+          catch (_) { /* 自动存档失败不影响灌文主流程 */ }
+        }
       }
     }
     // 规则过滤引擎（F2）：灌文事务提交后、状态推送之前同步应用规则
@@ -1114,6 +1129,9 @@ class AppStore extends EventEmitter {
     // 全文抓取（F1）：灌文事务提交后只登记 ID，筛选与网络由 fulltext.kick() 异步接力。
     // F5：平台源正文已是完整组装（描述+封面+iframe 播放器），不做全文提取补抓。
     if (!PlatformService.isPlatformFeed(feed)) this.fulltext.noteNewEntries(feed.id, newUnread);
+    // 外文源自动译（F33）：同样只登记 ID，筛选（开关/外文/已有译文/有正文）由
+    // translation.kick() 后台合批接力（并发 2，绝不阻塞灌文主路径）。
+    try { this.translation.noteNewEntries(feed.id, newUnread); } catch (_) { /* 登记失败不外抛 */ }
     // 后台预抓 AIHOT item 页（异步串行，不阻塞刷新；失败静默）
     if (toPrefetch.length) this._prefetchArticles(toPrefetch);
     return newUnread;
@@ -1463,6 +1481,11 @@ class AppStore extends EventEmitter {
       if (sourceLen > 400 && cacheLen > 0 && cacheLen < sourceLen * 0.4) {
         this.cachesRepo.deleteCache(entryID);
       } else {
+        // F34 存档馆回落：缓存命中但正文空壳（404 抓取的空文档等）且有存档 → 存档模式
+        const archivedCached = cache.html ? null : this.archive.fallback(entryID, cache.html);
+        if (archivedCached) {
+          return { html: archivedCached, text: plainText(archivedCached), fromCache: false, fromArchive: true, archivedAt: this.archive.get(entryID)?.capturedAt ?? null };
+        }
         return {
           html: cache.html,
           text: cache.text,
@@ -1476,6 +1499,18 @@ class AppStore extends EventEmitter {
     const html = entry.contentHTML
       ? ArticleExtractor.sanitizedHTML(ArticleExtractor.normalizeFeedMarkup(entry.contentHTML), entry.url)
       : null;
+    // F34 网页存档馆：正文 404/缓存缺失（无可读正文）且有存档 → 自动回落存档内容，
+    // 渲染层据 fromArchive 显示「存档模式」徽记（原文失效也能读的核心通路）。
+    const archivedHTML = this.archive.fallback(entryID, html);
+    if (archivedHTML) {
+      return {
+        html: archivedHTML,
+        text: plainText(archivedHTML),
+        fromCache: false,
+        fromArchive: true,
+        archivedAt: this.archive.get(entryID)?.capturedAt ?? null,
+      };
+    }
     return {
       html,
       text: sourceText,
@@ -1534,6 +1569,7 @@ class AppStore extends EventEmitter {
       // 手动刷新 = 强制全量补抓（F1）：源无新文章时存量无缓存篇目同样回补
       this.fulltext.backfillFeed(feedID);
       this.fulltext.kick();
+      this.translation.kick(); // F33：手动刷新收尾同样起译文队列
       return { newEntries: 0 };
     }
     const newIDs = this._applyParsedEntries(feed, result.parsed.entries);
@@ -1552,6 +1588,7 @@ class AppStore extends EventEmitter {
     // F5：平台源（B 站/微博）正文由适配器组装、播放器走 iframe，全文提取只会抓回页面壳——跳过。
     if (!PlatformService.isPlatformFeed(feed)) this.fulltext.backfillFeed(feedID);
     this.fulltext.kick();
+    this.translation.kick(); // F33：单源刷新收尾起译文队列
     this._emitState();
     return { newEntries: newIDs.length };
   }
@@ -2313,6 +2350,7 @@ class AppStore extends EventEmitter {
     }
     this._invalidatePrepared(); // 刷新可能新增/删除/改状态：宁可多失效（成功失败都清）
     this.fulltext.kick(); // 全文抓取（F1）：灌文全部落地、状态推送之后再异步起队列
+    this.translation.kick(); // F33 外文源自动译：灌文落地后异步起译文队列
     // 话题盯梢（F4）：同样在刷新落地后异步聚合（按话题频率过滤；逐话题独立容错）
     this.topics.aggregateDue().catch(() => { /* 聚合失败不影响刷新 */ });
     // WebDAV 多设备同步（F7）：刷新完成后异步 kick（默认开，≥10 分钟节流；绝不阻塞刷新路径）

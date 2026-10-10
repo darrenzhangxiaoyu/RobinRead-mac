@@ -195,6 +195,23 @@ contextBridge.exposeInMainWorld('robin', {
   quizCancel: (entryID) => invoke('quiz:cancel', entryID),
   quizLatest: (entryID) => data('quiz:latest', entryID),
 
+  // 外文源自动译（F33：手动整篇翻译 / 读回 / 取消 / 订阅级开关 / 可用性；onTranslateProgress 收分块进度）
+  translateFullAvailable: () => data('translate:fullAvailable').then((r) => Boolean(r && r.ai)),
+  translateFull: (entryID) => invoke('translate:full', entryID),
+  translateFullGet: (entryID) => data('translate:fullGet', entryID),
+  translateFullCancel: (entryID) => invoke('translate:fullCancel', entryID),
+  translateAutoConfig: (patch) => invoke('translate:autoConfig', patch),
+  onTranslateProgress: (listener) => subscribe('translate:progress', listener),
+
+  // 网页存档馆（F34：存档 / 取消 / 探测 / 列表搜索 / MHTML 导出（保存对话框）/ 追更自动存档开关 / 统计）
+  archiveAdd: (entryID) => invoke('archive:do', entryID),
+  archiveRemove: (entryID) => invoke('archive:undo', entryID),
+  archiveHas: (entryID) => data('archive:has', entryID),
+  archiveList: (opts) => data('archive:list', opts),
+  archiveStats: () => data('archive:stats'),
+  archiveExport: (entryID) => invoke('archive:export', entryID),
+  archiveAutoConfig: (patch) => invoke('archive:autoConfig', patch),
+
   // 时间胶囊（F27：封存 / 到期浮出 / 开启仪式 / 历史 / 徽标计数 / 简报段投影）
   capsuleSeal: (payload) => invoke('capsule:seal', payload),
   capsuleDue: () => data('capsule:due'),

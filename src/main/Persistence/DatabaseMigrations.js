@@ -1151,6 +1151,56 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: 'v28-translations-archives',
+    up: (db) => {
+      // ── F33 外文源自动译 ──
+      // translations：整篇译文缓存（一篇文章至多一份，PK 即防重——已有译文零请求幂等）。
+      // - lang：译文目标语言（跟随界面语言）；
+      // - translated_html：拼接完成的整篇译文（过 ArticleExtractor 消毒白名单后才落库——
+      //   LLM 输出不可信，script/iframe 等在写入前剥除）；
+      // - segments_json：分块翻译的「已完成块」进度（[{i, html}]）——中途失败保留进度，
+      //   重试从断点续译（全部块完成后拼接并清空本列）；
+      // - is_complete：0 = 生成中/中断（可续译），1 = 完整可切换。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS translations (
+            item_id         TEXT PRIMARY KEY NOT NULL,
+            lang            TEXT NOT NULL DEFAULT 'zh',
+            translated_html TEXT NOT NULL DEFAULT '',
+            segments_json   TEXT,
+            is_complete     INTEGER NOT NULL DEFAULT 0,
+            created_at      REAL NOT NULL,
+            updated_at      REAL NOT NULL,
+
+            FOREIGN KEY(item_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_translations_complete
+        ON translations(is_complete, updated_at DESC);
+      `);
+
+      // ── F34 网页存档馆 ──
+      // archives：重要文章 + 追更源的永久本地快照（原文失效也能读，可导 MHTML）。
+      // - html_captured：文章当前正文 HTML 原样存档（入库消毒 HTML 或全文抓取 HTML）；
+      // - html_size：字节体积（单篇 ≤6MB 闸的判定列 + 存档馆体积统计）；
+      // - captured_at：快照时间（重存档覆盖更新）；FK 级联随文章删除清行。
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS archives (
+            item_id       TEXT PRIMARY KEY NOT NULL,
+            html_captured TEXT NOT NULL,
+            captured_at   REAL NOT NULL,
+            html_size     INTEGER NOT NULL DEFAULT 0,
+
+            FOREIGN KEY(item_id)
+                REFERENCES items(id)
+                ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_archives_captured
+        ON archives(captured_at DESC);
+      `);
+    },
+  },
 ];
 
 /** 应用所有未执行的迁移（等价 GRDB DatabaseMigrator.migrate）。 */

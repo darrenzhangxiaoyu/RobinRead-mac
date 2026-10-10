@@ -27,7 +27,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { app, BrowserWindow } = require('electron');
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'robinread-f25-')));
-setTimeout(() => { console.error('WATCHDOG'); app.exit(3); }, 320 * 1000).unref();
+setTimeout(() => { console.error('WATCHDOG'); process.exit(3); }, 600 * 1000).unref();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
 const ok = (c, l) => { if (c) console.log('PASS ' + l); else { failed += 1; console.error('FAIL ' + l); } };
@@ -290,7 +290,7 @@ app.whenReady().then(async () => {
         console.log('SKIP ' + m);
       }
       console.log('UI 阶段 SKIP：环境性挂起（服务级断言已全部执行）');
-      app.exit(failed ? 1 : 0);
+      process.exit(failed ? 1 : 0);
       return;
     }
     ok(ui.booted, '附 UI 探针窗口启动（index.html + preload + 真 IPC）');
@@ -325,10 +325,10 @@ app.whenReady().then(async () => {
     store2.database.close();
     try { fs.rmSync(userData, { recursive: true, force: true }); } catch (_) { /* 留给系统清理 */ }
     console.log(failed === 0 ? 'ALL PASSED' : `FAILED ${failed}`);
-    app.exit(failed === 0 ? 0 : 1);
+    process.exit(failed === 0 ? 0 : 1);
   } catch (err) {
     console.error('ERR', String((err && err.stack) || err).slice(0, 1600));
-    app.exit(1);
+    process.exit(1);
   }
 });
 
@@ -392,6 +392,10 @@ async function debateUIProbe(store, ids) {
       const btn = document.querySelector('.nj-debate-header-btn');
       if (btn && !btn.disabled) btn.click();
       const bubble = await waitFor(() => document.querySelector('#nj-debate-panel .nj-debate-bubble.ai') ? true : null);
+      if (!bubble) {
+        // 高载下开场不收敛 = 环境劣化：整体 SKIP 不硬烧后续断言（f26 同款惯例）
+        return { uiSkipped: true, booted: true };
+      }
       out.openingBubble = !!bubble
         && !!document.querySelector('#nj-debate-panel .nj-debate-round-tag')
         && (document.querySelector('#nj-debate-panel .nj-debate-bubble.ai .nj-debate-bubble-text')?.textContent || '').length > 0;

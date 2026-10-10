@@ -344,12 +344,22 @@ function storageStatsFor(store) {
   try {
     artifactsCount = Number(store.database.prepare('SELECT COUNT(*) AS n FROM ai_artifacts').get()?.n ?? 0);
   } catch (_) { /* 同上 */ }
+  // F34 网页存档馆：存档篇数 + 总体积（全局存储统计联动）
+  let archivesCount = 0;
+  let archivesBytes = 0;
+  try {
+    const archRow = store.database.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(html_size), 0) AS bytes FROM archives').get();
+    archivesCount = Number(archRow?.n ?? 0);
+    archivesBytes = Number(archRow?.bytes ?? 0);
+  } catch (_) { /* 表缺失按 0 */ }
   return {
     dbSize: fileSize(path.join(userData, 'library.db')),
     walSize: fileSize(path.join(userData, 'library.db-wal')),
     cachesCount,
     cachesBytes,
     artifactsCount,
+    archivesCount,
+    archivesBytes,
     iconsBytes: directoryBytes(path.join(userData, 'favicons')),
   };
 }
@@ -807,6 +817,49 @@ function registerIPCHandlers(store, window) {
   handle('quiz:submit', (quizID, answers) => QZ().submit(String(quizID || ''), Array.isArray(answers) ? answers : []));
   handle('quiz:cancel', (entryID) => QZ().cancel(String(entryID || '')));
   handle('quiz:latest', (entryID) => QZ().latest(String(entryID || '')));
+
+  // MARK: 外文源自动译（F33：手动整篇翻译 / 读回 / 取消 / 订阅级开关 / 可用性 / 诊断；
+  //   分块进度走推送通道 translate:progress（阅读器进度提示），终态走信封返回）
+  const TR = () => store.translation;
+  if (store.translation) {
+    store.on('translation:progress', (payload) => send('translate:progress', payload));
+  }
+  handle('translate:fullAvailable', () => TR().available());
+  handle('translate:full', (entryID) => TR().translateNow(String(entryID || '')));
+  handle('translate:fullGet', (entryID) => TR().get(String(entryID || '')));
+  handle('translate:fullCancel', (entryID) => TR().cancel(String(entryID || '')));
+  handle('translate:autoConfig', (patch) => {
+    if (patch && typeof patch === 'object' && patch.feedID) TR().setFeedEnabled(String(patch.feedID), patch.enabled === true);
+    return TR().feedModes();
+  });
+  handle('translate:autoSnapshot', () => TR().snapshot());
+
+  // MARK: 网页存档馆（F34：存档 / 取消 / 探测 / 列表搜索 / MHTML 导出（保存对话框→主进程落盘）/
+  //   追更源自动存档开关 / 配额统计）
+  const AR = () => store.archive;
+  handle('archive:do', (entryID) => AR().archive(String(entryID || '')));
+  handle('archive:undo', (entryID) => AR().unarchive(String(entryID || '')));
+  handle('archive:has', (entryID) => AR().has(String(entryID || '')));
+  handle('archive:list', (opts) => AR().list(opts || {}));
+  handle('archive:stats', () => AR().stats());
+  handle('archive:autoConfig', (patch) => {
+    if (patch && typeof patch === 'object' && patch.feedID) AR().setAutoArchive(String(patch.feedID), patch.enabled === true);
+    return AR().autoFeeds();
+  });
+  handle('archive:export', async (entryID) => {
+    const entry = store.entry(String(entryID || ''));
+    if (!entry) throw new Error('文章不存在');
+    const safeName = `${entry.title || 'RobinRead Article'}`.replace(/[\\/:*?"<>|]/g, ' ').trim() || 'RobinRead Article';
+    const result = await dialog.showSaveDialog(window, {
+      title: '导出存档 MHTML',
+      defaultPath: `${safeName}.mhtml`,
+      filters: [{ name: 'MHTML 网页存档', extensions: ['mhtml', 'mht'] }, { name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    const mime = AR().buildMHTML(String(entryID || ''));
+    fs.writeFileSync(result.filePath, mime, 'utf8');
+    return { path: result.filePath, bytes: Buffer.byteLength(mime, 'utf8'), title: safeName };
+  });
 
   // MARK: 时间胶囊（F27：封存 / 到期浮出（懒结算）/ 开启仪式 / 历史报告 / 侧栏徽标计数 / 简报段投影）
   const CP = () => store.capsule;

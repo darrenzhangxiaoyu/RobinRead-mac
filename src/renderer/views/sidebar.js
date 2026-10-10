@@ -477,6 +477,16 @@ export class SidebarView {
     courseBtn.addEventListener('click', () => this.handlers.onOpenCourse?.());
     nav.appendChild(courseBtn);
 
+    // 网页存档馆入口（F34）：重要文章 + 追更快照的永久本地档案馆（MHTML 可导）
+    const archiveBtn = document.createElement('button');
+    archiveBtn.className = 'footer-nav-btn footer-archive-btn';
+    archiveBtn.dataset.role = 'archive-hall';
+    archiveBtn.title = t('网页存档馆');
+    archiveBtn.innerHTML = `${icon('docText')}<span class="nav-label"></span>`;
+    archiveBtn.querySelector('.nav-label').textContent = t('存档馆');
+    archiveBtn.addEventListener('click', () => this.handlers.onOpenArchive?.());
+    nav.appendChild(archiveBtn);
+
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
     settingsBtn.title = t('设置');

@@ -1705,6 +1705,42 @@ export class SettingsView {
     container.appendChild(refreshGroup);
     if (clockTip.textContent) refreshGroup.querySelector('.group-rows').appendChild(clockTip);
     this._fulltextFeeds(container, prefs);
+    this._autoTranslateFeeds(container, prefs);
+  }
+
+  /**
+   * 外文源自动译（F33）按源开关：开启后该源新文章入库即后台整篇翻译
+   * （仅对「标题/摘要外文占比高」的条目生效；列表「译」徽标 + 阅读器一键切换）。
+   * 开关状态随状态快照（prefs.autoTranslateFeedModes）下发。
+   */
+  _autoTranslateFeeds(container, prefs) {
+    const modes = prefs.autoTranslateFeedModes || {};
+    const feeds = [];
+    for (const account of this.state.sidebar || []) {
+      const isLocal = !account.account || !account.account.type || account.account.type === 'local';
+      if (!isLocal) continue; // 同步账户源由服务端管理，本地译文照常可用但不在此配置
+      for (const feed of account.allFeeds || []) feeds.push(feed);
+    }
+    const atGroup = group(
+      t('自动翻译'),
+      t('开启后，外文源的新文章（标题/摘要外文占比高）入库即后台整篇翻译，阅读时一键切换译文。'),
+      [],
+    );
+    container.appendChild(atGroup);
+    const host = atGroup.querySelector('.group-rows');
+    if (!feeds.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:4px 16px 10px;font-size:12px;color:var(--text-tertiary);';
+      empty.textContent = t('还没有订阅源。');
+      host.appendChild(empty);
+      return;
+    }
+    for (const feed of feeds) {
+      host.appendChild(toggleRow(feed.title || feed.id, '', modes[feed.id] === true, async (v) => {
+        await window.robin.translateAutoConfig({ feedID: feed.id, enabled: v === true });
+        this.handlers.onRefreshState?.();
+      }));
+    }
   }
 
   /**

@@ -563,6 +563,7 @@ export class ListView {
           ${badge ? `<span class="entry-account-badge"></span>` : ''}
           ${item.hasMedia ? `<span class="entry-media-badge" title="${attr(t('含音频/视频'))}">▶</span>` : ''}
           ${fulltextPending(item) ? `<span class="entry-fulltext-badge" title="${attr(t('正在后台补抓全文'))}">${escapeHTML(t('全文'))}</span>` : ''}
+          ${item.hasTranslation ? `<span class="entry-translation-badge" title="${attr(t('列表「译」徽标：这篇文章已有整篇译文，打开后在阅读器点「译文」即可切换。'))}">${escapeHTML(t('译'))}</span>` : ''}
           ${item.isLater ? `<span class="later-mini" title="${attr(t('稍后读'))}">${icon('clock')}</span>` : ''}
           ${item.isStarred ? `<span class="star-mini" title="${attr(t('已收藏'))}">${icon('starFilled')}</span>` : ''}
           <span class="read-min-slot">${readMinutesChip(item)}</span>
@@ -1573,6 +1574,29 @@ export class ListView {
     // 补抓完成（缓存落库）或用户切换源模式后，徽标即时消失/出现，不重建列表
     if (next.feedID !== undefined && next.hasBodyCache !== undefined) {
       this._syncFulltextBadge(row, next);
+    }
+    // 译徽标（F33）：整行数据携带 hasTranslation 时重算显隐（后台译文完成即时出现）
+    if (next.hasTranslation !== undefined) {
+      this._syncTranslationBadge(row, next);
+    }
+  }
+
+  /** 译徽标增删（F33；锚点：全文徽标之后 / 稍后读之前）。 */
+  _syncTranslationBadge(row, item) {
+    const existing = row.querySelector('.entry-translation-badge');
+    if (item.hasTranslation === true) {
+      if (!existing) {
+        const meta = row.querySelector('.entry-meta');
+        if (meta) {
+          const el = document.createElement('span');
+          el.className = 'entry-translation-badge';
+          el.title = t('列表「译」徽标：这篇文章已有整篇译文，打开后在阅读器点「译文」即可切换。');
+          el.textContent = t('译');
+          meta.insertBefore(el, meta.querySelector('.later-mini') || meta.querySelector('.star-mini') || meta.querySelector('.entry-time'));
+        }
+      }
+    } else if (existing) {
+      existing.remove();
     }
   }
 

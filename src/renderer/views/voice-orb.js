@@ -85,7 +85,7 @@ export class VoiceOrb {
   }
 
   _sync() {
-    if (!this._denied) this._capability = speechRecognitionAvailable(); // 引擎可随环境出现/消失：每拍重探
+    if (!this._denied && !this._runtimeDead) this._capability = speechRecognitionAvailable(); // 每拍重探；运行期死亡判定不复活（审查 P1）
     const active = this.deps.isActive();
     const show = Boolean(active && this.deps.enabled());
     if (this._el) this._el.classList.toggle('visible', show && this._capability);
@@ -128,20 +128,40 @@ export class VoiceOrb {
     };
     recognition.onerror = (event) => {
       const code = String(event && event.error || '');
-      if (code === 'not-allowed' || code === 'service-not-allowed') {
-        // 权限拒绝：明确提示一次，本会话不再重试
+      if (code === 'not-allowed') {
+        // 用户拒权：明确提示一次，本会话不再重试
         this._denied = true;
         this._stopRecognition();
         this._showCaption(t('麦克风权限被拒绝，语音指挥已停用'), 'denied');
         this.deps.toast?.(t('麦克风权限被拒绝：可在系统设置中授权后重启应用再试。'));
+        return;
       }
-      // no-speech / aborted / network：静默——连续识别的常规噪声
+      if (code === 'service-not-allowed' || code === 'language-not-supported') {
+        // 引擎服务被禁/语言不支持（批 F 审查 P1：真实 Electron 常态路径）→ 引擎不可用，落口令环
+        this._runtimeDead = true;
+        this._capability = false;
+        this._stopRecognition();
+        this._sync();
+        return;
+      }
+      if (code === 'network' || code === 'audio-capture') {
+        // 引擎在但服务/设备不可用：连续 3 次失败判引擎不可用（审查 P1：否则无限 error→end→start 循环）
+        this._errRun = (this._errRun || 0) + 1;
+        if (this._errRun >= 3) {
+          this._runtimeDead = true;
+          this._capability = false;
+          this._stopRecognition();
+          this._sync();
+        }
+        return;
+      }
+      // no-speech / aborted：静默——连续识别的常规噪声
     };
     recognition.onend = () => {
       this._listening = false;
-      // continuous 被引擎打断（静音超时等）：仍处 active 且未拒绝 → 自动续挂
-      if (this.deps.isActive() && this.deps.enabled() && !this._denied) {
-        try { recognition.start(); this._listening = true; } catch (_) { /* start 竞态由下轮 _sync 兜底 */ }
+      // continuous 被引擎打断（静音超时等）：仍处 active 且未拒绝且能力可用 → 自动续挂
+      if (this.deps.isActive() && this.deps.enabled() && !this._denied && this._capability !== false) {
+        try { recognition.start(); this._listening = true; } catch (_) { /* 竞态：置空交下轮 _sync 重建（审查 P2） */ this._recognition = null; }
       }
       this._sync();
     };
@@ -257,7 +277,11 @@ export class VoiceOrb {
     try { payload = await window.robin?.voiceCommands?.(this.deps.lang()); } catch (_) { payload = null; }
     this._commandsCache = Array.isArray(payload?.commands) && payload.commands.length
       ? payload.commands
-      : [{ action: 'toggle', label: t('暂停 / 继续') }, { action: 'next', label: t('下一篇') }, { action: 'star', label: t('收藏') }];
+      : [ // 兜底补 phrases 字段（审查 P2：缺 phrases 使 _showPanel 的 c.phrases[0] 抛 TypeError，面板打不开）
+        { action: 'toggle', label: t('暂停 / 继续'), phrases: ['暂停', '继续', '停止'] },
+        { action: 'next', label: t('下一篇'), phrases: ['下一篇', '下一条'] },
+        { action: 'star', label: t('收藏'), phrases: ['收藏'] },
+      ];
     return this._commandsCache;
   }
 

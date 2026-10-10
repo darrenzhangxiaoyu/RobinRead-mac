@@ -132,6 +132,12 @@ export class ReaderView {
     this.progressFill = this.progressEl ? this.progressEl.querySelector('.reading-progress-fill') : null;
     // mouseup 兜底：部分场景 selectionchange 不触发（合成选区/快速点击）
     document.addEventListener('mouseup', () => setTimeout(() => this._onSelectionChange(), 10));
+    // F33 外文源自动译：整篇译文状态（原文/译文双容器切换，不叠加）
+    this._fullTranslation = null;      // 当前文章的译文投影（translateFullGet 载荷）
+    this._fullTranslationMode = 'original';
+    this._translating = false;
+    this._translationProgress = null;  // { done, total }（进度推送回填）
+    window.robin?.onTranslateProgress?.((payload) => this._onTranslateProgress(payload));
     this._buildScrollbarGestures();
     this._buildTOCGestures();
     this.clear();
@@ -160,6 +166,13 @@ export class ReaderView {
       this._translateAll = false;
       this._translationErrorShown = false;
       this.summary = { expanded: false, artifact: null, generating: false, streaming: '', error: null };
+      // F33/F34：整篇译文与存档模式随换文复位（双容器随正文重建）
+      this._fullTranslation = null;
+      this._fullTranslationMode = 'original';
+      this._translating = false;
+      this._translationProgress = null;
+      this._archiveMode = false;
+      this._archivedAt = null;
     }
     this._showLoading();
     // 渲染期任何异常（怪异 DOM 结构等）都不能让「正在准备正文…」遮罩永久卡死——
@@ -200,6 +213,9 @@ export class ReaderView {
     this.feed = data.feed;
     this.mediaInfo = data.media || null; // F3：enclosure 媒体元数据（阅读器内嵌播放卡片）
     this.summary.artifact = data.summary;
+    // F34 存档模式：正文 404/缓存缺失回落了本地存档 → 头部徽记（原文失效也能读）
+    this._archiveMode = Boolean(data.content?.fromArchive);
+    this._archivedAt = data.content?.archivedAt || null;
 
     let html = data.content?.html;
     if (data.content?.needsExtraction && this.entry.url) {
@@ -672,6 +688,11 @@ export class ReaderView {
     this.body = document.createElement('div');
     this.body.className = 'robin-body';
     article.appendChild(this.body);
+    // F33 整篇译文容器（双容器切换，不叠加）：默认隐藏，「译文」按钮切换显示
+    this.translatedBody = document.createElement('div');
+    this.translatedBody.className = 'robin-body robin-body-translated';
+    this.translatedBody.style.display = 'none';
+    article.appendChild(this.translatedBody);
     // 媒体中心（F3）：带 enclosure 的文章在标题下、正文前内嵌媒体卡片
     // （视频 → <video controls> 直接播画面；音频 → 播放卡片唤起迷你播放器）
     // F17：弹出阅读窗（mode:'popup'）不启用媒体播放——避免多窗多声源（构造选项开关）
@@ -719,6 +740,13 @@ export class ReaderView {
     this._interceptLinks();
     this._bindImages();
 
+    // F33：重排后若处于译文模式（原文精读重排等不换文的重建），按缓存译文重建译文容器
+    if (this._fullTranslationMode === 'translated' && this._fullTranslation?.html) {
+      this._showFullTranslation('translated');
+    } else {
+      this._syncTranslationButton?.();
+    }
+
     this._buildTOC();
     this._applyDarkPaperInversion(); // 深色纸面：线稿/公式图自动反相（借鉴上游 v1.4.3-beta.1）
     requestAnimationFrame(() => {
@@ -763,6 +791,22 @@ export class ReaderView {
     const entry = this.entry;
     const header = document.createElement('header');
     header.className = 'robin-header-container';
+
+    // F34 存档模式徽记：正文回落了本地存档快照（原文失效也能读）
+    if (this._archiveMode) {
+      const banner = document.createElement('div');
+      banner.className = 'robin-archive-banner';
+      banner.dataset.role = 'archive-banner';
+      const badge = document.createElement('span');
+      badge.className = 'robin-archive-badge';
+      badge.textContent = t('存档模式');
+      const text = document.createElement('span');
+      text.className = 'robin-archive-text';
+      const when = this._archivedAt ? formatFullDate(this._archivedAt) : '';
+      text.textContent = when ? tf('原文已失效，正在阅读本地存档快照（存档于 %@）', when) : t('原文已失效，正在阅读本地存档快照（存档于 %@）').replace('%@', '');
+      banner.append(badge, text);
+      header.appendChild(banner);
+    }
 
     // 刊头眉题（R15）：来源独立成行，杂志式小字距层级
     if (this.feed?.title) {
@@ -831,6 +875,7 @@ export class ReaderView {
       this._appendMirrorHeaderButton(actions);
       this._appendDebateHeaderButton(actions); // F25 反方辩手（与对照镜并列）
       this._appendQuizHeaderButton(actions); // F26 读后测验（正文 ≥500 字才显）
+      this._appendTranslationHeaderButton(actions); // F33 外文源自动译：整篇译文切换（有译文切换/无译文生成）
       if (entry.url) {
         const readBtn = document.createElement('button');
         readBtn.className = 'btn-text bordered';
@@ -918,6 +963,163 @@ export class ReaderView {
     const minutes = cjk / 400 + latinWords / 220;
     return minutes > 0 ? Math.max(1, Math.round(minutes)) : 0;
   }
+
+  // MARK: - F33 外文源自动译（整篇译文：原文/译文双容器一键切换）
+
+  /**
+   * 头部「译文」按钮：有译文 → 切换显示（再点切回原文）；无译文 → 点击生成。
+   * 无 Key 灰置并说明（与测验/辩手按钮同款口径）。
+   */
+  _appendTranslationHeaderButton(actions) {
+    if (!this.entryID) return;
+    const btn = document.createElement('button');
+    btn.className = 'btn-text bordered nj-translation-toggle';
+    btn.dataset.role = 'translation-toggle';
+    btn.innerHTML = `${icon('translate')}<span style="margin-left:4px"></span>`;
+    const label = btn.querySelector('span');
+    label.textContent = t('译文');
+    const noKey = window.__robinLLM?.__hasKey === false;
+    if (noKey) {
+      btn.disabled = true;
+      btn.title = t('未配置 AI Key，无法整篇翻译。请到 设置 → AI 填写后重试。');
+    } else {
+      btn.title = t('整篇翻译：后台把正文译成界面语言，原文/译文一键切换（外文源还支持订阅级自动翻译）。');
+      btn.addEventListener('click', () => this._toggleFullTranslation());
+    }
+    this._translationBtn = btn;
+    actions.appendChild(btn);
+    // 已有完整译文 → 按钮点亮（有译文，点击切换）
+    window.robin.translateFullGet?.(this.entryID).then((tr) => {
+      if (this.entryID && tr?.isComplete && tr.html) {
+        this._fullTranslation = tr;
+        this._syncTranslationButton();
+      }
+    }).catch(() => { /* 读回失败：按钮保持「生成」语义 */ });
+  }
+
+  /** 译文按钮态同步：mode=translated 时按钮显示「原文」，翻译中显示进度。无 Key 灰置态不覆写说明。 */
+  _syncTranslationButton() {
+    const btn = this._translationBtn;
+    if (!btn || !btn.isConnected || btn.disabled) return;
+    const label = btn.querySelector('span');
+    if (!label) return;
+    if (this._translating) {
+      const p = this._translationProgress;
+      label.textContent = p && p.total > 0
+        ? tf('译文 %lld/%lld', p.done, p.total)
+        : t('译文');
+      btn.title = p && p.total > 0
+        ? tf('正在整篇翻译（分段进行，已译 %lld / %lld 段）…', p.done, p.total)
+        : t('正在整篇翻译（分段进行，已译 %lld / %lld 段）…').replace('%lld', '').replace('%lld', '');
+      return;
+    }
+    if (this._fullTranslationMode === 'translated') {
+      label.textContent = t('原文');
+      btn.title = t('已切回原文');
+      btn.classList.add('active');
+      return;
+    }
+    btn.classList.remove('active');
+    label.textContent = t('译文');
+    btn.title = this._fullTranslation?.isComplete
+      ? t('有译文，点击切换')
+      : t('整篇翻译：后台把正文译成界面语言，原文/译文一键切换（外文源还支持订阅级自动翻译）。');
+  }
+
+  /** 分块进度推送：更新按钮进度（仅在翻译在途时）。 */
+  _onTranslateProgress(payload) {
+    if (!payload || payload.entryID !== this.entryID) return;
+    if (payload.state === 'running' && payload.total > 0) {
+      this._translating = true;
+      this._translationProgress = { done: payload.done, total: payload.total };
+    } else if (payload.state === 'done') {
+      this._translating = false;
+      this._translationProgress = null;
+    }
+    this._syncTranslationButton();
+  }
+
+  /** 「译文」点击：译文态 → 切回原文；原文态 → 有译文即切换、无译文先生成。 */
+  async _toggleFullTranslation() {
+    const entryID = this.entryID;
+    if (!entryID || this._translating) return;
+    if (this._fullTranslationMode === 'translated') {
+      this._showFullTranslation('original');
+      this.handlers.onFeedback?.(t('已切回原文'));
+      return;
+    }
+    let tr = this._fullTranslation;
+    if (!tr || tr.entryID !== entryID) {
+      tr = await window.robin.translateFullGet?.(entryID).catch(() => null) || null;
+    }
+    if (tr?.isComplete && tr.html) {
+      this._fullTranslation = tr;
+      this._showFullTranslation('translated');
+      this.handlers.onFeedback?.(t('译文已就绪，已切换到译文'));
+      return;
+    }
+    // 无译文：点击生成（后台分段翻译；进度经 translate:progress 推送回填按钮）
+    this._translating = true;
+    this._translationProgress = null;
+    this._syncTranslationButton();
+    try {
+      const result = await window.robin.translateFull(entryID);
+      if (this.entryID !== entryID) return; // 竞态：翻译期间已换文
+      if (!result?.ok) throw new Error(String(result?.error || 'failed'));
+      this._fullTranslation = result.data || null;
+      this._translating = false;
+      this._translationProgress = null;
+      if (this._fullTranslation?.isComplete && this._fullTranslation?.html) {
+        this._showFullTranslation('translated');
+        this.handlers.onFeedback?.(t('译文已就绪，已切换到译文'));
+      } else {
+        this.handlers.onFeedback?.(t('翻译失败，请稍后重试'));
+      }
+    } catch (err) {
+      if (this.entryID !== entryID) return;
+      this._translating = false;
+      this._translationProgress = null;
+      this._syncTranslationButton();
+      this.handlers.onFeedback?.(t('翻译失败，请稍后重试'));
+    }
+  }
+
+  /**
+   * 双容器切换（不叠加）：译文容器填消毒后的译文 HTML，原文容器 display 隐藏；
+   * 切回原文即恢复（批注/高亮锚点都在原容器，零损伤）。
+   */
+  _showFullTranslation(mode) {
+    this._fullTranslationMode = mode === 'translated' && this._fullTranslation?.html ? 'translated' : 'original';
+    if (!this.body || !this.translatedBody) return;
+    if (this._fullTranslationMode === 'translated') {
+      this.translatedBody.innerHTML = this._fullTranslation.html;
+      // 轻量归一：图片防盗链 + iframe 懒加载（译文 HTML 主进程已过消毒白名单）
+      const base = this.feed?.siteURL || this.entry?.url || '';
+      this.translatedBody.querySelectorAll('img').forEach((img) => {
+        img.referrerPolicy = 'no-referrer';
+        if (base && img.getAttribute('src') && !/^https?:/i.test(img.getAttribute('src') || '')) {
+          try { img.src = new URL(img.getAttribute('src'), base).href; } catch (_) { /* 保留原样 */ }
+        }
+      });
+      this.translatedBody.querySelectorAll('iframe').forEach((f) => { f.loading = 'lazy'; });
+      this.body.style.display = 'none';
+      this.translatedBody.style.display = '';
+      // 译文容器内链接同样在浏览器打开（_interceptLinks 只处理原容器，这里就地补）
+      this.translatedBody.querySelectorAll('a[href]').forEach((anchor) => {
+        if (/^https?:/i.test(anchor.getAttribute('href') || '')) anchor.title = t('在浏览器打开外部链接');
+        anchor.addEventListener('click', (event) => {
+          event.preventDefault();
+          const href = anchor.getAttribute('href');
+          if (href && /^https?:/i.test(href)) window.robin.openLink(href);
+        });
+      });
+    } else {
+      this.translatedBody.style.display = 'none';
+      this.body.style.display = '';
+    }
+    this._syncTranslationButton();
+  }
+
 
   _setBodyHTML(html) {
     this.body.innerHTML = html;

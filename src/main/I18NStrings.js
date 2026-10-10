@@ -2425,6 +2425,43 @@ const STRINGS = {
   "现在是你的高峰阅读时段": { zh: "现在是你的高峰阅读时段", en: "You're in your peak reading hours" },
   "你的高峰阅读时段，要进入专注模式吗？": { zh: "你的高峰阅读时段，要进入专注模式吗？", en: "You're in your peak reading hours — start a focus session?" },
   "进入专注模式": { zh: "进入专注模式", en: "Start Focus" },
+
+  // F33 外文源自动译
+  "译文": { zh: "译文", en: "Translation" },
+  "原文": { zh: "原文", en: "Original" },
+  "整篇翻译：后台把正文译成界面语言，原文/译文一键切换（外文源还支持订阅级自动翻译）。": { zh: "整篇翻译：后台把正文译成界面语言，原文/译文一键切换（外文源还支持订阅级自动翻译）。", en: "Full-text translation: renders the article in your UI language with one click (per-feed auto translation available for foreign sources)." },
+  "未配置 AI Key，无法整篇翻译。请到 设置 → AI 填写后重试。": { zh: "未配置 AI Key，无法整篇翻译。请到 设置 → AI 填写后重试。", en: "No AI key configured — full translation is unavailable. Set it up in Settings → AI." },
+  "正在整篇翻译（分段进行，已译 %lld / %lld 段）…": { zh: "正在整篇翻译（分段进行，已译 %lld / %lld 段）…", en: "Translating the article (segment %lld of %lld)…" },
+  "译文已就绪，已切换到译文": { zh: "译文已就绪，已切换到译文", en: "Translation ready — switched to the translated view" },
+  "已切回原文": { zh: "已切回原文", en: "Switched back to the original" },
+  "翻译失败，请稍后重试": { zh: "翻译失败，请稍后重试", en: "Translation failed — try again later" },
+  "有译文，点击切换": { zh: "有译文，点击切换", en: "Translation available — click to switch" },
+  "自动翻译": { zh: "自动翻译", en: "Auto Translation" },
+  "开启后，外文源的新文章（标题/摘要外文占比高）入库即后台整篇翻译，阅读时一键切换译文。": { zh: "开启后，外文源的新文章（标题/摘要外文占比高）入库即后台整篇翻译，阅读时一键切换译文。", en: "New articles from this feed whose title/summary look foreign are translated in the background so you can switch while reading." },
+  "列表「译」徽标：这篇文章已有整篇译文，打开后在阅读器点「译文」即可切换。": { zh: "列表「译」徽标：这篇文章已有整篇译文，打开后在阅读器点「译文」即可切换。", en: "The \"T\" badge marks articles that already have a full translation — open one and click \"Translation\"." },
+  "取消翻译": { zh: "取消翻译", en: "Cancel Translation" },
+  "翻译已取消，已完成的段落会保留，下次可续译。": { zh: "翻译已取消，已完成的段落会保留，下次可续译。", en: "Translation cancelled — completed segments are kept and the next run resumes." },
+
+  // F34 网页存档馆
+  "网页存档馆": { zh: "网页存档馆", en: "Web Archive Hall" },
+  "存档馆": { zh: "存档馆", en: "Archives" },
+  "重要文章与追更快照的永久本地档案馆：原文失效也能读，可导出 MHTML。": { zh: "重要文章与追更快照的永久本地档案馆：原文失效也能读，可导出 MHTML。", en: "A permanent local hall for important articles and monitor snapshots — readable even if the source dies, exportable as MHTML." },
+  "存档此文": { zh: "存档此文", en: "Archive This Article" },
+  "已存档，原文失效也能读": { zh: "已存档，原文失效也能读", en: "Archived — readable even if the source dies" },
+  "已取消存档": { zh: "已取消存档", en: "Archive removed" },
+  "存档模式": { zh: "存档模式", en: "Archive Mode" },
+  "原文已失效，正在阅读本地存档快照（存档于 %@）": { zh: "原文已失效，正在阅读本地存档快照（存档于 %@）", en: "Source unavailable — reading the local snapshot (archived %s)" },
+  "正文超过 6MB 存档上限，已拒绝存档。": { zh: "正文超过 6MB 存档上限，已拒绝存档。", en: "Body exceeds the 6MB archive limit — archived was refused." },
+  "这篇文章还没有可存档的正文。": { zh: "这篇文章还没有可存档的正文。", en: "This article has no body to archive yet." },
+  "搜索存档（标题/来源）": { zh: "搜索存档（标题/来源）", en: "Search archives (title/source)" },
+  "导出 MHTML": { zh: "导出 MHTML", en: "Export MHTML" },
+  "取消存档": { zh: "取消存档", en: "Remove Archive" },
+  "还没有任何存档。右键文章选「存档此文」，或为追更源开启自动存档。": { zh: "还没有任何存档。右键文章选「存档此文」，或为追更源开启自动存档。", en: "No archives yet. Right-click an article to archive it, or enable auto-archiving for a monitored page." },
+  "追更快照自动存档": { zh: "追更快照自动存档", en: "Auto-archive Monitor Snapshots" },
+  "开启后，该追更源每次检出变更落新文时自动保存一份快照到存档馆（默认关）。": { zh: "开启后，该追更源每次检出变更落新文时自动保存一份快照到存档馆（默认关）。", en: "When enabled, every detected change saved as a new article also snapshots into the archive hall (off by default)." },
+  "存档 %lld 篇 · 共 %@": { zh: "存档 %lld 篇 · 共 %@", en: "%lld archived · %s total" },
+  "MHTML 已导出": { zh: "MHTML 已导出", en: "MHTML exported" },
+  "已存档": { zh: "已存档", en: "Archived" },
 };
 
 module.exports = { STRINGS };

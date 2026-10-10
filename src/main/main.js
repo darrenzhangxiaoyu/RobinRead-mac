@@ -270,6 +270,9 @@ if (!IS_PROBE) {
       store.fulltext?.dispose(); // F1：全文抓取队列清空，退出不再发起新提取
     } catch (_) { /* 退出路径不抛错 */ }
     try {
+      store.translation?.dispose(); // F33：自动译队列清空，退出不再发起新翻译
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
       store.media?.dispose(); // F3：中止在途媒体下载（.part 由下载路径自行清理）
     } catch (_) { /* 退出路径不抛错 */ }
     try {

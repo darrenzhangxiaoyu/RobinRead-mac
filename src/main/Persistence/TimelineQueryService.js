@@ -35,6 +35,8 @@ function rowToListItem(row) {
     hasBodyCache: Number(row.has_body_cache ?? 0) === 1,
     // 媒体中心（F3）：是否带 enclosure 媒体附件（主键探测）→ 列表行「▶」小标记
     hasMedia: Number(row.has_media ?? 0) === 1,
+    // 外文源自动译（F33）：是否有完整整篇译文（主键探测）→ 列表行「译」小徽标
+    hasTranslation: Number(row.has_translation ?? 0) === 1,
     // 事件聚类（F21）：所属事件簇 id（NULL = 未聚成事件的独报）→ 事件模式按它分组
     clusterID: row.cluster_id ?? null,
     feedIconURL: feedIconURL({
@@ -67,6 +69,7 @@ const LIST_SELECT = `
       COALESCE(s.is_later, 0) AS is_later,
       CASE WHEN c.item_id IS NULL THEN 0 ELSE 1 END AS has_body_cache,
       CASE WHEN mi.item_id IS NULL THEN 0 ELSE 1 END AS has_media,
+      CASE WHEN tr.item_id IS NULL THEN 0 ELSE 1 END AS has_translation,
       i.cluster_id AS cluster_id
   FROM items i
   INNER JOIN feeds f ON f.id = i.feed_id
@@ -75,6 +78,7 @@ const LIST_SELECT = `
   LEFT JOIN article_states s ON s.item_id = i.id
   LEFT JOIN article_caches c ON c.item_id = i.id
   LEFT JOIN media_items mi ON mi.item_id = i.id
+  LEFT JOIN translations tr ON tr.item_id = i.id
 `;
 
 class TimelineQueryService {

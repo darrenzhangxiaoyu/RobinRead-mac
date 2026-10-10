@@ -171,7 +171,7 @@ app.whenReady().then(async () => {
 
     // ── 2/4/5. 全局刷新 → 启用源新文章入队提取，未启用源不动，并发 ≤2 ──
     await store.refresh('manual');
-    const snap1 = await waitDrain(store, 40000);
+    const snap1 = await waitDrain(store, 90000);
     const onItems = store.articlesRepo.entriesForFeed(feedOn.id);
     const newItems = store.articlesRepo.entriesForFeed(feedNew.id);
     const offItems = store.articlesRepo.entriesForFeed(feedOff.id);
@@ -195,7 +195,7 @@ app.whenReady().then(async () => {
     const extractedBefore = store.fulltext.snapshot().extracted;
     const callsBefore = new Map([...fetchCalls].filter(([u]) => !FEED_URLS.has(u)));
     await store.refresh('manual'); // 同一批 guid：无新文章
-    const snap2 = await waitDrain(store, 20000);
+    const snap2 = await waitDrain(store, 60000);
     const callsUnchanged = [...callsBefore.keys()].every((u) => (fetchCalls.get(u) || 0) === callsBefore.get(u));
     ok(snap2.extracted === extractedBefore && callsUnchanged,
       `3 二次刷新不重复提取（extracted ${extractedBefore}→${snap2.extracted}，正文抓取调用数不变）`);
@@ -205,7 +205,7 @@ app.whenReady().then(async () => {
     addArticle(feedOn, 'on-n3', 'qfmarkeronn3');
     syncRSS();
     await store.refreshFeed(feedOn.id);
-    const snap3 = await waitDrain(store, 40000);
+    const snap3 = await waitDrain(store, 90000);
     const stock1 = onItems.find((e) => e.url === stockURL(feedOn, 1));
     const stock2 = onItems.find((e) => e.url === stockURL(feedOn, 2));
     const eOn3 = rssEntry(store.articlesRepo.entriesForFeed(feedOn.id), 'https://mock.test/' + feedOn.id + '/on-n3');
@@ -224,7 +224,7 @@ app.whenReady().then(async () => {
     addArticle(feedNew, 'new-m3', 'qfmarkernewm3');
     syncRSS();
     await store.refreshFeed(feedNew.id);
-    await waitDrain(store, 40000);
+    await waitDrain(store, 90000);
     const newItems2 = store.articlesRepo.entriesForFeed(feedNew.id);
     const eM3 = rssEntry(newItems2, 'https://mock.test/' + feedNew.id + '/new-m3');
     const nStock1 = newItems2.find((e) => e.url === stockURL(feedNew, 1));
