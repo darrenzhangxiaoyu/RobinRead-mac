@@ -214,6 +214,7 @@ class AppStore extends EventEmitter {
     this.lastRefreshOutcome = null;
     this._refreshTimer = null;
     this._outboxTimer = null;
+    this._closed = false; // 退出序哨兵：shutdown() 置位后所有触碰 DB 的定时器回调短路
     this._retainedUnreadIDs = new Set(); // 未读会话保留
     this._retainedStarredIDs = new Set();
     this._retainedLaterIDs = new Set();  // 稍后读会话保留（本地状态，仿 retainedUnreadIDs）
@@ -2733,11 +2734,20 @@ class AppStore extends EventEmitter {
     if (this._outboxTimer) return;
     this._outboxTimer = setTimeout(() => {
       this._outboxTimer = null;
-      for (const account of this.accounts.enabledAccounts()) {
-        if (account.type !== 'freshRSS') continue;
-        this._drainOutbox(account.id).catch(() => { /* 重试由退避控制 */ });
-      }
+      if (this._closed) return; // 退出竞态（二轮修复：will-quit 关库后定时器仍触发 → prepare 抛 "database is not open" 弹窗）
+      try {
+        for (const account of this.accounts.enabledAccounts()) {
+          if (account.type !== 'freshRSS') continue;
+          this._drainOutbox(account.id).catch(() => { /* 重试由退避控制 */ });
+        }
+      } catch (_) { /* 关闭后/瞬时异常静默：下一轮刷新再同步 */ }
     }, delayMs);
+  }
+
+  /** 退出序（main will-quit 首位调用）：停掉一切会触碰数据库的定时器，再由调用方关库。 */
+  shutdown() {
+    this._closed = true;
+    if (this._outboxTimer) { clearTimeout(this._outboxTimer); this._outboxTimer = null; }
   }
 
   async _drainOutbox(accountID) {

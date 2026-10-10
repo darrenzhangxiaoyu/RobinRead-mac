@@ -267,6 +267,9 @@ if (!IS_PROBE) {
   app.on('will-quit', () => {
     if (!store) return;
     try {
+      store.shutdown?.(); // 二轮修复：首位停掉 outbox 等触碰数据库的定时器——否则关库后定时器触发抛 "database is not open" 弹窗
+    } catch (_) { /* 退出路径不抛错 */ }
+    try {
       store.fulltext?.dispose(); // F1：全文抓取队列清空，退出不再发起新提取
     } catch (_) { /* 退出路径不抛错 */ }
     try {

@@ -195,7 +195,7 @@ app.whenReady().then(async () => {
       '5 view 投影：风格 tag + 一句话画像 + 最近 3 篇（详情面板数据面）');
     ok(v1.dueReanalyze === false, '5 新画像：无重析需求（dueReanalyze=false）');
     // 缺槽不落，下次补判
-    svc._llmComplete = async () => JSON.stringify([GOOD_PROFILES[0], { index: 3, spectrum: 90, style: '教程', portrait: '丙补' }]); // 缺 index 2
+    svc._llmComplete = async () => { llmCalls += 1; return JSON.stringify([GOOD_PROFILES[0], { index: 3, spectrum: 90, style: '教程', portrait: '丙补' }]); }; // 缺 index 2
     const before = store.database.prepare('SELECT COUNT(*) AS n FROM source_profiles').get().n;
     const vSlot = await svc.analyze({ force: true });
     const midRows = store.database.prepare('SELECT COUNT(*) AS n FROM source_profiles').get().n;
@@ -205,7 +205,7 @@ app.whenReady().then(async () => {
     const feedCView = vSlot.feeds.find((f) => f.feedID === feedC.id);
     ok(feedCView && feedCView.spectrum === 90, '5 force 重析：显式 index 精确落槽（丙→90）');
     // 恢复标准画像
-    svc._llmComplete = async () => '```json\n' + JSON.stringify(GOOD_PROFILES) + '\n```';
+    svc._llmComplete = async () => { llmCalls += 1; return '```json\n' + JSON.stringify(GOOD_PROFILES) + '\n```'; };
     await svc.analyze({ force: true });
     ok(svc.counters.profiled >= 8 && llmCalls >= 3, '5 profiled 计数在案（含 force 重析）');
     // 坏输出：不落库可重析
@@ -215,7 +215,7 @@ app.whenReady().then(async () => {
     ok(svc.counters.parseFailures === parseFailBefore + 1
       && store.database.prepare('SELECT COUNT(*) AS n FROM source_profiles').get().n === 3,
       '5 坏输出：parseFailures 计数 + 旧画像原地保留（可重析）');
-    svc._llmComplete = async () => '```json\n' + JSON.stringify(GOOD_PROFILES) + '\n```';
+    svc._llmComplete = async () => { llmCalls += 1; return '```json\n' + JSON.stringify(GOOD_PROFILES) + '\n```'; };
 
     // ── 6. 缓存与 7 天过期 ──
     llmCalls = 0;
@@ -223,7 +223,7 @@ app.whenReady().then(async () => {
     ok(llmCalls === 0 && svc.counters.analyses >= 2, '6 TTL 内：零 LLM（缓存全命中）');
     ok(svc.profile(feedA.id) && svc.profile(feedA.id).spectrum === -60, '6 profile()：TTL 内返回画像');
     svc._now = () => T0 + 8 * DAY; // 过期（7 天 TTL）
-    ok(svc.profile(feedA) === null, '6 过期 profile()：视同无（stale 语义）');
+    ok(svc.profile(feedA.id) === null, '6 过期 profile()：视同无（stale 语义）');
     ok(svc.needsReanalyze() === true, '6 过期 needsReanalyze=true（刷新钩子重析判定）');
     const v8 = await svc.analyze();
     ok(llmCalls === 1 && svc.counters.expired >= 3 && v8.feeds.every((f) => !f.stale),

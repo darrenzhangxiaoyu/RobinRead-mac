@@ -47,8 +47,10 @@ export function renderSpectrum(host, view, { toast = null, onOpenFeedArticles = 
     analyzeBtn.dataset.busy = '1';
     analyzeBtn.querySelector('span').textContent = t('正在分析…');
     try {
-      const fresh = await window.robin.spectrumAnalyze({ force: false });
-      if (toast && fresh && fresh.feeds && fresh.feeds.length) toast(t('光谱已更新'));
+      const envelope = await window.robin.spectrumAnalyze({ force: false }); // invoke 信封 {ok, data}
+      const fresh = envelope && envelope.ok ? envelope.data : null;
+      if (!fresh) throw new Error(String((envelope && envelope.error) || 'analyze failed'));
+      if (toast && fresh.feeds && fresh.feeds.length) toast(t('光谱已更新'));
       renderSpectrum(host, fresh, { toast, onOpenFeedArticles });
     } catch (err) {
       if (toast) toast(String((err && err.message) || err).slice(0, 120));
