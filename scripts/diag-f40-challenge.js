@@ -284,11 +284,11 @@ app.whenReady().then(async () => {
     ok(migrationsSrc.includes('v30-challenges-garden-decor') && migrationsSrc.includes('challenge_decor'),
       '11 v30 迁移在迁移链中（DDL 只进迁移链）');
 
-    store.preferences.flushSync();
-    store.database.close();
-    try { fs.rmSync(userData, { recursive: true, force: true }); } catch (_) { /* 留给系统清理 */ }
-    console.log(`TOTAL passed=${passed} failed=${failed}`);
-    console.log(failed === 0 ? 'ALL PASSED' : `FAILED ${failed}`);
+    // 判定先行 + 同步写：末次拆卸（process.exit/热库句柄）在 Desktop Heap 劣化期可能原生崩溃
+    // （exit 127 且缓冲 stdout 全丢），verdict 走 fs.writeSync 即时落盘不经过缓冲。
+    // close/reopen 语义已由上方「重启读回」阶段真验过，连库直接留给 OS 回收。
+    fs.writeSync(1, `TOTAL passed=${passed} failed=${failed}\n`);
+    fs.writeSync(1, failed === 0 ? 'ALL PASSED\n' : `FAILED ${failed}\n`);
     process.exit(failed === 0 ? 0 : 1);
   } catch (err) {
     console.error('ERR', String((err && err.stack) || err).slice(0, 1600));
