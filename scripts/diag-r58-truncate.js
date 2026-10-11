@@ -74,7 +74,9 @@ app.whenReady().then(async () => {
     ok(listSrc.includes('clusterTitleEl.title = '), '2 聚簇行标题悬停全文');
     ok(read('src/renderer/views/topic-view.js').includes('title.title = hit.title || hit.url;'), '2 话题命中标题悬停全文');
     ok(read('src/renderer/views/knowledge.js').includes("card.querySelector('.kb-col-name').title = col.name;"), '2 收藏集名悬停全文');
-    ok(/row\.title = entryTitle; \/\/ R58/.test(read('src/renderer/views/weekly-view.js')), '2 周刊条目悬停全文（取代泛提示）');
+    ok(/nj-weekly-entry-title'\)\.title = entryTitle/.test(read('src/renderer/views/weekly-view.js'))
+      && /row\.title = t\('打开这篇文章'\)/.test(read('src/renderer/views/weekly-view.js')),
+      '2 周刊条目悬停全文落在截断 span 上、行级保留动作提示（批1审查P1-1 收口：两连写死代码修复）');
 
     // ── 3. meta 行光学（静态锚点）──
     ok(/\.entry-meta \{\n  display: flex; align-items: center; gap: var\(--space-1\);/.test(css),

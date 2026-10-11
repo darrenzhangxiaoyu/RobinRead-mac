@@ -259,7 +259,9 @@ export class WeeklyView {
       row.innerHTML = `<span class="nj-weekly-entry-title"></span><span class="nj-weekly-entry-src"></span>`;
       const entryTitle = entry.title || entry.entryID;
       row.querySelector('.nj-weekly-entry-title').textContent = entryTitle;
-      row.title = entryTitle; // R58：周刊条目标题单行截断的悬停全文（取代泛提示）
+      // R58 悬停全文（批1审查P1-1 收口）：title 落在真正截断的标题 span 上；
+      // 行级 title 保留动作提示（此前行级两连写互相覆盖成死代码）
+      row.querySelector('.nj-weekly-entry-title').title = entryTitle;
       row.querySelector('.nj-weekly-entry-src').textContent = entry.sourceTitle || '';
       row.title = t('打开这篇文章');
       row.addEventListener('click', () => {
