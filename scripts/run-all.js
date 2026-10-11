@@ -79,6 +79,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r56-press.js', runner: 'electron', desc: 'R56 按压纪律三连：active 态补齐/悬停不位移/命令面板退场（离线）' },
   { file: 'scripts/diag-r57-numeric.js', runner: 'electron', desc: 'R57 数字纪律三连：tabular-nums 全量/相对时间 60s 静默刷新/时长口径（离线）' },
   { file: 'scripts/diag-r58-truncate.js', runner: 'electron', desc: 'R58 截断与光学三连：line-clamp 口径表/截断必有出路/meta 行光学（离线）' },
+  { file: 'scripts/diag-r59-emptyout.js', runner: 'electron', desc: 'R59 空态出路三连：空态 CTA 三态归簇/垂直节奏令牌化/搜索无结果清空出路（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

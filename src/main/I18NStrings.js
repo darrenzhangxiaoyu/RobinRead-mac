@@ -2732,6 +2732,11 @@ const STRINGS = {
   "上一步": { zh: "上一步", en: "Back" },
   "跳过引导": { zh: "跳过引导", en: "Skip Tour" },
   "开始使用": { zh: "开始使用", en: "Start Reading" },
+  /* R59 空态出路：列表搜索无结果空态 + 清空搜索出路（并补 R53 命令面板同款键） */
+  "没有匹配的文章": { zh: "没有匹配的文章", en: "No Matching Articles" },
+  "换个关键词试试，或清空搜索查看全部文章。": { zh: "换个关键词试试，或清空搜索查看全部文章。", en: "Try a different keyword, or clear the search to see all articles." },
+  "清空搜索": { zh: "清空搜索", en: "Clear Search" },
+  "清空搜索，显示全部命令": { zh: "清空搜索，显示全部命令", en: "Clear search to show all commands" },
 };
 
 module.exports = { STRINGS };

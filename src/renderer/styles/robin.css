@@ -677,9 +677,10 @@ body.zen .list-top-inset { display: none; }
 
 .list-empty, .reader-empty {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 8px;
+  align-items: center; justify-content: center; gap: var(--space-2); /* R59：8px 裸值归令牌 */
   color: var(--text-tertiary);
-  padding: 30px; text-align: center;
+  padding: var(--space-8) var(--space-6); /* R59：30px 裸值退役 → 32/24 网格档 */
+  text-align: center;
   position: relative; z-index: 1;
 }
 /* U20 漂移合并：旧 .list-empty 空态三行（glyph/h3/p）已并入下方精修块，此处不再分叉 */
@@ -4352,8 +4353,9 @@ body.nj-resizing *, body.nj-resizing *::before, body.nj-resizing *::after {
 /* 全局选区：纸感绿（阅读区原有规则保持兼容） */
 ::selection { background: rgba(116, 137, 100, 0.26); }
 
-/* 空状态精修：装饰圆底 + 衬线标题 */
-.list-empty, .reader-empty { gap: 10px; }
+/* 空状态精修：装饰圆底 + 衬线标题（R59：垂直节奏令牌化——art/标题/文案/出路按钮四拍
+   间距归 --space-*，10px/30px 裸值退役进 4px 网格档） */
+.list-empty, .reader-empty { gap: var(--space-2); }
 .list-empty .glyph, .reader-empty .glyph {
   width: 72px; height: 72px; display: flex; align-items: center; justify-content: center;
   border-radius: 50%; font-size: 30px; opacity: 0.9;
@@ -5804,7 +5806,8 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 .search-history-item.hl { background: var(--row-hover); }
 .search-history-item.hl span { color: var(--text-primary); }
 
-/* ===== R41 空态「立即刷新」按钮 ===== */
+/* ===== R41 空态「立即刷新」按钮（R59 归簇：空态 CTA 家族——垂直节奏与三态全令牌化，
+   搜索无结果「清空搜索」出路按钮共用同族（.list-empty-clear 只加语义钩子不改观感）===== */
 .list-empty-refresh {
   appearance: none;
   border: 1px solid var(--separator);
@@ -5813,11 +5816,11 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  padding: 6px 18px;
-  margin-top: 14px;
+  padding: var(--space-2) var(--space-5); /* R59：6px 18px 裸值退役 → 令牌（更稳的点击热区） */
+  margin-top: var(--space-4); /* R59：垂直节奏第四拍（文案 → 出路按钮）归 --space-4 */
   border-radius: var(--radius-full, 999px);
   cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .list-empty-refresh:hover { border-color: var(--accent); background: var(--row-hover); }
 
@@ -5851,8 +5854,8 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
   animation: er-dot-breathe 1.2s ease-in-out infinite;
 }
 @keyframes er-dot-breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-.list-empty-refresh:active { transform: scale(0.96); }
-.list-empty-refresh:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* R59：按压归簇进 U12 --press-scale 家族（此处裸 0.96 双写退役）；焦点环归 U18 量纲 */
+.list-empty-refresh:focus-visible { outline: var(--focus-w, 2px) solid var(--accent); outline-offset: var(--focus-off, 2px); }
 
 /* ===== R45 标签 chips 键盘焦点环 ===== */
 .robin-tag-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

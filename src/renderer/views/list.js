@@ -432,6 +432,23 @@ export class ListView {
         empty.innerHTML = `${artFor('clock')}<h3></h3><p></p>`;
         empty.querySelector('h3').textContent = t('稍后读队列为空');
         empty.querySelector('p').textContent = t('读着累先存起来：右键文章或点阅读器「稍后读」，处理完移出即可。');
+      } else if (scope?.kind === 'search') {
+        // R59 搜索无结果空态：换关键词的出路（对齐 R53 命令面板「清空搜索」先例——
+        // 无结果不该是死胡同，一键回到全部文章）
+        empty.innerHTML = `${artFor('search')}<h3></h3><p></p>`;
+        empty.querySelector('h3').textContent = t('没有匹配的文章');
+        empty.querySelector('p').textContent = t('换个关键词试试，或清空搜索查看全部文章。');
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'list-empty-refresh list-empty-clear';
+        clearBtn.textContent = t('清空搜索');
+        clearBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          this.clearSearch();
+          this.handlers.onSearch?.('');
+          this.searchInput?.focus();
+        });
+        empty.appendChild(clearBtn);
       } else {
         empty.innerHTML = `${artFor('newspaper')}<h3></h3><p></p>`;
         empty.querySelector('h3').textContent = t('没有文章');
