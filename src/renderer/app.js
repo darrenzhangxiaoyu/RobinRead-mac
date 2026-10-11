@@ -1364,11 +1364,14 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
       pendingPaint = null;
       if (!job || !document.body.contains(body)) return; // 弹窗已关闭
       const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 60;
+      const prevTop = body.scrollTop; // R54：重绘保位（innerHTML 清空会把 scrollTop 钳到 0）
       body.classList.remove('loading');
       body.classList.toggle('streaming', !!job.streaming);
       body.innerHTML = '';
       body.appendChild(renderDigestVisual(job.content, job.refs, { ...job.meta, mode }, () => overlay.remove()));
-      if (nearBottom) body.scrollTop = body.scrollHeight; // 首帧/缓存渲染时内容未溢出，等效始终落底
+      // R54：仅流式生成分支跟随落底；缓存命中/终稿渲染从报头读起（缓存首帧 prevTop=0 即落顶）
+      if (job.streaming && nearBottom) body.scrollTop = body.scrollHeight;
+      else body.scrollTop = prevTop;
     });
   };
 

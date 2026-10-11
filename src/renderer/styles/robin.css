@@ -4081,6 +4081,13 @@ body.dark .robin-header-original-actions .nj-later-header-btn.active {
 .nj-page-turn-back { animation: njPageTurnBack var(--dur-slow) var(--ease-out); will-change: transform, opacity; }
 /* reduced-motion 由全局收敛块统一接管（此处不再局部重复） */
 
+/* ── R54 文章微入场：淡入 + 微缩放（--dur-fast/--ease-out 令牌；翻页动效在场时 JS 侧让位）── */
+@keyframes njArticleEnter {
+  from { opacity: 0; transform: scale(0.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+.nj-article-enter { animation: njArticleEnter var(--dur-fast) var(--ease-out) both; }
+
 /* 深色纸面 */
 body.dark .nj-mag-card {
   background: rgba(255, 255, 255, 0.045);

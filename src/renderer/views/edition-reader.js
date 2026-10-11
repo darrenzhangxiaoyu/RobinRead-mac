@@ -863,8 +863,11 @@ export class EditionReader {
     this._play();
     this._fx('open');
     // 续读提醒（R18）：开书后提示已落位到上次位置
+    // R54 降噪：延迟窗口内用户已先行翻页 → 落位提示已过时，安静跳过（不打断正在进行的阅读）
     if (this._resumedFrom > 0) {
-      setTimeout(() => this._notice(`${t('已续读至上次位置 · 第')} ${this._resumedFrom + 1} ${t('页')}`), 950);
+      setTimeout(() => {
+        if (this.open && this.index === this.startIndex) this._notice(`${t('已续读至上次位置 · 第')} ${this._resumedFrom + 1} ${t('页')}`);
+      }, 950);
     }
     const cover = this.overlay.querySelector('.er-cover');
     const dur = this.reduceMotion ? 0.16 : 0.65;

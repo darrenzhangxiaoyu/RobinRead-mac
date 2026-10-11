@@ -798,6 +798,10 @@ export class ReaderView {
       this._pageTurn = null;
       article.classList.add(turnClass);
       article.addEventListener('animationend', () => article.classList.remove(turnClass), { once: true });
+    } else {
+      // R54 文章微入场：淡入 + 微缩放（列表→阅读的视线引导；翻页动效在场时让位，同元素不叠两场）
+      article.classList.add('nj-article-enter');
+      article.addEventListener('animationend', () => article.classList.remove('nj-article-enter'), { once: true });
     }
 
     // 正文：注入段落 ID + 版面重排 + 句子包裹 + 缓存译文 + 恢复划词注释锚点
