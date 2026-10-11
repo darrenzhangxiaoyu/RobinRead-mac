@@ -688,6 +688,7 @@ function updateToolbarState() {
   const modeLabels = { off: t('翻译：关闭'), bilingual: t('翻译：双语对照'), zh: t('翻译：仅中文') };
   capTranslate.classList.toggle('active', tMode !== 'off');
   capTranslate.title = `${modeLabels[tMode]} (C · 点击切换模式)`;
+  capTranslate.setAttribute('aria-label', capTranslate.title); // 批3审查P3-11 收口：aria 随三模式同步（此前恒停静态兜底）
   const capRead = document.getElementById('cap-read');
   capRead.innerHTML = icon(item?.isRead ? 'envelopeOpen' : 'checkAll'); // R67 已读同形：勾=标为已读 / 开信封=标为未读（与行内快捷 q-read 同一二元）
   capRead.title = t(item?.isRead ? '标为未读' : '标为已读');

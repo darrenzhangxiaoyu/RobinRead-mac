@@ -680,8 +680,8 @@ export class SettingsView {
         const result = await window.robin.cleanupNow();
         const mb = (result.freedBytes || 0) / (1024 * 1024);
         const summary = mb >= 0.1
-          ? t(`已清理 ${result.pruned} 篇，释放 ${mb.toFixed(1)} MB`)
-          : t(`已清理 ${result.pruned} 篇`);
+          ? tf('已清理 %lld 篇，释放 %s MB', result.pruned, mb.toFixed(1)) // 批4审查P2-1：模板串 t() 永不命中键表（en 界面恒中文）→ tf 占位键
+          : tf('已清理 %lld 篇', result.pruned);
         p.set(100, t('写入完成'));
         p.done(summary);
         cleanupButton.textContent = summary;
@@ -697,7 +697,7 @@ export class SettingsView {
         String(maintenance.retentionDays || 0),
         async (value) => {
           const result = await window.robin.setRetentionDays(Number(value));
-          if (result && result.pruned > 0) this.handlers.onFeedback?.(t(`已按新期限清理 ${result.pruned} 篇历史文章`));
+          if (result && result.pruned > 0) this.handlers.onFeedback?.(tf('已按新期限清理 %lld 篇历史文章', result.pruned));
         },
       )),
       row(t('回收磁盘空间'), t('清理历史文章后立即压缩数据库并归还磁盘空间。'), cleanupButton),

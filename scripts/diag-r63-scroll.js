@@ -91,6 +91,12 @@ app.whenReady().then(async () => {
       '3 scrollTop() 外部干预推进代际（resetScroll 击穿在途回补的修复）');
     ok(/gen !== undefined && gen !== \(this\._scrollGen \|\| 0\)\) return;/.test(listSrc),
       '3 代际过期回补让位（切视野后视口不被拽回旧阅读位）');
+    // 批3审查P2-2 收口：代际通道扩面——用户滚轮与程序化平滑滚动同属干预
+    ok(listSrc.includes("scrollEl.addEventListener('wheel', () => { this._scrollGen = (this._scrollGen || 0) + 1; }, { passive: true });"),
+      '3 用户滚轮推进代际（passive 监听）');
+    ok(/_bumpScrollGen\(\) \{ this\._scrollGen = \(this\._scrollGen \|\| 0\) \+ 1; \}/.test(listSrc)
+      && (listSrc.match(/this\._bumpScrollGen\(\)/g) || []).length >= 3,
+      '3 程序化平滑滚动（J/K/跳转/定位）经 _bumpScrollGen 入通道');
 
     // ── UI 行为断言（真实 ListView + 真滚动）──
     const win = new BrowserWindow({

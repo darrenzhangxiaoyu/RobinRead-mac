@@ -10,7 +10,7 @@
  * - 数据卫生：卡片只展示真实信息（语言/分类/抓取健康），不做虚构评分与订阅数
  * - 「AI 探索」视图：exploreRun 真实网络验证候选源，客观指标 + 样章 + AI 解释
  */
-import { t } from '../i18n.js';
+import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { alertBox, confirmBox } from '../ui-prompt.js';
 import { CATALOG_EXTRA } from './feed-store-extra.js';
@@ -601,7 +601,7 @@ export class FeedStore {
         <div class="wc-bridge-title">${escapeHTML(t('搜索任意公众号'))}</div>
         <span class="wc-search-count">${WECHAT_ACCOUNTS.length}</span>
       </div>
-      <p class="wc-bridge-desc">${escapeHTML(t(`内置 ${WECHAT_ACCOUNTS.length} 个活跃公众号目录（离线秒搜，订阅走 wechat2rss 公共桥）。搜不到的号用下方自建桥 10 分钟搞定。`))}</p>
+      <p class="wc-bridge-desc">${escapeHTML(tf('内置 %lld 个活跃公众号目录（离线秒搜，订阅走 wechat2rss 公共桥）。搜不到的号用下方自建桥 10 分钟搞定。', WECHAT_ACCOUNTS.length))}</p>
       <div class="wc-search-row">
         <input class="wc-search-input" type="text" spellcheck="false" placeholder="${escapeHTML(t('输入公众号名称，如：机器之心 / 晚点 / 槽边往事'))}"/>
       </div>

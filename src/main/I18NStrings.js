@@ -519,6 +519,11 @@ const STRINGS = {
   "清理超龄": { zh: "清理超龄", en: "Clean Overdue" },
   "把入队超过 14 天的稍后读标记已读并移出队列": { zh: "把入队超过 14 天的稍后读标记已读并移出队列", en: "Marks read-later items queued over 14 days as read and removes them" },
   "已清理 %lld 篇超龄稍后读": { zh: "已清理 %lld 篇超龄稍后读", en: "Cleaned %lld overdue read-later items" },
+  "已清理 %lld 篇，释放 %s MB": { zh: "已清理 %lld 篇，释放 %s MB", en: "Cleaned %lld items, freed %s MB" },  /* 批4审查P2-1：模板串 t() 转正 tf 占位键 */
+  "已清理 %lld 篇": { zh: "已清理 %lld 篇", en: "Cleaned %lld items" },
+  "已按新期限清理 %lld 篇历史文章": { zh: "已按新期限清理 %lld 篇历史文章", en: "Cleaned %lld historical articles under the new retention" },
+  "内置 %lld 个活跃公众号目录（离线秒搜，订阅走 wechat2rss 公共桥）。搜不到的号用下方自建桥 10 分钟搞定。": { zh: "内置 %lld 个活跃公众号目录（离线秒搜，订阅走 wechat2rss 公共桥）。搜不到的号用下方自建桥 10 分钟搞定。", en: "Built-in catalog of %lld active WeChat accounts (offline instant search; subscribe via the wechat2rss public bridge). Can't find one? A self-hosted bridge below takes 10 minutes." },
+  "找到 %lld 条结果": { zh: "找到 %lld 条结果", en: "%lld results found" },
   "约 %lld 分钟": { zh: "约 %lld 分钟", en: "≈ %lld min read" },  "知识图谱": { zh: "知识图谱", en: "Knowledge Graph" },
   "问知识库": { zh: "问知识库", en: "Ask My Knowledge" },
   "图谱": { zh: "图谱", en: "Graph" },
@@ -2907,6 +2912,7 @@ const STRINGS = {
   "高亮全部命中，Enter / Shift+Enter 在命中间跳转，Esc 关闭。": { zh: "高亮全部命中，Enter / Shift+Enter 在命中间跳转，Esc 关闭。", en: "Highlights all matches; Enter / Shift+Enter jump between them, Esc closes." },
   "非当前段落渐暗，指针所在段保持清晰。": { zh: "非当前段落渐暗，指针所在段保持清晰。", en: "Dim every paragraph except the one under your pointer." },
   "连续多次刷新失败，已暂停自动刷新（手动刷新成功后自动恢复）": { zh: "连续多次刷新失败，已暂停自动刷新（手动刷新成功后自动恢复）", en: "Auto-refresh paused after repeated failures (resumes after a successful manual refresh)" },
+  "连续 %lld 次刷新失败": { zh: "连续 %lld 次刷新失败", en: "%lld consecutive refresh failures" },  /* 批4审查P2-1：模板串 t() 转正 */
 };
 
 module.exports = { STRINGS };

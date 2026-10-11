@@ -31,13 +31,23 @@ app.on('window-all-closed', () => { /* 探针自行控制退出 */ });
 const RENDER_FILES = ['src/renderer/app.js', 'src/renderer/reader-window.js', 'src/renderer/ui-prompt.js']
   .concat(fs.readdirSync(path.join(ROOT, 'src/renderer/views')).map((f) => 'src/renderer/views/' + f));
 
-/** 抽取 t()/tf() 单引号字面量实参（探针内静态扫描）。 */
+/** 抽取 t()/tf() 字面量实参（探针内静态扫描）。
+ *  批4审查P2-2 收口：单引号 + 双引号全覆盖（双引号实参曾逃过扫描）；另单独抓
+ *  模板串 t(`…${…}…`) ——插值后的 key 永不命中键表（en 界面恒中文），一律违规。 */
 function extractTLiterals(src) {
   const out = [];
-  const re = /\bt(?:f)?\(\s*'((?:[^'\\]|\\.)*)'/g;
+  const re = /\bt(?:f)?\(\s*('((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g;
   let m;
-  while ((m = re.exec(src))) out.push(m[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'));
+  while ((m = re.exec(src))) {
+    const raw = m[2] !== undefined ? m[2] : m[3];
+    out.push(raw.replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, '\\'));
+  }
   return out;
+}
+
+/** 模板串 t()（t(`…${…}…`)）：插值 key 永不命中键表，属违规用法（应改 tf 占位键）。 */
+function countTemplateT(src) {
+  return (src.match(/\bt\(\s*`[^`]*\$\{[^`]*`/g) || []).length;
 }
 
 app.whenReady().then(async () => {
@@ -74,6 +84,12 @@ app.whenReady().then(async () => {
     const missing = new Set();
     for (const { src } of sources) for (const lit of extractTLiterals(src)) if (!keys.has(lit)) missing.add(lit);
     ok(missing.size === 0, `2 t()/tf() 实参与键表差集 = 0（${missing.size} 缺${missing.size ? '：' + [...missing].slice(0, 5).join(' / ') : ''}）`);
+    // 批4审查P2-1/P2-2 收口：模板串 t() 违规清零 + 双引号实参入扫（list.js "已收藏" 先例）
+    let tmplTotal = 0;
+    for (const { src } of sources) tmplTotal += countTemplateT(src);
+    ok(tmplTotal === 0, `2 模板串 t(\`…\${…}…\`) 违规清零（实插值 key 永不命中键表，应改 tf 占位键；现存 ${tmplTotal} 处）`);
+    const dqHit = sources.some(({ src }) => /\bt\(\s*"/.test(src));
+    ok(dqHit, '2 双引号实参在扫（list.js t("已收藏") 先例不再逃过扫描）');
     ok(Object.keys(STRINGS).length > 2780, `2 键表规模在册（${Object.keys(STRINGS).length} 键，本轮 +162）`);
     // 抽样断言 en 译文真实落库（高频面 + 本轮代表性键）
     const samples = [

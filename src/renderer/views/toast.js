@@ -64,45 +64,61 @@ function leave(entry) {
   setTimeout(() => el.remove(), LEAVE_MS);
 }
 
+/** 批3审查P2-1 收口：暂停持有计数——hover 与 focus 双源暂停共享同一条计时腿，
+ *  各自独立扣减会把同一段已暂停时间扣两次（扣穿 0 → 松开即刻消失，违背焦点承诺）。
+ *  holds 计数为 0→非 0 才扣一次，非 0→0 才续走；协调器挂在 entry 上（两处 wire 共享一份）。 */
+function holdCoordinator(entry) {
+  entry._holds = entry._holds || new Set();
+  const holds = entry._holds;
+  return {
+    pause(key) {
+      if (!entry.duration || holds.has(key)) return;
+      if (holds.size === 0) {
+        clearTimeout(entry.timer);
+        entry.remaining -= Date.now() - entry.startedAt;
+        entry.el.classList.add('hold');
+      }
+      holds.add(key);
+    },
+    resume(key) {
+      if (!entry.duration || !holds.delete(key)) return;
+      if (holds.size === 0) {
+        entry.el.classList.remove('hold');
+        entry.startedAt = Date.now();
+        entry.timer = setTimeout(() => leave(entry), Math.max(0, entry.remaining));
+      }
+    },
+  };
+}
+
 /** hover 暂停：进悬停清表记剩余，离悬停按剩余续走（呼吸的倒计时条同步暂停）。 */
 function wireHoverPause(entry) {
-  entry.el.addEventListener('mouseenter', () => {
-    if (!entry.duration) return;
-    clearTimeout(entry.timer);
-    entry.remaining -= Date.now() - entry.startedAt;
-    entry.el.classList.add('hold');
-  });
-  entry.el.addEventListener('mouseleave', () => {
-    if (!entry.duration) return;
-    entry.el.classList.remove('hold');
-    entry.startedAt = Date.now();
-    entry.timer = setTimeout(() => leave(entry), Math.max(0, entry.remaining));
-  });
+  const hold = holdCoordinator(entry);
+  entry.el.addEventListener('mouseenter', () => hold.pause('hover'));
+  entry.el.addEventListener('mouseleave', () => hold.resume('hover'));
 }
 
 /** R64 键盘可达：动作按钮获得焦点即暂停自动消退（同 hover 暂停语言），失焦按剩余续走——
  *  Tab 逐层走到 toast 按钮时它不会在阅读/按下途中消失；Enter 触发由原生 button 语义承担。 */
 function wireFocusHold(entry, btn) {
-  btn.addEventListener('focus', () => {
-    if (!entry.duration) return;
-    clearTimeout(entry.timer);
-    entry.remaining -= Date.now() - entry.startedAt;
-    entry.el.classList.add('hold');
-  });
-  btn.addEventListener('blur', () => {
-    if (!entry.duration) return;
-    entry.el.classList.remove('hold');
-    entry.startedAt = Date.now();
-    entry.timer = setTimeout(() => leave(entry), Math.max(0, entry.remaining));
-  });
+  const hold = holdCoordinator(entry);
+  btn.addEventListener('focus', () => hold.pause('focus'));
+  btn.addEventListener('blur', () => hold.resume('focus'));
 }
 
 /** R64 同类合并：在场条里找同文案+同 tone 的普通条——命中则计数「×N」内联升级
- *  （数字弹一拍提示「又来了一条」）并重置计时；不新增第 N 条堆叠。 */
-function mergeIntoExisting(message, tone, effDuration) {
+ *  （数字弹一拍提示「又来了一条」）并重置计时；不新增第 N 条堆叠。
+ *  批4审查P1-1 收口：新调用带 action 时替换合并条的按钮闭包（最新意图胜出）——
+ *  两个不同链接失败共用同文案时，旧闭包会把「重试」打到错误目标上；无 action 的新条不摘旧按钮，
+ *  且带动作条的剩余时长不因无 action 合并被缩短（动作按钮需要阅读+点击时间的保底不架空）。 */
+function mergeIntoExisting(message, tone, effDuration, action) {
   for (const e of live) {
     if (e.progress || e.msg !== message || e.tone !== tone) continue;
     e.count += 1;
+    if (action?.label) {
+      if (e.setAction) e.setAction(action);
+      else if (!e.el.querySelector('.toast-action')) return null; // 旧条无按钮也无换装通道：不吞新 action，改为新增一条
+    }
     let badge = e.el.querySelector('.toast-merge');
     if (!badge) {
       badge = document.createElement('span');
@@ -113,11 +129,11 @@ function mergeIntoExisting(message, tone, effDuration) {
     badge.classList.remove('bump'); // 强制重排重放弹跳
     void badge.offsetWidth;
     badge.classList.add('bump');
-    e.remaining = effDuration;
+    e.remaining = e.hasAction ? Math.max(e.remaining, effDuration) : effDuration;
     if (effDuration > 0 && !e.el.classList.contains('hold')) {
       clearTimeout(e.timer);
       e.startedAt = Date.now();
-      e.timer = setTimeout(() => leave(e), effDuration);
+      e.timer = setTimeout(() => leave(e), e.remaining);
     }
     return e.el;
   }
@@ -140,7 +156,7 @@ export function showToast(message, opts = {}) {
   const effDuration = action?.label ? Math.max(duration, 4200) : duration;
   const stack = ensureStack();
   // R64 同类合并先于容量护栏：同文案+同 tone 不再新增第 4 条
-  const merged = mergeIntoExisting(message, tone, effDuration);
+  const merged = mergeIntoExisting(message, tone, effDuration, action);
   if (merged) return merged;
   while (live.size >= CAP) evictOldestNormal();
 
@@ -150,8 +166,10 @@ export function showToast(message, opts = {}) {
   el.innerHTML = `<span class="toast-ic">${TONE_ICON[tone] || TONE_ICON.success}</span><span class="toast-msg"></span>`;
   el.querySelector('.toast-msg').textContent = message;
 
-  const entry = { el, duration: effDuration, timer: 0, startedAt: Date.now(), remaining: effDuration, msg: message, tone, count: 1 };
+  const entry = { el, duration: effDuration, timer: 0, startedAt: Date.now(), remaining: effDuration, msg: message, tone, count: 1, hasAction: false };
   if (action?.label) {
+    entry.hasAction = true;
+    let currentAction = action;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'toast-action';
@@ -159,8 +177,19 @@ export function showToast(message, opts = {}) {
     btn.addEventListener('click', (ev) => {
       ev.stopPropagation();
       leave(entry);
-      action.onClick?.();
+      currentAction.onClick?.();
     });
+    // 批4审查P1-1 收口：同类合并保留最新意图——合并时经 setAction 替换按钮文案与闭包
+    entry.setAction = (a) => {
+      currentAction = a;
+      btn.textContent = a.label;
+      entry.remaining = Math.max(entry.remaining, 4200);
+      if (effDuration > 0 && !el.classList.contains('hold')) {
+        clearTimeout(entry.timer);
+        entry.startedAt = Date.now();
+        entry.timer = setTimeout(() => leave(entry), entry.remaining);
+      }
+    };
     el.appendChild(btn);
     wireFocusHold(entry, btn);
   }

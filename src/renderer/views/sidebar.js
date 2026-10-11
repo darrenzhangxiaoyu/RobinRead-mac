@@ -289,7 +289,7 @@ export class SidebarView {
       warn.textContent = '!';
       const parts = [health.isDead
         ? t('连续多次刷新失败，已暂停自动刷新（手动刷新成功后自动恢复）')
-        : t(`连续 ${health.recentFailures} 次刷新失败`)];
+        : tf('连续 %lld 次刷新失败', health.recentFailures)]; // 批4审查P2-1：模板串 t() 转 tf 占位键（en 界面恒中文）
       if (health.lastError) parts.push(String(health.lastError).slice(0, 80));
       warn.title = parts.join('\n');
       row.appendChild(warn);

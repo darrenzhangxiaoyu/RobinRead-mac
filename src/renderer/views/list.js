@@ -56,6 +56,8 @@ function eventEl(tag, className, text) {
 export class ListView {
   constructor(scrollEl, handlers) {
     this.scrollEl = scrollEl;
+    // 批3审查P2-2 收口：用户滚轮同属滚动干预——渐进链在途的锚定回补同样让位（passive 不挡滚动）
+    scrollEl.addEventListener('wheel', () => { this._scrollGen = (this._scrollGen || 0) + 1; }, { passive: true });
     this.handlers = handlers; // onSelect / onContext / onLoadMore / onSearch / onDigest
     this.items = [];
     this.scope = null;
@@ -781,7 +783,7 @@ export class ListView {
     const row = this.rowForEntry(this.cursorID);
     if (row) {
       row.classList.add('nj-cursor');
-      if (explicit) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (explicit) { this._bumpScrollGen(); row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
     }
   }
 
@@ -955,6 +957,7 @@ export class ListView {
         : (this.rowForEntry(this.selectedID) || cards[0]);
       const next = nearestMagCard(cards, current, event.key);
       if (next) {
+        this._bumpScrollGen();
         next.focus();
         next.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       } else {
@@ -1276,8 +1279,11 @@ export class ListView {
 
   scrollToEntry(entryID) {
     const row = this.rowForEntry(entryID);
-    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (row) { this._bumpScrollGen(); row.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   }
+
+  /** 批3审查P2-2 收口：程序化平滑滚动（J/K/跳转/定位）同属滚动干预——在途锚定回补让位。 */
+  _bumpScrollGen() { this._scrollGen = (this._scrollGen || 0) + 1; }
 
   scrollTop() {
     this._scrollGen = (this._scrollGen || 0) + 1; // 批2审查P1-1：外部干预滚动位——在途的延迟锚定回补即刻作废
@@ -1364,6 +1370,7 @@ export class ListView {
       el.classList.toggle('hl', i === next);
       el.setAttribute('aria-selected', i === next ? 'true' : 'false'); // R43：读屏语义同步
     });
+    this._bumpScrollGen();
     items[next].scrollIntoView({ block: 'nearest' });
   }
 

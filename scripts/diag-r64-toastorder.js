@@ -33,10 +33,10 @@ app.whenReady().then(async () => {
     const robin = read('src/renderer/styles/robin.css');
 
     ok(/const CAP = 3;/.test(toastSrc), '1 栈容量上限 3 在册（R64 秩序）');
-    ok(/mergeIntoExisting\(message, tone, effDuration\)/.test(toastSrc) && /e\.count \+= 1/.test(toastSrc),
-      '1 同类合并：同文案+同 tone 计数升级（mergeIntoExisting 在册）');
+    ok(/mergeIntoExisting\(message, tone, effDuration, action\)/.test(toastSrc) && /e\.count \+= 1/.test(toastSrc),
+      '1 同类合并：同文案+同 tone 计数升级（mergeIntoExisting 在册，action 入参供换闭包）');
     ok(/badge\.textContent = `×\$\{e\.count\}`/.test(toastSrc), '1 合并计数「×N」徽标在册');
-    ok(/mergeIntoExisting\(message, tone, effDuration\);\n  if \(merged\) return merged;/.test(toastSrc),
+    ok(/mergeIntoExisting\(message, tone, effDuration, action\);\n  if \(merged\) return merged;/.test(toastSrc),
       '1 合并先于容量护栏：命中即复用，不新增堆叠');
 
     ok(/@keyframes toast-in \{ from \{ opacity: 0; transform: translateY\(12px\)/.test(robin),
@@ -137,6 +137,36 @@ app.whenReady().then(async () => {
         out.actFired = fired === 1;
         out.actLeftAfterClick = !document.body.contains(act) || act.classList.contains('leaving');
 
+        // ④b 批3审查P2-1 收口：hover×focus 双源暂停不双扣减（持有计数制）
+        const act2 = Toast.show('R64双源暂停探针', { tone: 'warn', duration: 6000, action: { label: '重试', onClick: () => {} } });
+        const btn2 = act2.querySelector('.toast-action');
+        act2.dispatchEvent(new MouseEvent('mouseenter')); // 源 1：悬停
+        await sleep(30);
+        btn2.dispatchEvent(new FocusEvent('focus')); // 源 2：焦点（旧实现此处按陈旧 startedAt 二次扣减）
+        await sleep(30);
+        btn2.dispatchEvent(new FocusEvent('blur')); // 焦点先撤——悬停仍在，暂停必须保持
+        await sleep(30);
+        out.crossHoldKept = act2.classList.contains('hold'); // 旧实现此处已续走（hold 被摘）
+        out.crossDebug = { cls: act2.className, connected: act2.isConnected, btnConn: btn2.isConnected };
+        act2.dispatchEvent(new MouseEvent('mouseleave')); // 悬停也撤——此刻才续走
+        await sleep(30);
+        out.crossResumeAfterAll = !act2.classList.contains('hold');
+        document.getElementById('nj-toast-stack')?.remove();
+
+        // ③c 批4审查P1-1 收口：同类合并换闭包——最新意图胜出（旧闭包会把重试打到错误目标）
+        let hitA = 0; let hitB = 0;
+        Toast.show('链接精读失败', { tone: 'error', duration: 6000, action: { label: '重试 A', onClick: () => { hitA += 1; } } });
+        await sleep(30);
+        Toast.show('链接精读失败', { tone: 'error', duration: 6000, action: { label: '重试 B', onClick: () => { hitB += 1; } } });
+        await sleep(60);
+        const mergedEl = [...document.querySelectorAll('.toast-capsule')].find((n) => n.textContent.includes('链接精读失败'));
+        const mergedLabel = mergedEl?.querySelector('.toast-action')?.textContent;
+        mergedEl?.querySelector('.toast-action')?.click();
+        await sleep(30);
+        out.mergeNewLabel = mergedLabel === '重试 B';
+        out.mergeNewClosure = hitB === 1 && hitA === 0;
+        out.mergeBadge2 = mergedEl?.querySelector('.toast-merge')?.textContent === '×2';
+
         // 收尾清场
         document.getElementById('nj-toast-stack')?.remove();
         return out;
@@ -160,6 +190,10 @@ app.whenReady().then(async () => {
       ok(b.blurResume, '3 blur 按剩余续走（hold 摘除）');
       ok(b.actFired, '3 Enter/点击触发动作回调');
       ok(b.actLeftAfterClick, '3 触发后离场（不残留）');
+      ok(b.crossHoldKept, '3b 双源暂停：焦点先撤、悬停仍持——hold 保持（批3审查P2-1 双扣减修复）');
+      ok(b.crossResumeAfterAll, '3b 双源全撤才续走（hold 摘除）');
+      ok(b.mergeNewLabel === true && b.mergeNewClosure === true && b.mergeBadge2 === true,
+        `3c 同类合并换闭包：最新意图胜出（label=${b.mergeNewLabel} closure=${b.mergeNewClosure} badge=${b.mergeBadge2}）——批4审查P1-1 收口`);
     }
 
     win.destroy();

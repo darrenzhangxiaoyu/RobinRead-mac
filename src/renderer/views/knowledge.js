@@ -492,7 +492,7 @@ export class KnowledgeCenter {
       if (!result.total) { this._emptyIn(resultHost, '没有匹配', '换个关键词试试。'); return; }
       const lbl = document.createElement('div');
       lbl.className = 'td-section-label';
-      lbl.textContent = t(`找到 ${result.total} 条结果`);
+      lbl.textContent = tf('找到 %lld 条结果', result.total);
       resultHost.appendChild(lbl);
       for (const n of result.notes || []) {
         const card = document.createElement('div');

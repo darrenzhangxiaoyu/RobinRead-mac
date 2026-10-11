@@ -87,6 +87,8 @@ app.whenReady().then(async () => {
       && /capZen\.setAttribute\('aria-label', capZen\.title\);/.test(appSrc)
       && /capRead\.setAttribute\('aria-label', capRead\.title\);/.test(appSrc),
       '3 阅读胶囊动态按钮（star/zen/read）双补在册');
+    ok(/capTranslate\.setAttribute\('aria-label', capTranslate\.title\);/.test(appSrc),
+      '3 cap-translate aria 随三模式同步（批3审查P3-11 收口：此前恒停静态兜底）');
     ok(/b\.setAttribute\('aria-label', title\); \/\/ R67 纯图标按钮 title\+aria 双补/.test(listSrc)
       && /btn\.setAttribute\('aria-label', btn\.title\); \/\/ R67 纯图标按钮 title\+aria 双补/.test(listSrc),
       '3 行内快捷三连 + 精选移出双补在册');
