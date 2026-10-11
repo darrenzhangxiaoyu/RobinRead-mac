@@ -423,6 +423,9 @@ export class MediaView {
     }
     aiBtn.addEventListener('click', async () => {
       aiBtn.disabled = true;
+      // R60 动作按钮 loading 态：生成中 inline spinner + 禁用原因 title（.btn-text.spinning 家族）
+      aiBtn.classList.add('spinning');
+      aiBtn.title = t('正在生成 AI 摘要，请稍候');
       aiBtn.textContent = t('正在生成摘要…');
       try {
         const res = await window.robin.transcriptSummary(itemID);
@@ -440,6 +443,8 @@ export class MediaView {
         this.deps.toast?.(String(e && e.message || e) || t('摘要生成失败'));
         aiBtn.textContent = tx.summary ? t('重新生成 AI 摘要') : t('AI 摘要');
       }
+      aiBtn.classList.remove('spinning');
+      aiBtn.title = tx.summary ? t('重新生成这篇文字稿的 AI 摘要') : t('为这篇文字稿生成 AI 摘要');
       aiBtn.disabled = window.__robinLLM?.__hasKey === false;
     });
     foot.append(copyBtn, aiBtn);

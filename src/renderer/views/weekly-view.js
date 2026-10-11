@@ -170,6 +170,9 @@ export class WeeklyView {
     const exportBtn = this.overlay.querySelector('.nj-weekly-export');
     if (genBtn) {
       genBtn.disabled = !!this.generating;
+      // R60 动作按钮 loading 态：生成中 inline spinner（.btn-text.spinning 家族）+ 禁用原因 title
+      genBtn.classList.toggle('spinning', !!this.generating);
+      genBtn.title = this.generating ? t('主编正在排版这一周的阅读，完成后会通知你') : t('把上周阅读编成一期周刊：AI 导语 + 主题归纳 + 金句摘录');
       const label = genBtn.querySelector('span');
       if (label) label.textContent = this.generating ? t('排版中…') : t('生成上周周刊');
     }

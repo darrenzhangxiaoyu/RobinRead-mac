@@ -89,6 +89,8 @@
   --dur-spin: 0.9s;      /* 载入旋转周期（revisit/mirror/debate/quiz spinner 同值归簇） */
   --dur-breathe: 1.2s;   /* 徽标呼吸单拍（revisit badge breathing） */
   --dur-pulse: 1.8s;     /* 声控浮球识别光环（njVoiceBreath） */
+  /* ── R60 加载语言：shimmer 扫光周期单一事实源（骨架/杂志封面/正文图三屏同拍，1.5s 裸值归簇）── */
+  --dur-shimmer: 1.4s;
   /* P2-6：55% 光环对纸底实算仅 2.10:1（弱于非文本 3:1 指标），80% 后浅色 3.18:1、
      暗色（随 body.dark 提亮 accent）4.34:1；消费点 6048/6359/6376/6389/6813 自动跟随。 */
   --focus-ring: 0 0 0 2px color-mix(in srgb, var(--accent) 80%, transparent);
@@ -326,6 +328,19 @@ body.sidebar-collapsed .tb-zone-list { width: var(--list-width, 340px); }
   position: absolute;
 }
 .btn { position: relative; }
+/* ── R60 动作按钮 loading 态：生成/重生成类文本按钮生成中 inline spinner + 禁用原因 title
+   （与 .btn.spinning 同一几何/同拍，家族扩展；标签以 color: transparent 隐去——
+   元素子节点与纯文本节点一并生效；消费方：周刊生成/媒体 AI 摘要）── */
+.btn-text.spinning { position: relative; pointer-events: none; color: transparent; }
+.btn-text.spinning::after {
+  content: '';
+  position: absolute; left: 50%; top: 50%;
+  width: 13px; height: 13px; margin: -8.5px 0 0 -8.5px; /* (13+2*2)/2 + 1px 边框补偿居中 */
+  border: 2px solid var(--row-selected);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: rotate 0.8s linear infinite;
+}
 @keyframes rotate { to { transform: rotate(360deg); } }
 
 /* ── U8 图标系统微调 ─────────────────────────────────────────────
@@ -2738,14 +2753,14 @@ body.zen .list-top-inset { display: none; }
 .aihot-daily-stats { display: flex; gap: 14px; font-size: var(--fs-lg); color: var(--text-secondary); flex-wrap: wrap; }
 .aihot-daily-stats svg { width: 12px; height: 12px; color: var(--accent); vertical-align: -2px; margin-right: 3px; }
 
-/* 骨架屏 */
+/* 骨架屏（R60 形状归档：圆角/间距归令牌——50%→--radius-full 与列表骨架圆点同族、5px→--radius-sm） */
 .aihot-skeleton {
-  display: flex; gap: 12px; padding: 14px; margin-bottom: 10px;
+  display: flex; gap: var(--space-3); padding: var(--space-4); margin-bottom: var(--space-2);
   border: 1px solid var(--separator); border-radius: var(--radius-lg);
 }
-.aihot-skeleton-rank { width: 26px; height: 26px; border-radius: 50%; background: var(--row-selected); }
-.aihot-skeleton-main { flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.aihot-skeleton-line { height: 10px; border-radius: 5px; background: var(--row-selected); }
+.aihot-skeleton-rank { width: 26px; height: 26px; border-radius: var(--radius-full); background: var(--row-selected); }
+.aihot-skeleton-main { flex: 1; display: flex; flex-direction: column; gap: var(--space-2); }
+.aihot-skeleton-line { height: 10px; border-radius: var(--radius-sm); background: var(--row-selected); }
 .aihot-skeleton-line.w40 { width: 40%; }
 .aihot-skeleton-line.w70 { width: 70%; }
 .aihot-skeleton-line.w90 { width: 90%; }
@@ -3299,7 +3314,7 @@ body.dark .nj-note-marker { color: #d3a952; }
 .reader-article img.nj-img-loading {
   background: linear-gradient(100deg, var(--note-background) 30%, var(--row-hover) 50%, var(--note-background) 70%);
   background-size: 220% 100%;
-  animation: img-shimmer 1.5s ease-in-out infinite;
+  animation: img-shimmer var(--dur-shimmer) ease-in-out infinite; /* R60：扫光周期归 --dur-shimmer */
 }
 @keyframes img-shimmer { 0% { background-position: 220% 0; } 100% { background-position: -120% 0; } }
 .reader-article img.nj-img-failed {
@@ -3803,7 +3818,7 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
   position: absolute; inset: 0;
   transform: translateX(-100%);
   background: linear-gradient(100deg, transparent 32%, rgba(255, 255, 255, 0.28) 50%, transparent 68%);
-  animation: kb-shimmer 1.5s linear infinite;
+  animation: kb-shimmer var(--dur-shimmer) linear infinite; /* R60：扫光周期归 --dur-shimmer */
 }
 @keyframes kb-shimmer {
   from { transform: translateX(-100%); }
@@ -5824,9 +5839,11 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
 }
 .list-empty-refresh:hover { border-color: var(--accent); background: var(--row-hover); }
 
-/* ===== R41 打回：失败图编排式占位（提示条+内边距，替代原生 alt 兜底观感）===== */
+/* ===== R41 打回：失败图编排式占位（提示条+内边距，替代原生 alt 兜底观感）=====
+   R60 几何统一：失败占位与加载 shimmer/成品图共用基础 .reader-article img 几何
+   （--radius-lg 同一圆角档，loading → failed → loaded 三态零跳变） */
 .nj-img-failed-wrap { position: relative; display: block; }
-.nj-img-failed-wrap img { width: 100%; border-radius: var(--radius-md); }
+.nj-img-failed-wrap img { width: 100%; border-radius: var(--radius-lg); }
 .nj-img-failed-tip {
   position: absolute; left: 8px; right: 8px; bottom: 8px;
   padding: 5px 10px;
@@ -6670,12 +6687,13 @@ body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24
 }
 @keyframes ea-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* ── U11 ② 统一骨架屏：列表行占位（阅读器 .nj-sk / AIHOT 骨架同 shimmer 语言）── */
+/* ── U11 ② 统一骨架屏：列表行占位（阅读器 .nj-sk / AIHOT 骨架同 shimmer 语言）──
+   R60 形状归档：行内间距/内边距归 --space-*（10/13/16/7 裸值退役进 4px 网格档） */
 .nj-skeleton-list { display: flex; flex-direction: column; }
-.nj-sk-row { display: flex; align-items: flex-start; gap: 10px; padding: 13px 16px; }
+.nj-sk-row { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-3) var(--space-4); }
 .nj-sk-row + .nj-sk-row { border-top: 1px solid var(--separator); }
 .nj-sk-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: var(--radius-full); margin-top: 6px; background: var(--row-selected); }
-.nj-sk-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: 7px; }
+.nj-sk-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-2); }
 .nj-sk-lines .nj-sk-line { height: 11px; margin-bottom: 0; }
 .w45 { width: 45%; }
 /* ── P2-1：shimmer 位移层统一收口为伪元素 translateX（合成器路径，替代 background-position 逐帧重绘）──
@@ -6689,10 +6707,11 @@ body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24
   position: absolute; inset: 0;
   transform: translateX(-100%);
   background: linear-gradient(100deg, transparent 35%, var(--row-hover) 50%, transparent 65%);
-  animation: kb-shimmer 1.4s linear infinite;
+  animation: kb-shimmer var(--dur-shimmer) linear infinite; /* R60：扫光周期归 --dur-shimmer（三屏同拍） */
 }
-/* AIHOT 骨架并入统一 shimmer 语言（透明度脉冲已废：2686 区残留的 aihot-pulse 一并拆除） */
-.aihot-skeleton-rank, .aihot-skeleton-line { border-radius: var(--radius-sm); }
+/* AIHOT 骨架并入统一 shimmer 语言（透明度脉冲已废：2686 区残留的 aihot-pulse 一并拆除）；
+   R60 形状归档：圆点归 --radius-full（与列表骨架圆点同族），线条归 --radius-sm（组规则不再覆盖圆点） */
+.aihot-skeleton-line { border-radius: var(--radius-sm); }
 
 /* ── U11 ③ 进度语言：呼吸点 / 不确定进度条（transform+opacity 合成层动画）── */
 .nj-breath {

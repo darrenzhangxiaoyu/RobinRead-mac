@@ -2737,6 +2737,12 @@ const STRINGS = {
   "换个关键词试试，或清空搜索查看全部文章。": { zh: "换个关键词试试，或清空搜索查看全部文章。", en: "Try a different keyword, or clear the search to see all articles." },
   "清空搜索": { zh: "清空搜索", en: "Clear Search" },
   "清空搜索，显示全部命令": { zh: "清空搜索，显示全部命令", en: "Clear search to show all commands" },
+  /* R60 动作按钮 loading 态：禁用原因 title */
+  "主编正在排版这一周的阅读，完成后会通知你": { zh: "主编正在排版这一周的阅读，完成后会通知你", en: "The editor is composing this week's issue; you'll be notified when it's ready" },
+  "把上周阅读编成一期周刊：AI 导语 + 主题归纳 + 金句摘录": { zh: "把上周阅读编成一期周刊：AI 导语 + 主题归纳 + 金句摘录", en: "Compose last week's reading into an issue: AI intro + topic digest + quotes" },
+  "正在生成 AI 摘要，请稍候": { zh: "正在生成 AI 摘要，请稍候", en: "Generating the AI summary, please wait" },
+  "重新生成这篇文字稿的 AI 摘要": { zh: "重新生成这篇文字稿的 AI 摘要", en: "Regenerate the AI summary for this transcript" },
+  "为这篇文字稿生成 AI 摘要": { zh: "为这篇文字稿生成 AI 摘要", en: "Generate an AI summary for this transcript" },
 };
 
 module.exports = { STRINGS };
