@@ -725,6 +725,10 @@ body.zen .list-top-inset { display: none; }
 .reader-scroll {
   flex: 1; overflow-y: auto;
   position: relative; z-index: 1;
+  /* R69-① 滚轮过滚动不冒泡：顶/底端点滚动链在此截断（contain 而非 none——
+     保留端点 overscroll 提示、只断祖先链），触摸板惯性滚动到顶/底不再带动外层。
+     翻页视图（EditionReader）滚轮自管翻页无需此设置；灯箱滚轮缩放已 stopPropagation 语义。 */
+  overscroll-behavior: contain;
 }
 .reader-scroll::-webkit-scrollbar { width: 0; height: 0; }
 

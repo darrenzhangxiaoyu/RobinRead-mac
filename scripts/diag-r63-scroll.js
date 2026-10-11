@@ -76,10 +76,13 @@ app.whenReady().then(async () => {
     // ── 3. 滚动锚定（静态锚点）──
     ok(listSrc.includes('const anchorTop = this.scrollEl.scrollTop;') && listSrc.includes('const anchorHeight = this.scrollEl.scrollHeight;'),
       '3 重绘前基线捕获在册');
-    ok(listSrc.includes('_restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③ 新文章到达：顶部之外保持阅读位置'),
+    // R69-③ 锚点随迁：四条渲染分支收口为 restoreFor()（常规=R63 高度差回补 / 互切=R69 同值钳位，同受代际守卫）
+    ok(listSrc.includes('restoreFor(); // R63-③ 新文章到达：顶部之外保持阅读位置；R69-③ 互切走锚定通道'),
       '3 常规路径锚定回补在册');
-    ok(/_restoreScrollAnchor\(anchorTop, anchorHeight, anchorGen\); \/\/ R63-③：渐进渲染完成后高度才有代表性/.test(listSrc),
+    ok(/restoreFor\(\); \/\/ R63-③：渐进渲染完成后高度才有代表性/.test(listSrc),
       '3 渐进路径完成后回补（高度有代表性后再回补）');
+    ok((listSrc.match(/restoreFor\(\); \/\/ R63-③/g) || []).length === 4,
+      '3 四分支统一收口（事件/杂志/渐进完成/常规；R69-③ 布防时走切换通道）');
     ok(/if \(!prevTop || !prevHeight\) return;/.test(listSrc), '3 在顶部不介入（新文章自然到顶）');
     // 批2审查P1-1 收口：代际作废——外部滚动干预使在途延迟回补让位
     ok(listSrc.includes('const anchorGen = this._scrollGen || 0;') && /_restoreScrollAnchor\(prevTop, prevHeight, gen\) \{/.test(listSrc),

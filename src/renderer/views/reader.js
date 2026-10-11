@@ -183,6 +183,9 @@ export class ReaderView {
     } catch (_) { /* mock/精简引擎无 addEventListener：点击时仍会兜底提示 */ }
 
     this.scrollEl.addEventListener('scroll', () => this._onScroll(), { passive: true });
+    // R69-② 双击正文空白回顶：只在版心外的空白处（段落/图/链接/浮层等交互面之外）触发，
+    // 与划词双击选词（落在段落文本上）、灯箱双击缩放（img 上，命中守卫直接让位）互不冲突
+    this.scrollEl.addEventListener('dblclick', (event) => this._onBodyDblClick(event));
     document.addEventListener('selectionchange', () => this._onSelectionChange());
     // F7 WebDAV 同步：合并回来的远端阅读位置并入续读表（仅更新者生效）
     window.robin?.onSyncProgress?.((payload) => this._applySyncedProgress(payload));
@@ -5544,6 +5547,27 @@ export class ReaderView {
     const on = !!this._autoScroll;
     btn.classList.toggle('active', on);
     if (on) btn.textContent = `${this._autoScroll.speed}×`;
+  }
+
+  /**
+   * R69-② 双击正文空白回顶：长文读到深处想回报头，双击版心外的空白即平滑回顶。
+   * 触发面收敛在「空白」：滚动容器自身 / 正文容器 / 报头容器本身——段落、图片、
+   * 链接、按钮、批注锚点、摘要卡、研读面板等一切交互与文本面（closest 命中）直接让位，
+   * 划词双击选词与灯箱双击缩放（img 上）由此天然互斥；无选区时才动作。
+   */
+  _onBodyDblClick(event) {
+    if (!this.entryID || !this.body) return; // 空态（选择一篇文章）不响应
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const blankHit = target === this.scrollEl
+      || target === this.body
+      || target.classList?.contains('reader-article')
+      || target.classList?.contains('robin-header-container');
+    if (!blankHit) return;
+    const selection = window.getSelection?.();
+    if (selection && !selection.isCollapsed) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.scrollEl.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
   }
 
   /** 朗读中点击段落：从该段继续播（选区拖选中不触发）。 */

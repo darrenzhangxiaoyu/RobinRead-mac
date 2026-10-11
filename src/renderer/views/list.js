@@ -244,9 +244,21 @@ export class ListView {
     return h;
   }
 
-  /** 时间线形态（list 经典列表 / magazine 沉浸杂志），切换后下一次 render 生效。 */
+  /**
+   * 时间线形态（list 经典列表 / magazine 沉浸杂志），切换后下一次 render 生效。
+   * R69-③ 互切保持滚动位置：形态真变化时记下当前 scrollTop，随下一次 render 走
+   * 锚定通道（代际守卫）恢复——期间若有外部滚动干预（scrollTop()/resetScroll）
+   * 推进代际，恢复即刻让位；同值重复调用（state 推送常态）不布防。
+   */
   setViewMode(mode) {
-    this.viewMode = mode === 'magazine' ? 'magazine' : 'list';
+    const next = mode === 'magazine' ? 'magazine' : 'list';
+    if (next !== this.viewMode) {
+      this._switchArmed = true;
+      this._switchTop = this.scrollEl?.scrollTop || 0;
+      // 代际随布防快照：布防与恢复之间若有外部干预（scrollTop()/resetScroll），恢复即刻让位
+      this._switchGen = this._scrollGen || 0;
+    }
+    this.viewMode = next;
     this._sigBust = true; // 同一签名的另一形态必须真重绘
     this.viewBtn.innerHTML = `<span>${escapeHTML(this.viewMode === 'magazine' ? t('杂志') : t('列表'))}</span>`;
     this.viewBtn.classList.toggle('active', this.viewMode === 'magazine');
@@ -421,6 +433,15 @@ export class ListView {
     const anchorTop = this.scrollEl.scrollTop;
     const anchorHeight = this.scrollEl.scrollHeight;
     const anchorGen = this._scrollGen || 0;
+    // R69-③ 形态互切：本次渲染若是列表↔杂志切换的落地，恢复走 _restoreSwitchTop（同值钳位），
+    // R63 高度差回补不适用（整形态重排，前后高度无锚定关系）；恢复用布防时的代际快照守卫
+    const switchPending = this._switchArmed === true;
+    const switchGen = this._switchGen;
+    this._switchArmed = false;
+    // R63-③/R69-③ 统一收口：常规重绘走高度差回补，形态互切走同值钳位恢复（同受代际守卫）
+    const restoreFor = () => (switchPending
+      ? this._restoreSwitchTop(this._switchTop, switchGen)
+      : this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen));
     requestAnimationFrame(() => this._syncEdgeFades()); // R63-②：重绘后同步淡出遮（高度已变，滚动事件未必再来）
     this.topInset.querySelector('.list-top-title').textContent = this.titleForScope(scope);
     this.rowsHost.innerHTML = '';
@@ -492,13 +513,13 @@ export class ListView {
     if (this.eventsMode) {
       this.rowsHost.closest('.list-scroll')?.classList.remove('nj-mag-paper', 'nj-mag-white', 'nj-mag-book');
       this._renderEvents(items, selectedID);
-      this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③
+      restoreFor(); // R63-③ / R69-③
       return;
     }
 
     if (this.viewMode === 'magazine') {
       this._renderMagazine(items, selectedID);
-      this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③
+      restoreFor(); // R63-③ / R69-③（互切保位走锚定通道）
       this._knownIds = new Set(items.map((it) => it.id));
       this._markNew = false;
       return;
@@ -526,7 +547,7 @@ export class ListView {
         else {
           this._renderingPages = false;
           this.markSelected(selectedID); this._observeReveal(); this._mountResumeCard();
-          this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③：渐进渲染完成后高度才有代表性，此刻回补（代际过期则让位 resetScroll）
+          restoreFor(); // R63-③：渐进渲染完成后高度才有代表性，此刻回补（代际过期则让位 resetScroll）；R69-③ 互切同通道
         }
       };
       appendNext();
@@ -543,7 +564,7 @@ export class ListView {
       }
     }
     this.rowsHost.appendChild(fragment);
-    this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③ 新文章到达：顶部之外保持阅读位置
+    restoreFor(); // R63-③ 新文章到达：顶部之外保持阅读位置；R69-③ 互切走锚定通道
     this.markSelected(selectedID);
     this._observeReveal();
     this._mountResumeCard();
@@ -1746,6 +1767,19 @@ export class ListView {
     const el = this.scrollEl;
     const delta = el.scrollHeight - prevHeight;
     if (delta !== 0) el.scrollTop = prevTop + delta;
+    this._syncEdgeFades();
+  }
+
+  /**
+   * R69-③ 列表↔杂志互切保持滚动位置：形态重排后按切换前 scrollTop 同值钳位恢复
+   * （新形态可视高度不同则贴到边缘），恢复直改 scrollTop 但走 R63 同一代际守卫通道——
+   * 期间任何外部干预（scrollTop()/resetScroll）推进代际即让位，两机制互不打架。
+   */
+  _restoreSwitchTop(top, gen) {
+    if (gen !== undefined && gen !== (this._scrollGen || 0)) return; // 外部滚动干预：旧恢复让位
+    const el = this.scrollEl;
+    const max = el.scrollHeight - el.clientHeight;
+    el.scrollTop = Math.max(0, Math.min(top || 0, Math.max(0, max)));
     this._syncEdgeFades();
   }
 

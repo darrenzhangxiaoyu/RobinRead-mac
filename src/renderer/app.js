@@ -425,6 +425,8 @@ function applyReaderLayout(layout) {
     if (changed && views.list) reloadList({ resetScroll: true }).catch(() => {});
   }
   // 时间线形态（列表 / 沉浸杂志）：切换后重拉并重渲染（前端美化：View Transition 淡入）
+  // R69-③ 互切保持滚动位置：切换路径不再 resetScroll——setViewMode 布防的切换锚
+  // 在 render 落地后经代际守卫通道恢复原 scrollTop（同值钳位）。
   const viewMode = layout?.listViewMode === 'magazine' ? 'magazine' : 'list';
   if (views.list?.setViewMode) views.list.setViewMode(viewMode);
   if (viewMode !== applyReaderLayout._lastViewMode) {
@@ -432,8 +434,8 @@ function applyReaderLayout(layout) {
     applyReaderLayout._lastViewMode = viewMode;
     if (changed && views.list) {
       const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (document.startViewTransition && !reduce) document.startViewTransition(() => reloadList({ resetScroll: true }).catch(() => {}));
-      else reloadList({ resetScroll: true }).catch(() => {});
+      if (document.startViewTransition && !reduce) document.startViewTransition(() => reloadList({ resetScroll: false }).catch(() => {}));
+      else reloadList({ resetScroll: false }).catch(() => {});
     }
   }
   // 注意：translateMode 是「打开文章时的默认模式」，由 reader.open 自行读取；
