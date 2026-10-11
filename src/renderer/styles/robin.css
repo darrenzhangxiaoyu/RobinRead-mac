@@ -1146,6 +1146,8 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
   flex: 1; min-width: 0;
   display: inline-flex; align-items: center; gap: 6px;
 }
+/* R70-③ 摘要卡失败态：错误文案走 --danger 语义令牌（原内联 #c93b3b 裸值退役） */
+.robin-summary-subtext.robin-summary-errtext { color: var(--danger); flex: 0 1 auto; }
 .robin-summary-ai-btn {
   background: transparent; border: none; border-radius: var(--radius-xs);
   width: 24px; height: 24px;
@@ -2932,6 +2934,39 @@ body.zen .list-top-inset { display: none; }
 }
 .study-panel-loading { color: var(--text-tertiary); font-size: 12.5px; }
 .study-panel-error { color: var(--danger); font-size: 12.5px; }
+/* R70-③ 研读面板失败态 inline 重试（正文按钮家族同语言：文字钮 + focus 环走全局铺底） */
+.study-panel-retry {
+  margin-top: 8px; padding: 3px 12px;
+  background: transparent; border: 1px solid color-mix(in srgb, var(--danger) 52%, transparent);
+  border-radius: var(--radius-full); color: var(--danger);
+  font-size: 12px; cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.study-panel-retry:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.study-panel-retry:active { transform: scale(var(--press-scale)); }
+
+/* R70-② 正文图片批量失败条：报头下方计数 + 全部重试（挂 article 容器，不进正文文本面） */
+.nj-img-batch-bar {
+  display: flex; align-items: center; gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--note-border); border-radius: var(--radius-full);
+  background: var(--note-background);
+  width: fit-content; max-width: 100%;
+}
+.nj-img-batch-note {
+  color: var(--danger); font-size: 12px; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nj-img-batch-retry {
+  flex: 0 0 auto; padding: 2px 12px;
+  background: transparent; border: 1px solid var(--note-border);
+  border-radius: var(--radius-full); color: var(--accent);
+  font-size: 12px; cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.nj-img-batch-retry:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.nj-img-batch-retry:active { transform: scale(var(--press-scale)); }
 
 /* ==========================================================================
    批注系统：荧光笔高亮 / 划词色条 / 高亮菜单 / 便签笔记 / 批注面板

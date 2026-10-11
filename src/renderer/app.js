@@ -2251,12 +2251,15 @@ async function onFeedContext(event, { feed, selectedFeedIDs }) {
     ]);
     return;
   }
+  // R70-① 网络类失败 toast 带「重试」动作：闭包回调原操作（重试仍失败可继续重试）。
+  // 高频点 1/2：单源刷新失败（点侧栏右键「刷新此源」网络抖动/源站超时的第一出路）
+  const refreshThisFeed = async () => {
+    const result = await window.robin.refreshFeed(feed.id);
+    if (result.ok) { await reloadAll(); showToast(t('已刷新')); }
+    else showToast(result.error || t('刷新失败'), { tone: 'error', action: { label: t('重试'), onClick: () => refreshThisFeed() } });
+  };
   ContextMenu.show(event.clientX, event.clientY, [
-    { label: t('刷新此源'), icon: 'refresh', onClick: async (item) => {
-      const result = await window.robin.refreshFeed(feed.id);
-      if (result.ok) { await reloadAll(); showToast(t('已刷新')); }
-    else showToast(result.error || t('刷新失败'), { tone: 'error' });
-    } },
+    { label: t('刷新此源'), icon: 'refresh', onClick: () => refreshThisFeed() },
     { label: t('全部已读'), icon: 'checkAll', onClick: () => window.robin.markAllRead({ kind: 'feed', feedID: feed.id }) },
     { label: t('复制订阅'), icon: 'copy', onClick: () => navigator.clipboard.writeText(feed.feedURL) },
     { label: t('此源排版偏好…'), icon: 'appearance', onClick: () => showFeedTypographyDialog(feed) },

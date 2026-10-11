@@ -411,7 +411,11 @@ export class ReaderView {
       const result = await window.robin.extractUrl(url);
       if (gen !== openExternalSeq || this.entryID !== intentEntryID) return false; // 已被更新的打开动作取代
       if (!result?.ok || !result.data?.html || plainLen(result.data.html) < 40) {
-        this.handlers.onFeedback?.(t('链接精读失败（站点限制或需要登录），请稍后重试或在浏览器打开。'));
+        // R70-① 网络类失败 toast 带「重试」动作（高频点 2/2：全文抓取失败——闭包重发同一 URL）
+        this.handlers.onFeedback?.(t('链接精读失败（站点限制或需要登录），请稍后重试或在浏览器打开。'), {
+          tone: 'error',
+          action: { label: t('重试'), onClick: () => this.openExternalUrl(url) },
+        });
         return false;
       }
       const extracted = result.data;
@@ -437,7 +441,11 @@ export class ReaderView {
       if (llm.automaticallyGenerateSummary && this._articleText().length > 0) this.generateSummary(false);
       return true;
     } catch (err) {
-      this.handlers.onFeedback?.(t('链接精读失败（站点限制或需要登录），请稍后重试或在浏览器打开。'));
+      // R70-① 同上：异常分支同享「重试」出路
+      this.handlers.onFeedback?.(t('链接精读失败（站点限制或需要登录），请稍后重试或在浏览器打开。'), {
+        tone: 'error',
+        action: { label: t('重试'), onClick: () => this.openExternalUrl(url) },
+      });
       return false;
     } finally {
       this._hideLoading();
@@ -480,7 +488,11 @@ export class ReaderView {
         return;
       }
     }
-    this.handlers.onFeedback?.(t('原文抓取失败（站点限制或需要登录），已保留当前内容。'));
+    // R70-① 原文精读抓取失败同享「重试」出路（闭包重跑同一 openOriginal）
+    this.handlers.onFeedback?.(t('原文抓取失败（站点限制或需要登录），已保留当前内容。'), {
+      tone: 'error',
+      action: { label: t('重试'), onClick: () => this.openOriginal() },
+    });
   }
 
   // MARK: - 导出（复制 Markdown / 保存文件 / 打印 PDF）
@@ -2032,6 +2044,7 @@ export class ReaderView {
       img.classList.remove('nj-img-loading', 'nj-img-retrying', 'nj-img-failed');
       // U34 边注：图片加载后锚段全体下移——重排边注列（批 3 审查 P2-3）
       document.dispatchEvent(new CustomEvent('robinread:margin-notes-changed'));
+      this._syncImgBatchRetry(); // R70-②：恢复一张后批量条可能整条退役
     });
     img.addEventListener('error', () => {
       // 图片失败自动重试（借鉴上游 v1.4.5）：首次失败经代理通道重取一次，仍失败才标记
@@ -2066,17 +2079,13 @@ export class ReaderView {
         wrapEl.appendChild(tip);
         tip.addEventListener('click', () => img.click());
       }
+      this._syncImgBatchRetry(); // R70-②：失败累计到 2 张及以上浮现批量重试条
     });
     markState();
     img.addEventListener('click', () => {
       // R41：失败图点击即手动重试（清重试计数换缓存戳重取），不再只能干看破框
       if (img.classList.contains('nj-img-failed')) {
-        img.dataset.retryCount = '0';
-        img.classList.remove('nj-img-failed');
-        img.classList.add('nj-img-loading');
-        img.title = t('正在重试加载…');
-        const sep = img.src.includes('?') ? '&' : '?';
-        img.src = `${img.src.split('#')[0]}${sep}r=${Date.now()}`;
+        this._retryImage(img);
         return;
       }
       if (img.naturalWidth > 0) {
@@ -2087,6 +2096,54 @@ export class ReaderView {
         this._showLightbox(img.src, img.alt || '', cur >= 0 ? gallery : null, cur >= 0 ? cur : 0);
       }
     });
+  }
+
+  /** R70-② 单图重试（R41 点击重试语义收口为方法，单图/批量两通道复用）。 */
+  _retryImage(img) {
+    img.dataset.retryCount = '0';
+    img.classList.remove('nj-img-failed');
+    img.classList.add('nj-img-loading');
+    img.title = t('正在重试加载…');
+    const sep = img.src.includes('?') ? '&' : '?';
+    img.src = `${img.src.split('#')[0]}${sep}r=${Date.now()}`;
+  }
+
+  /**
+   * R70-② 图片批量失败「全部重试」：正文里 ≥2 张失败图时，报头下方浮现批量条
+   * （计数 + 一键全部重试），免去逐张点破框；全部恢复（或只剩 1 张）整条退役。
+   * 条挂 article 容器（body 之前）而非 body 内——不污染 _articleText/TTS 文本面。
+   */
+  _syncImgBatchRetry() {
+    const article = this.body?.parentElement;
+    if (!article) return;
+    // 只数「失败态」图：点过重试正在途中的（failed 类已摘、壳还没拆）不计入，
+    // 否则批量条会在重试期间谎报张数；等下次 error/load 事件自然收敛
+    const failedImgs = [...(this.body?.querySelectorAll('.nj-img-failed-wrap img.nj-img-failed') || [])];
+    let bar = article.querySelector('.nj-img-batch-bar');
+    if (failedImgs.length < 2) {
+      bar?.remove();
+      return;
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'nj-img-batch-bar';
+      bar.setAttribute('role', 'status');
+      const note = document.createElement('span');
+      note.className = 'nj-img-batch-note';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nj-img-batch-retry';
+      btn.textContent = t('全部重试');
+      btn.addEventListener('click', () => {
+        // 快照此刻的失败集：重试途中新失败的图等下一次 _syncImgBatchRetry 再入列
+        const pending = [...article.querySelectorAll('.nj-img-failed-wrap img.nj-img-failed')];
+        pending.forEach((img) => this._retryImage(img));
+        bar?.remove();
+      });
+      bar.append(note, btn);
+      article.insertBefore(bar, this.body);
+    }
+    bar.querySelector('.nj-img-batch-note').textContent = tf('%lld 张图片加载失败', failedImgs.length);
   }
 
   // MARK: - 摘要卡（summaryCardHTML 三态 1:1）
@@ -2154,8 +2211,11 @@ export class ReaderView {
         </div>`;
     } else {
       card.classList.add('ungenerated');
+      // R70-③ 失败态 inline 重试：错误文案旁直接给「重试」钮（data-action 走建卡时绑定的
+      // 委托监听 → generateSummary(true) 强制重试），失败不再只留 toast、也不必解读"点卡片"的隐式出路
       const errLine = this.summary.error
-        ? `<span class="robin-summary-subtext" style="color:#c93b3b">${escapeHTML(this.summary.error)}</span>`
+        ? `<span class="robin-summary-subtext robin-summary-errtext">${escapeHTML(this.summary.error)}</span>
+           <button class="robin-summary-action-btn" data-action="regenerate">${escapeHTML(t('重试'))}</button>`
         : `<span class="robin-summary-subtext">${escapeHTML(t('尚未生成，点击后发送正文生成摘要'))}</span>`;
       card.innerHTML = `
         <div class="robin-summary-header">
@@ -4460,7 +4520,10 @@ export class ReaderView {
     panel.querySelector('.study-panel-title').textContent = title;
     const bodyEl = panel.querySelector('.study-panel-body');
     if (s.error) {
-      bodyEl.innerHTML = `<div class="study-panel-error">${escapeHTML(s.error)}</div>`;
+      // R70-③ 研读面板失败态 inline 重试：错误行内直接给「重试」钮（头部刷新钮是纯图标
+      // 小控件，失败时用户不该被要求发现它）；与 openStudy 同通路（缓存秒开/重新生成）
+      bodyEl.innerHTML = `<div class="study-panel-error">${escapeHTML(s.error)}</div>
+        <button class="study-panel-retry">${escapeHTML(t('重试'))}</button>`;
     } else if (bodyText) {
       bodyEl.innerHTML = renderMarkdown(bodyText);
     } else if (s.generating) {
@@ -4477,6 +4540,13 @@ export class ReaderView {
       event.stopPropagation();
       this.openStudy(s.kind);
     });
+    const inlineRetry = panel.querySelector('.study-panel-retry');
+    if (inlineRetry) {
+      inlineRetry.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.openStudy(s.kind); // R70-③：面板内重试与头部刷新同通路
+      });
+    }
     const exportBtn = panel.querySelector('[data-act="export"]');
     if (exportBtn) {
       exportBtn.addEventListener('click', (event) => {
