@@ -65,6 +65,14 @@ app.whenReady().then(async () => {
       '3 胶囊仪式浮层栈挂账（nj-capsule-ceremony）');
     ok(/const onEsc = \(event\) => \{[\s\S]*?isTopEscapeLayer\(ceremonyLayer\)[\s\S]*?close\(\);/.test(appSrc),
       '3 仪式 Esc = 先收下（onEsc → close 同一通路）');
+    // 批1审查P1-3 收口：ui-prompt 确认/输入框挂账浮层栈 + polite Esc
+    const uiPromptSrc = read('src/renderer/ui-prompt.js');
+    ok(uiPromptSrc.includes("registerEscapeLayer({ id: 'ui-prompt'") && uiPromptSrc.includes('isTopEscapeLayer'),
+      '3 ui-prompt 确认/输入框挂账浮层栈（overlayBase 统一 register/isTop）');
+    ok(uiPromptSrc.includes('e.defaultPrevented') && uiPromptSrc.includes('e.preventDefault()'),
+      '3 ui-prompt polite 口径（defaultPrevented 让位 + 消费即 preventDefault）');
+    ok(uiPromptSrc.includes('close(); resolve') || /close\(\);[\s\S]{0,40}resolve/.test(uiPromptSrc),
+      '3 ui-prompt 关闭统一走 close()（摘 DOM+摘监听+释放层三合一）');
 
     // ── UI 行为断言 ──
     const { AppStore } = require('../src/main/AppStore');
@@ -204,6 +212,37 @@ app.whenReady().then(async () => {
       ok(menuFlow.menuClosed === true, '1 Esc 关闭右键菜单（此前不响应 Esc——补齐）');
       ok(menuFlow.settingsKept === true, '1 菜单层消费 Esc：底下设置不动');
       ok(menuFlow.settingsClosed === true, '1 再一次 Esc 关设置（逐层）');
+    }
+
+    // ── 1/3（真实流程·批1审查 P1-3 收口）：设置模态上叠 ui-prompt 确认框 → Esc 逐层 ──
+    const confirmFlow = await exec(`(async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      try {
+        const sbtn = [...document.querySelectorAll('.footer-nav-btn')].find((b) => (b.title || '').includes('设置'));
+        sbtn.click();
+        await sleep(800);
+        const settingsOpen = Boolean(document.querySelector('.settings-modal'));
+        const { confirmBox } = await import('./ui-prompt.js');
+        const boxPromise = confirmBox('删除确认', { message: '探针确认框', danger: true });
+        await sleep(300);
+        const boxOpen = Boolean(document.querySelector('.modal.small'));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        const boxClosed = !document.querySelector('.modal.small');
+        const settingsKept = Boolean(document.querySelector('.settings-modal'));
+        const resolved = await Promise.race([boxPromise.then((v) => v), sleep(400).then(() => 'pending')]);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await sleep(300);
+        const settingsClosed = !document.querySelector('.settings-modal');
+        return { settingsOpen, boxOpen, boxClosed, settingsKept, resolvedCancel: resolved === false, settingsClosed };
+      } catch (e) { return { __err: String(e && e.stack || e) }; }
+    })()`, 'confirm-esc-flow');
+    if (confirmFlow.__err) ok(false, '1 确认框逐层流程探针异常 — ' + confirmFlow.__err);
+    else {
+      ok(confirmFlow.settingsOpen === true && confirmFlow.boxOpen === true, '3 设置模态上叠 ui-prompt 确认框（P1-3 场景）');
+      ok(confirmFlow.boxClosed === true && confirmFlow.settingsKept === true, '3 Esc 只关确认框、设置不动（确认框挂账后逐层成立）');
+      ok(confirmFlow.resolvedCancel === true, '3 确认框 Esc 以 cancel 兑现 Promise（await 方不挂起）');
+      ok(confirmFlow.settingsClosed === true, '3 第二次 Esc 轮到设置（逐层退场）');
     }
 
     win.destroy();

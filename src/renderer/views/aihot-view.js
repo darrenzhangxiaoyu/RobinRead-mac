@@ -61,8 +61,8 @@ export class AihotView {
     this._esc = (e) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
       if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      e.preventDefault(); // 批1审查P2-1：消费即 preventDefault（polite 口径），退出深读分支同享
       if (this._deepReading) { this._deepReading = false; this._renderContent(); return; }
-      e.preventDefault();
       this.dismiss();
     };
     this._navKeys = (e) => this._handleNavKeys(e);

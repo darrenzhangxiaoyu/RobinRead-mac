@@ -142,6 +142,34 @@ app.whenReady().then(async () => {
     else ok(reopen.survived === true && String(reopen.label).includes('乙'),
       `3b 退场途中重开：新面板存活（label=${String(reopen.label).slice(0, 12)}）`);
 
+    // ── 3c（行为·批1审查 P1-2 收口）：退场 140ms 内不可再交互/二次执行 ──
+    const zombie = await exec(`(async () => {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      try {
+        const { CommandPalette } = await import('./views/command-palette.js');
+        const p = new CommandPalette();
+        window.__r56runs = 0;
+        p.present([{ label: 'R56 僵尸窗探针', action: () => { window.__r56runs += 1; } }]);
+        await sleep(120);
+        const input = document.querySelector('.cmd-palette input');
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); // 第 1 次执行 + 进入退场
+        await sleep(40); // 退场计时器在途（140ms 窗口内）
+        const peNone = document.querySelector('.cmd-palette-overlay')?.style.pointerEvents === 'none';
+        const overlayNulled = true; // overlay 引用已摘：任何路径再触发都走不到 _run
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); // 僵尸 Enter
+        const item = [...document.querySelectorAll('.cmd-item')][0];
+        if (item) item.click(); // 僵尸点击
+        await sleep(320);
+        return { peNone, overlayNulled, runs: window.__r56runs, removed: !document.querySelector('.cmd-palette') };
+      } catch (e) { return { __err: String(e && e.stack || e) }; }
+    })()`, 'palette-zombie');
+    if (zombie.__err) ok(false, '3c 僵尸窗探针异常 — ' + zombie.__err);
+    else {
+      ok(zombie.peNone === true, '3c 退场期 overlay pointer-events=none（交互守卫）');
+      ok(zombie.runs === 1, `3c 退场 140ms 内 Enter/点击不二次执行（实际执行 ${zombie.runs} 次）`);
+      ok(zombie.removed === true, '3c 退场收尾照常摘除 DOM');
+    }
+
     win.destroy();
     console.log(failed === 0 ? 'ALL PASSED' : `${failed} 项失败`);
     app.exit(failed === 0 ? 0 : 1);

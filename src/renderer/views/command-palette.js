@@ -161,14 +161,17 @@ export class CommandPalette {
     this._escLayer = null;
     if (leave) {
       // R56：执行退场——面板与遮罩同步淡出（--dur-instant 120ms），动画后摘除 DOM；
-      // reduce-motion 由全局收敛块把过渡压到 0.01ms，等效即时收场
+      // reduce-motion 由全局收敛块把过渡压到 0.01ms，等效即时收场。
+      // 批1审查P1-2：先摘状态再播动画——退场 140ms 内面板不可再交互/再执行
+      //（overlay 置 null + pointer-events 守卫 + input 失焦，杜绝二次执行命令的僵尸窗口）
       const ov = this.overlay;
+      this.overlay = null;
+      this.previewHost = null;
+      this.input?.blur();
+      ov.style.pointerEvents = 'none'; // 退场期交互守卫
       ov.querySelector('.cmd-palette')?.classList.add('leaving');
       ov.classList.add('leaving');
-      this._leaveT = setTimeout(() => {
-        ov.remove();
-        if (this.overlay === ov) { this.overlay = null; this.previewHost = null; }
-      }, 140);
+      this._leaveT = setTimeout(() => { ov.remove(); }, 140);
       return;
     }
     this.overlay.remove();
@@ -235,7 +238,7 @@ export class CommandPalette {
   }
 
   _run(cmd) {
-    if (!cmd) return;
+    if (!cmd || !this.overlay) return; // 批1审查P1-2：退场期 overlay 已摘，Enter/点击路径到此一律 inert（防二次执行）
     this._rememberRecent(cmd);
     this._recordUse(cmd); // U30：执行即计频
     this.dismiss({ leave: true }); // R56：执行后 120ms 淡出 + 0.98 缩放退场（替代瞬消；Esc/点外部仍即时收）
