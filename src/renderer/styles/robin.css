@@ -117,6 +117,9 @@
   /* ── U25 展示级字号两档（年报四卡大数字/刊头；>12px 展示字归簇进令牌阶梯）── */
   --fs-display: 22px;
   --fs-hero: 32px;
+  /* ── R62 暗色 parity：封面图亮度曲线单一事实源（列表杂志卡/周刊刊头/媒体缩略图三家族同档；
+     浅色不滤镜；暗色压亮度收饱和——白底封面在暗纸面上不再眩光）── */
+  --cover-filter: none;
   /* ── U18 焦点环家族量纲（accent 环宽 / 档位偏移：按钮外扩、列表项内嵌）── */
   --focus-w: 2px;
   --focus-off: 2px;      /* 按钮/链接档：环画在元素外 */
@@ -162,6 +165,9 @@ body.dark {
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.32);
   --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.30);
   --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.52);
+  /* ── R62 暗色 parity：封面图亮度曲线暗色档（与 --cover-filter 亮色 none 对偶；
+     brightness 0.86 + saturate 0.92 —— 暗纸面上白底封面降眩光，色彩不过度灰化）── */
+  --cover-filter: brightness(0.86) saturate(0.92);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -855,7 +861,7 @@ body.rp-micro-off .reader-article { text-spacing-trim: space-all; }
   cursor: pointer;
   background: var(--note-background);
 }
-.nj-edition-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nj-edition-cover img { width: 100%; height: 100%; object-fit: cover; display: block; filter: var(--cover-filter); /* R62：封面亮度曲线归令牌 */ }
 .nj-edition-cover.no-image { aspect-ratio: auto; min-height: 120px; display: flex; align-items: center; justify-content: center; }
 .nj-edition-cover-caption {
   position: absolute;
@@ -4042,6 +4048,7 @@ body.dark .robin-header-original-actions .nj-later-header-btn.active {
   height: 100%;
   object-fit: cover;
   display: block;
+  filter: var(--cover-filter); /* R62：封面亮度曲线归令牌（暗色档 body.dark 统一压光） */
 }
 .nj-mag-card .mag-cover .mag-cover-fallback {
   position: absolute;
@@ -6112,7 +6119,7 @@ body.dark .list-scroll.nj-mag-kraft .list-search { background: rgba(255, 255, 25
   background: var(--note-background); border: 1px solid var(--note-border);
   overflow: hidden; display: flex; align-items: center; justify-content: center;
 }
-.nj-media-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nj-media-cover img { width: 100%; height: 100%; object-fit: cover; display: block; filter: var(--cover-filter); /* R62：封面亮度曲线归令牌 */ }
 .nj-media-kind {
   position: absolute; left: 0; right: 0; bottom: 0;
   font-size: var(--fs-2xs); text-align: center; padding: 1px 0;
