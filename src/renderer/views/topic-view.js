@@ -8,7 +8,7 @@
  * - 「立即聚合」手动触发 + 结果 toast；Esc 关闭（defaultPrevented 守卫与既有浮层家族一致）；
  * - 不可信回显一律 textContent；样式全 OKLCH 令牌（robin.css nj-topic-* 区块）。
  */
-import { t, tf } from '../i18n.js';
+import { t, tf, uiLocale } from '../i18n.js';
 import { icon } from '../icons.js';
 import { emptyArtSVG } from './empty-art.js';
 
@@ -23,7 +23,7 @@ function fmtWhen(epochSeconds) {
   const ms = Number(epochSeconds) * 1000;
   if (!ms) return '';
   try {
-    return new Intl.DateTimeFormat(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(ms));
+    return new Intl.DateTimeFormat(uiLocale(), { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(ms)); // R71-③ 跟随界面语言（原 undefined OS locale）
   } catch (_) { return ''; }
 }
 

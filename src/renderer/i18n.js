@@ -34,3 +34,12 @@ export function tf(key, ...args) {
 export function currentLanguage() {
   return language;
 }
+
+/**
+ * R71-③ 界面语言对应的 BCP47 locale：日期/数字格式化统一走这里，
+ * 不再依赖 OS locale（`[]` / `undefined`）——中文 Windows + 英文界面时
+ * 「上次同步」「命中时间」等此前会漏成 zh 格式。
+ */
+export function uiLocale() {
+  return language === 'en' ? 'en-US' : 'zh-CN';
+}

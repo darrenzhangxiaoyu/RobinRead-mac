@@ -4,7 +4,7 @@
  *
  * 分区（对应 SettingsSection）：外观 / 通用 / 账号 / AI 功能 / 刷新 / 语言 / 同步 / 反馈 / 关于
  */
-import { t, tf } from '../i18n.js';
+import { t, tf, uiLocale } from '../i18n.js';
 import { icon } from '../icons.js';
 import { FEED_REFRESH_INTERVALS_META } from '../refresh-intervals.js';
 import { promptBox, confirmBox, alertBox } from '../ui-prompt.js';
@@ -1035,7 +1035,7 @@ export class SettingsView {
         const state = result.data[el.dataset.accountId];
         if (!state) continue;
         if (state.lastSyncCompletedAt) {
-          el.querySelector('.sync-ok').textContent = tf('上次同步：%@', new Date(state.lastSyncCompletedAt * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          el.querySelector('.sync-ok').textContent = tf('上次同步：%@', new Date(state.lastSyncCompletedAt * 1000).toLocaleTimeString(uiLocale(), { hour: '2-digit', minute: '2-digit' })); // R71-③ 跟随界面语言（原 [] OS locale）
           el.querySelector('.sync-ok').style.display = '';
         }
         if (state.lastError) {
@@ -1334,7 +1334,7 @@ export class SettingsView {
         cells: {
           acct: mailCell,
           sync: account.lastSync
-            ? tf('上次同步：%@', new Date(account.lastSync * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+            ? tf('上次同步：%@', new Date(account.lastSync * 1000).toLocaleString(uiLocale(), { hour: '2-digit', minute: '2-digit' })) // R71-③
             : t('尚未同步'),
           manage: manageCell,
           toggle: toggleControl(account.enabled, async (value) => {
@@ -2291,7 +2291,7 @@ export class SettingsView {
     })()));
 
     behaviorHost.appendChild(row(t('上次同步'), t('最近一次成功完成同步的时间。'), staticText(cfg.lastSyncAt
-      ? tf('上次同步：%@', new Date(cfg.lastSyncAt * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+      ? tf('上次同步：%@', new Date(cfg.lastSyncAt * 1000).toLocaleString(uiLocale(), { hour: '2-digit', minute: '2-digit' })) // R71-③
       : t('尚未同步'))));
 
     if (cfg.deviceId) {
@@ -2562,7 +2562,7 @@ export class SettingsView {
       row(t('立即导出'), t('增量导出：只写入新增或内容变化的文件。'), exportButton),
       row(t('全量重导'), t('忽略增量游标，重写全部文件（仍不删除你在 Obsidian 侧的内容）。'), fullButton),
       row(t('最后导出'), null, staticText(lastExportAt
-        ? tf('上次导出：%@', new Date(lastExportAt * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit' }))
+        ? tf('上次导出：%@', new Date(lastExportAt * 1000).toLocaleString(uiLocale(), { hour: '2-digit', minute: '2-digit' })) // R71-③
         : t('尚未导出'))),
     ]));
   }
@@ -3481,7 +3481,7 @@ function previewRow(entry) {
   const meta = document.createElement('div');
   meta.style.cssText = 'font-size:11px;color:var(--text-secondary);';
   const when = Number(entry.publishedAt) > 0
-    ? new Date(Number(entry.publishedAt) * 1000).toLocaleDateString()
+    ? new Date(Number(entry.publishedAt) * 1000).toLocaleDateString(uiLocale()) // R71-③ 跟随界面语言（原 OS locale）
     : '';
   meta.textContent = when;
   row.append(title, meta);

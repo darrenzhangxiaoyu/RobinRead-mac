@@ -14,7 +14,7 @@
  *
  * 交互原则：AIHot 已把内容总结成中文——一切点击先在应用内读中文，英文原文只作深挖入口。
  */
-import { t, tf } from '../i18n.js';
+import { t, tf, uiLocale } from '../i18n.js';
 import { icon } from '../icons.js';
 import { renderMarkdown } from '../markdown.js';
 import { emptyArtSVG } from './empty-art.js';
@@ -937,7 +937,7 @@ export class AihotView {
   }
 
   _exportMarkdown() {
-    const lines = [`# AI 热点 · ${SECTIONS.find((s) => s.id === this.section)?.label || ''}`, `> ${new Date().toLocaleString()}`, ''];
+    const lines = [`# AI 热点 · ${SECTIONS.find((s) => s.id === this.section)?.label || ''}`, `> ${new Date().toLocaleString(uiLocale())}`, '']; // R71-③ 跟随界面语言
     if (this.section === 'hot') {
       for (const it of this._visibleItems(this.data || [], 'hot')) {
         lines.push(`${it.rank}. **${it.title}**（${it.sourceCount} 源${it.latestAt ? ' · ' + timeAgo(it.latestAt) : ''}）`);
