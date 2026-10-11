@@ -2714,8 +2714,12 @@ const STRINGS = {
   "打标签「%@」": { zh: "打标签「%@」", en: "Tag \"%@\"" },
   // U38 首启引导流
   "新手引导": { zh: "新手引导", en: "Welcome Tour" },
+  "新手引导": { zh: "新手引导", en: "Welcome Tour" },
   "重看新手引导": { zh: "重看新手引导", en: "Replay the Welcome Tour" },
   "重看引导": { zh: "重看引导", en: "Replay Tour" },
+  "重开后按当前状态呈现：已有订阅源时可直接跳到 AI 配置或快捷键卡。": { zh: "重开后按当前状态呈现：已有订阅源时可直接跳到 AI 配置或快捷键卡。", en: "Restarts with your current state: with feeds already added you can jump straight to AI setup or the shortcut card." },
+  "进度": { zh: "进度", en: "Progress" },
+  "聚焦模式": { zh: "聚焦模式", en: "Focus Mode" },
   "添加订阅、AI 配置与快捷键的三步引导。错过或想再看一遍，从这里重开。": { zh: "添加订阅、AI 配置与快捷键的三步引导。错过或想再看一遍，从这里重开。", en: "A three-step tour covering feeds, AI setup and shortcuts. Missed it or want another look? Restart here." },
   "欢迎来到知更": { zh: "欢迎来到知更", en: "Welcome to RobinRead" },
   "三步把阅读台搭起来：先添加你的第一个订阅源。": { zh: "三步把阅读台搭起来：先添加你的第一个订阅源。", en: "Three steps to set up your reading desk: start by adding your first feed." },

@@ -8698,7 +8698,7 @@ html.theme-transition * {
 .nj-onboarding-overlay {
   position: fixed;
   inset: 0;
-  z-index: 960;
+  z-index: 780; /* 批 4 审查 P1：低于 modal-overlay(800)——引导内「添加订阅/AI 设置」动作要打开模态，960 会把它们压成看不见点不着 */
   display: flex;
   align-items: center;
   justify-content: center;

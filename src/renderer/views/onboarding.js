@@ -168,14 +168,16 @@ export function presentOnboarding(deps = {}) {
     nextBtn.textContent = step >= ONBOARDING_STEP_COUNT ? t('开始使用') : t('下一步');
     actionHost.innerHTML = '';
     card.classList.toggle('step-keys', step >= ONBOARDING_STEP_COUNT);
+    // 先收引导再派发动作（批 4 审查 P1 双保险：z-index 已降，浮层在场仍会遮罩变暗模态）
+    const go = (fn) => { finish(); fn?.(); };
     if (step === 1) {
       title.textContent = t('欢迎来到知更');
       desc.textContent = t('三步把阅读台搭起来：先添加你的第一个订阅源。');
-      actionHost.append(actionBtn(t('添加订阅'), () => deps.onAddFeed?.(), true));
+      actionHost.append(actionBtn(t('添加订阅'), () => go(deps.onAddFeed), true));
     } else if (step === 2) {
       title.textContent = t('配置 AI（可跳过）');
       desc.textContent = t('配上 AI 服务商即可解锁摘要、深读与逐段翻译；不配置也不影响阅读。');
-      actionHost.append(actionBtn(t('打开 AI 设置'), () => deps.onOpenAI?.()));
+      actionHost.append(actionBtn(t('打开 AI 设置'), () => go(deps.onOpenAI)));
     } else {
       title.textContent = t('一切就绪');
       desc.textContent = t('先记几枚最常用的键——其余随时按 Ctrl+/ 查看。');
