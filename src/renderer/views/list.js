@@ -207,6 +207,8 @@ export class ListView {
     this.scrollEl.appendChild(this.topInset);
     this.rowsHost = document.createElement('div');
     this.scrollEl.appendChild(this.rowsHost);
+    // R57 数字纪律：列表在场上时每 60s 静默刷新时间桶（跨日 HH:MM→日期翻转），只改文本节点不重绘
+    this._timeTicker = setInterval(() => refreshEntryTimes(this.rowsHost), 60000);
 
     this.scrollEl.addEventListener('scroll', () => this._onScroll(), { passive: true });
   }
@@ -326,6 +328,7 @@ export class ListView {
     meta.appendChild(badge);
     const time = document.createElement('span');
     time.className = 'entry-time';
+    time.dataset.ts = String(first.publishedAt || 0); // R57：60s 静默刷新定位用
     time.textContent = formatTime(first.publishedAt);
     time.title = fullTime(first.publishedAt);
     meta.appendChild(time);
@@ -570,7 +573,7 @@ export class ListView {
           ${item.isStarred ? `<span class="star-mini" title="${attr(t('已收藏'))}">${icon('starFilled')}</span>` : ''}
           <span class="read-min-slot">${readMinutesChip(item)}</span>
           ${this.laterAgeBadge(item)}
-          <span class="entry-time" title="${attr(fullTime(item.publishedAt))}">${escapeHTML(formatTime(item.publishedAt))}</span>
+          <span class="entry-time" data-ts="${Number(item.publishedAt) || 0}" title="${attr(fullTime(item.publishedAt))}">${escapeHTML(formatTime(item.publishedAt))}</span>
         </div>
       </div>
     `;
@@ -799,7 +802,7 @@ export class ListView {
     row.innerHTML = `<span class="cluster-count"></span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
       <span class="cluster-hint">${escapeHTML(t('同题报道 · 点击展开'))}</span>
-      <span class="entry-time" title="${attr(fullTime(cluster.items[0].publishedAt))}">${escapeHTML(formatTime(cluster.items[0].publishedAt))}</span>`;
+      <span class="entry-time" data-ts="${Number(cluster.items[0].publishedAt) || 0}" title="${attr(fullTime(cluster.items[0].publishedAt))}">${escapeHTML(formatTime(cluster.items[0].publishedAt))}</span>`;
     row.querySelector('.cluster-count').textContent = t('%lld 篇').replace('%lld', String(cluster.items.length));
     row.querySelector('span:nth-child(2)').textContent = stripHtml(cluster.items[0].title);
     row.title = t('多源相似报道，点击展开');
@@ -1141,7 +1144,7 @@ export class ListView {
         ${item.isStarred ? `<span class="star-mini" title="${attr(t("已收藏"))}">${icon('starFilled')}</span>` : ''}
         ${item.isLater ? `<span class="later-mini" title="${attr(t('稍后读'))}">${icon('clock')}</span>` : ''}
         ${readMinutesChip(item)}
-        <span class="entry-time">${escapeHTML(formatTime(item.publishedAt))}</span>
+        <span class="entry-time" data-ts="${Number(item.publishedAt) || 0}">${escapeHTML(formatTime(item.publishedAt))}</span>
       </div>`;
     body.querySelector('.mag-title').textContent = stripHtml(item.title) || t('未命名文章');
     body.querySelector('.mag-feed').textContent = item.sourceTitle || '';
@@ -1788,18 +1791,40 @@ function accountBadge(item) {
 }
 
 /** 日期格式 1:1：今天→时间；今年→月日；更早→年月。 */
-export function formatTime(timestamp) {
+export function formatTime(timestamp, now = new Date()) {
   if (!timestamp) return '';
   const date = new Date(timestamp * 1000);
-  const now = new Date();
+  const nowDate = now instanceof Date ? now : new Date(now); // R57：注入时钟（探针确定性）
   const locale = (window.__robinLanguage || 'zh') === 'zh' ? 'zh-CN' : 'en-US';
-  if (date.toDateString() === now.toDateString()) {
+  if (date.toDateString() === nowDate.toDateString()) {
     return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
   }
-  if (date.getFullYear() === now.getFullYear()) {
+  if (date.getFullYear() === nowDate.getFullYear()) {
     return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   }
   return date.toLocaleDateString(locale, { year: 'numeric', month: 'short' });
+}
+
+/**
+ * R57 相对时间静默刷新：每 60s 一拍，只改列表可见时间文本节点（不整页重绘）。
+ * 今天 HH:MM → 跨日翻日期桶；将来若引入「N 分钟前」相对口径，同一通路直接受益。
+ * @param {HTMLElement} root 时间节点宿主（列表 rowsHost）
+ * @param {Date} [now] 注入时钟（探针确定性）
+ * @returns {number} 实际改写的节点数
+ */
+export function refreshEntryTimes(root, now = new Date()) {
+  if (!root || !root.querySelectorAll) return 0;
+  let patched = 0;
+  root.querySelectorAll('.entry-time[data-ts]').forEach((el) => {
+    const ts = Number(el.dataset.ts);
+    if (!ts) return;
+    const next = formatTime(ts, now);
+    if (next && el.textContent !== next) {
+      el.textContent = next;
+      patched += 1;
+    }
+  });
+  return patched;
 }
 
 /** 完整日期（阅读器头部：yyyy-MM-dd HH:mm）。 */

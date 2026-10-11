@@ -4408,6 +4408,21 @@ body.dark .favicon-badge { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 }
 .reader-article .robin-header-title { font-size: 1.92em; line-height: 1.28; letter-spacing: 0.01em; text-wrap: balance; }
 .robin-header-meta { font-variant-numeric: tabular-nums; } /* U20：gap 分叉声明已并入基础块（6px 8px） */
+
+/* ── R57 数字纪律：等宽数字全量补齐（全库审计后的剩余缺口——
+   播放器时间/媒体时长/阅读剩余/批处理计数/各视图统计数字四家族；既有 .entry-time、
+   .sidebar-count、.nj-progress-pct 等由 U3/U32 等先轮覆盖）── */
+.nj-mp-time, .nj-media-duration, .nj-media-played, .robin-read-time,
+.er-remain-tip, .er-remain, .er-article-progress, .er-count, .er-vol-num, .er-cover-stats,
+.cluster-count, .list-batch-count, .aihot-time, .aihot-badge, .aihot-source-count,
+.kb-card-time, .kb-stat-num, .kb-col-count, .kb-thread-count, .kb-dash-card-num,
+.dg-clock, .dg-clock-text, .dg-hero-stats, .dg-stat, .nj-clock-advice,
+.nj-archive-stats, .nj-garden-stats, .nj-topic-lane-badge, .nj-capsule-badge,
+.nj-revisit-badge, .nj-course-progress-nums, .nj-fp-stats, .nj-spectrum-readcount,
+.nj-weekly-section-summary, .evo-score-num, .wc-search-count,
+.translate-progress, .nj-translate-progress {
+  font-variant-numeric: tabular-nums;
+}
 .robin-read-time {
   padding: 2px 9px; border: 1px solid var(--note-border);
   border-radius: var(--radius-full); font-size: 0.92em; color: var(--text-secondary);
