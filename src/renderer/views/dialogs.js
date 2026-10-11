@@ -765,7 +765,7 @@ export class SettingsView {
       sel.addEventListener('change', async () => {
         const v = Number(sel.value);
         await saveCfg({ enabled: v > 0, keep: v > 0 ? v : backupCfg.keep });
-        showToast(v > 0 ? t('自动备份已开启') : t('自动备份已关闭'));
+        flashRowCheck(sel); // R65 样板：设置行内改动即时保存 → 行内对勾确认（原「已开启/已关闭自动备份」toast 退役）
       });
       wrap.appendChild(sel);
       return wrap;
@@ -2599,9 +2599,12 @@ export class SettingsView {
       try {
         const res = await window.robin.apiSetConfig({ port: next });
         if (res && res.ok === false) throw new Error(String(res.error || t('保存失败'))); // 批 I 审查 P2：业务错误走 resolve 不走 catch
+        portInput.classList.remove('invalid'); portInput.title = ''; // R65 字段级错误态：成功即摘
         if (st.running && next !== st.port) showToastLocal(t('端口已保存——重启应用或关闭再开启开关后生效。'));
       } catch (err) {
         showToastLocal(String(err && err.message || err));
+        portInput.classList.add('invalid'); // R65 字段级错误态：非法值红边标在字段上（悬停见原因）
+        portInput.title = String(err && err.message || err);
         portInput.value = String(conf.port ?? 7962);
       }
     });
@@ -2721,9 +2724,14 @@ export class SettingsView {
       const res = await window.robin.pocketSetConfig?.({ port: next }).catch(() => null);
       if (res && res.ok === false) {
         showToast(String(res.error || t('设置失败')), { tone: 'error' });
+        portInput.classList.add('invalid'); // R65 字段级错误态：非法值红边标在字段上（悬停见原因）
+        portInput.title = String(res.error || t('设置失败'));
         portInput.value = String(conf.port ?? 7963);
-      } else if (st.running && next !== st.port) {
-        showToast(t('端口已保存——重启应用或关闭再开启开关后生效。'));
+      } else {
+        portInput.classList.remove('invalid'); portInput.title = ''; // R65 字段级错误态：成功即摘
+        if (st.running && next !== st.port) {
+          showToast(t('端口已保存——重启应用或关闭再开启开关后生效。'));
+        }
       }
     });
 
@@ -4172,6 +4180,7 @@ function toggleControl(initial, onChange) {
     const next = !toggle.classList.contains('on');
     toggle.classList.toggle('on', next);
     await onChange(next);
+    flashRowCheck(toggle); // R65 行内确认：改动即时保存 → 0.5s 对勾淡出，不打 toast
   });
   return toggle;
 }
@@ -4186,8 +4195,28 @@ function selectControl(options, current, onChange) {
     option.selected = String(value) === String(current);
     select.appendChild(option);
   }
-  select.addEventListener('change', () => onChange(select.value));
+  select.addEventListener('change', async () => {
+    await onChange(select.value);
+    flashRowCheck(select); // R65 行内确认（与开关同语言）
+  });
   return select;
+}
+
+/**
+ * R65 行内确认：设置控件改动即时保存成功后，在所属设置行控制区淡入一枚对勾，
+ * 约 0.5s 后淡出——反馈安静、就地、不打 toast（toast 只留给非行内上下文与错误）。
+ * 不在设置行上下文（如书架卡片里的开关）时不渲染，由调用方保留既有反馈通道。
+ */
+function flashRowCheck(controlEl) {
+  const rowEl = controlEl?.closest?.('.setting-row');
+  if (!rowEl) return null;
+  const host = controlEl.closest('.setting-control') || controlEl.parentElement || controlEl;
+  const check = document.createElement('span');
+  check.className = 'nj-row-check';
+  check.innerHTML = icon('checkCircle');
+  host.appendChild(check);
+  setTimeout(() => check.remove(), 760); // 0.5s 在位 + --dur-mid 淡出预算
+  return check;
 }
 
 function staticText(text) {

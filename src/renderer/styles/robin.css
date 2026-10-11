@@ -1940,6 +1940,9 @@ select.control, input.control {
   padding: 5px 9px; outline: none;
 }
 select.control:focus, input.control:focus { border-color: var(--accent); }
+/* R65 字段级错误态：落库被拒（端口占用/越界等）红边标在字段上——对勾管成功确认，
+   .invalid 管失败反馈，表单反馈两端闭环（悬停原因走 title，由接线方填写） */
+select.control.invalid, input.control.invalid { border-color: var(--danger); }
 
 .btn-text {
   appearance: none;
@@ -2022,6 +2025,11 @@ select.control:focus, input.control:focus { border-color: var(--accent); }
   border-radius: var(--radius-lg); background: var(--separator);
   cursor: default; transition: background var(--dur-fast) var(--ease-out);
   flex: 0 0 auto; border: none;
+}
+/* R65 命中区扩展：视觉 22px 高的开关把可点区经透明 ::before 撑到 ≥40px 高
+   （inset -9px 纵向 → 22+18=40px；±6px 横向），零视觉变化，行高内精准可点 */
+.toggle::before {
+  content: ''; position: absolute; inset: -9px -6px;
 }
 .toggle::after {
   content: ''; position: absolute; left: 2px; top: 2px;
@@ -3252,6 +3260,17 @@ body.dark .nj-note-marker { color: #d3a952; }
 /* R64 键盘可达：toast 非 modal（Esc 不归它），只保证 Tab 可达 + 焦点环可见——
    环走 R9/U18 全局 button 家族同量纲（2px accent 外扩）；toast.js 侧焦点即暂停自动消退 */
 .toast-capsule .toast-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── R65 行内确认对勾：设置控件即时保存成功后在行控制区淡入，0.5s 在位 + --dur-mid 淡出
+   （reduced-motion 由全局收敛块停表直达终态；toast 只留给非行内上下文与错误） ── */
+.nj-row-check {
+  display: inline-flex; flex: 0 0 auto;
+  color: var(--accent);
+  animation: nj-row-check-in var(--dur-fast) var(--ease-out), nj-row-check-out var(--dur-mid) var(--ease-out) 0.5s forwards;
+}
+.nj-row-check svg { width: 14px; height: 14px; }
+@keyframes nj-row-check-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+@keyframes nj-row-check-out { to { opacity: 0; } }
 
 /* ==========================================================================
    面板折叠（批注面板 / 研读面板共用）：折叠后仅剩窄条，点击头部切换
@@ -8759,6 +8778,9 @@ html.theme-transition * {
 }
 .nj-settings-table-row { border-top: 1px solid var(--hairline); min-width: 0; }
 .nj-settings-table-row:first-of-type { border-top: none; }
+/* R65 热区与 hover 同语言：U37 表格行含启停开关/微钮等交互控件，行悬停底色
+   与 .setting-row:hover 同公式（55% row-hover），无 scale（批 1 审查纪律：行非按钮容器） */
+.nj-settings-table-row:hover { background: color-mix(in srgb, var(--row-hover) 55%, transparent); }
 .nj-settings-table-cell { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .nj-settings-table-cell.cell-hits,
 .nj-settings-table-cell.cell-sync { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: var(--fs-lg); }

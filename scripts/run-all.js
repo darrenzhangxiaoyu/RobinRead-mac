@@ -85,6 +85,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r62-darkparity.js', runner: 'electron', desc: 'R62 暗色parity三连：accent对比度实算审计/封面图亮度曲线档/阴影三档暗色映射固化（离线）' },
   { file: 'scripts/diag-r63-scroll.js', runner: 'electron', desc: 'R63 滚动细节三连：浮层内滚动条全量主题化/列表顶底edge淡出遮/新文章到达滚动锚定（离线）' },
   { file: 'scripts/diag-r64-toastorder.js', runner: 'electron', desc: 'R64 toast 秩序三连：堆叠上限3+同类合并×N计数/退场12px镜像对称/按钮键盘可达焦点暂停（离线）' },
+  { file: 'scripts/diag-r65-forms.js', runner: 'electron', desc: 'R65 设置与表单三连：开关命中区≥40px+表格行hover同语言/focus环audit+字段级错误态/改动行内对勾确认样板（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },
