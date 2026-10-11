@@ -153,11 +153,24 @@ export class CommandPalette {
     list.style.overflowY = 'auto';
   }
 
-  dismiss() {
+  dismiss({ leave = false } = {}) {
     if (!this.overlay) return;
+    clearTimeout(this._leaveT); // 退场途中再开面板：撤销上一场退场收尾，防误删新面板
     document.removeEventListener('keydown', this._escHandler);
     releaseEscapeLayer(this._escLayer);
     this._escLayer = null;
+    if (leave) {
+      // R56：执行退场——面板与遮罩同步淡出（--dur-instant 120ms），动画后摘除 DOM；
+      // reduce-motion 由全局收敛块把过渡压到 0.01ms，等效即时收场
+      const ov = this.overlay;
+      ov.querySelector('.cmd-palette')?.classList.add('leaving');
+      ov.classList.add('leaving');
+      this._leaveT = setTimeout(() => {
+        ov.remove();
+        if (this.overlay === ov) { this.overlay = null; this.previewHost = null; }
+      }, 140);
+      return;
+    }
     this.overlay.remove();
     this.overlay = null;
     this.previewHost = null;
@@ -225,7 +238,7 @@ export class CommandPalette {
     if (!cmd) return;
     this._rememberRecent(cmd);
     this._recordUse(cmd); // U30：执行即计频
-    this.dismiss();
+    this.dismiss({ leave: true }); // R56：执行后 120ms 淡出 + 0.98 缩放退场（替代瞬消；Esc/点外部仍即时收）
     try { cmd.action?.(); } catch (_) { /* 单条命令失败不破坏面板生命周期 */ }
   }
 
