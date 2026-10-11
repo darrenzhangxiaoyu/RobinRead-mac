@@ -45,6 +45,7 @@ import { PicksTTSPlayer } from './views/picks-tts.js';
 import { RadioPlayer } from './views/radio-player.js';
 import { FocusSessionPanel } from './views/focus-session.js';
 import { VoiceOrb } from './views/voice-orb.js';
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './views/overlay-stack.js'; // R55 浮层秩序
 import { TopicView } from './views/topic-view.js';
 import { AccountController } from './views/account.js';
 import { syncPaletteCommand } from './views/sync-command.js';
@@ -2665,7 +2666,20 @@ function openCapsuleCeremony(capsule, { from = null } = {}) {
   if (note) overlay.querySelector('.nj-ceremony-note').textContent = note;
   if (message) overlay.querySelector('.nj-ceremony-message').textContent = `—— ${message}`;
   overlay.querySelector('.nj-ceremony-meta').textContent = `${kindLabel} · 《${articleTitle}》`;
-  const close = () => overlay.remove();
+  const close = () => {
+    document.removeEventListener('keydown', onEsc);
+    releaseEscapeLayer(ceremonyLayer);
+    overlay.remove();
+  };
+  // R55：仪式 = 轻遮罩浮层，Esc 等价「先收下」（f27 原设计不响应 Esc——补齐）
+  const ceremonyLayer = registerEscapeLayer({ id: 'capsule-ceremony', isAlive: () => Boolean(document.getElementById('nj-capsule-ceremony')) });
+  const onEsc = (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    if (!isTopEscapeLayer(ceremonyLayer)) return; // 仪式之上有更顶浮层时不抢
+    event.preventDefault();
+    close();
+  };
+  document.addEventListener('keydown', onEsc);
   overlay.querySelector('.nj-ceremony-later').addEventListener('click', close);
   overlay.querySelector('.nj-ceremony-goto').addEventListener('click', () => {
     close();

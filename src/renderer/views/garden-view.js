@@ -18,6 +18,7 @@ import { icon } from '../icons.js';
 import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 import { gardenArt } from './garden-art.js';
 import { playSfx } from './sfx.js'; /* U27 微交互音效：挑战完成琶音 */
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; /* R55 浮层秩序 */
 
 const LAST_STAGE_KEY = 'robinread.garden.lastStage';
 
@@ -110,9 +111,12 @@ export class GardenView {
 
     this._esc = (event) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      event.preventDefault();
       this.dismiss();
     };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'garden-overlay', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
     // 花园变更推送（主进程花园服务）：在场时热刷新
     this._unsubscribe = window.robin.onGardenChanged?.(() => {
       if (!this.overlay) return;
@@ -134,6 +138,8 @@ export class GardenView {
   dismiss() {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     if (this._unsubscribe) { try { this._unsubscribe(); } catch (_) { /* 已退订 */ } this._unsubscribe = null; }
     if (this._unsubscribeChallenge) { try { this._unsubscribeChallenge(); } catch (_) { /* 已退订 */ } this._unsubscribeChallenge = null; }
     this.overlay.remove();

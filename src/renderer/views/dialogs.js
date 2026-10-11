@@ -16,6 +16,7 @@ import { Toast } from './toast.js';
 import { focusArrowSiblings } from './kbd-nav.js'; /* U18：设置分区导航 ↑↓ */
 import { playSfx } from './sfx.js'; /* U27 微交互音效：开关开启瞬间试听 */
 import { resetOnboarding, presentOnboarding } from './onboarding.js'; /* U38 首启引导：设置→通用重开入口（onboarding 不反 imported dialogs，无环） */
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer, captureFocusReturn } from './overlay-stack.js'; /* R55 浮层秩序 */
 
 const SECTIONS = [
   { id: 'appearance', title: '外观', icon: 'appearance' },
@@ -178,15 +179,26 @@ export class SettingsView {
     document.body.appendChild(overlay);
     this.overlay = overlay;
 
-    this._esc = (event) => { if (event.key === 'Escape') this.dismiss(); };
+    this._esc = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      event.preventDefault();
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'settings-modal', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
+    this._restoreFocus = captureFocusReturn(); // R55：关闭时焦点归还打开者
     this.render();
   }
 
   dismiss() {
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay?.remove();
     this.overlay = null;
+    this._restoreFocus?.(); // R55：模态退场后焦点回落 body → 归还打开者
+    this._restoreFocus = null;
   }
 
   refresh() {

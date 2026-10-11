@@ -10,6 +10,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; // R55 浮层秩序
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -65,9 +66,12 @@ export class CourseView {
 
     this._esc = (event) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      event.preventDefault();
       this.dismiss();
     };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'course-overlay', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
 
     this._load();
   }
@@ -75,6 +79,8 @@ export class CourseView {
   dismiss() {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay.remove();
     this.overlay = null;
     if (window.__robinCourseView === this) window.__robinCourseView = null;

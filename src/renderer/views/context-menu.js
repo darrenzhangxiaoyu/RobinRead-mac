@@ -4,6 +4,7 @@
  */
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
+import { registerEscapeLayer, releaseEscapeLayer } from './overlay-stack.js';
 
 // 最近一次右键命中的列表行（list.js 行元素带 data-entry-id）。
 // capture 监听先于行级 contextmenu 处理器执行，同步链路内 show() 可安全读取；
@@ -21,9 +22,12 @@ export class ContextMenu {
     const menu = ContextMenu._build(injected, 0);
     document.body.appendChild(menu);
     ContextMenu._place(menu, x, y);
+    // R55：右键菜单是浮层栈的一员且天然最顶——Esc 关菜单（此前不响应 Esc，Esc 会关到菜单底下的浮层）
+    ContextMenu._escLayer = registerEscapeLayer({ id: 'context-menu', isAlive: () => Boolean(document.querySelector('.context-menu')) });
     setTimeout(() => {
       window.addEventListener('mousedown', ContextMenu._outside, { capture: true });
       window.addEventListener('blur', ContextMenu.dismissAll);
+      window.addEventListener('keydown', ContextMenu._escKey, { capture: true });
     }, 0);
     return menu;
   }
@@ -136,9 +140,19 @@ export class ContextMenu {
     if (!event.target.closest?.('.context-menu')) ContextMenu.dismissAll();
   }
 
+  static _escKey(event) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation(); // capture 裁决：Esc 归菜单，不落到底下浮层
+    ContextMenu.dismissAll();
+  }
+
   static dismissAll() {
     document.querySelectorAll('.context-menu').forEach((el) => el.remove());
     window.removeEventListener('mousedown', ContextMenu._outside, { capture: true });
     window.removeEventListener('blur', ContextMenu.dismissAll);
+    window.removeEventListener('keydown', ContextMenu._escKey, { capture: true });
+    releaseEscapeLayer(ContextMenu._escLayer);
+    ContextMenu._escLayer = null;
   }
 }

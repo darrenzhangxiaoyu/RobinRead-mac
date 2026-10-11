@@ -75,6 +75,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r52-details.js', runner: 'electron', desc: 'R52 细节三连：设置导航可达性/图标染色/滚动条（离线）' },
   { file: 'scripts/diag-r53-details.js', runner: 'electron', desc: 'R53 收官：面板空态出路/最近徽标/滚动条（离线）' },
   { file: 'scripts/diag-r54-openfeed.js', runner: 'electron', desc: 'R54 开卷三连：简报缓存落顶/文章微入场/续读提示降噪（离线）' },
+  { file: 'scripts/diag-r55-escorder.js', runner: 'electron', desc: 'R55 浮层秩序三连：Esc 逐层裁决/模态焦点归还/胶囊仪式 Esc（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

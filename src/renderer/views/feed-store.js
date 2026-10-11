@@ -18,6 +18,7 @@ import { CATALOG_EXTRA2 } from './feed-store-extra2.js';
 import { CATALOG_CN } from './feed-store-cn.js';
 import { CATALOG_TIDINGS, TIDINGS_TOPICS } from './feed-store-tidings.js';
 import { WECHAT_ACCOUNTS } from './wechat-accounts.js';
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; // R55 浮层秩序
 
 // MARK: - 目录（按 rank 排序，合并后 URL 唯一）
 
@@ -240,8 +241,14 @@ export class FeedStore {
     overlay.appendChild(this.modal);
     document.body.appendChild(overlay);
     this.overlay = overlay;
-    this._esc = (event) => { if (event.key === 'Escape') this.dismiss(); };
+    this._esc = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      event.preventDefault();
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'feed-store', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
     if (!document.getElementById('fs-extra-style')) {
       const styleEl = document.createElement('style');
       styleEl.id = 'fs-extra-style';
@@ -255,6 +262,8 @@ export class FeedStore {
 
   dismiss() {
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay?.remove();
     this.overlay = null;
     if (this._pending.length) this.handlers.onSubscribed?.(this._pending);

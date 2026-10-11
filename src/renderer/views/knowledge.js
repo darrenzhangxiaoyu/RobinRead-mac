@@ -11,6 +11,7 @@ import { renderMarkdown } from '../markdown.js';
 import { chartToken, setupCanvas, runChartIntro, clipSeriesByProgress, strokeSeries, drawBaseline, onResolutionChange } from './chart-kit.js'; /* U16 */
 import { renderSpectrum } from './spectrum-view.js'; /* F38 来源立场光谱 */
 import { renderWrapped } from './wrapped-view.js'; /* U25 阅读年报 */
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer, captureFocusReturn } from './overlay-stack.js'; /* R55 浮层秩序 */
 
 const TABS = [
   { id: 'dashboard', label: '看板', icon: 'general' },
@@ -90,8 +91,15 @@ export class KnowledgeCenter {
     overlay.appendChild(this.modal);
     document.body.appendChild(overlay);
     this.overlay = overlay;
-    this._esc = (e) => { if (e.key === 'Escape') this.dismiss(); };
+    this._esc = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（复习会话/素材浮层在场时让位）
+      e.preventDefault();
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'knowledge-modal', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
+    this._restoreFocus = captureFocusReturn(); // R55：关闭时焦点归还打开者
     this._render();
     this._load();
   }
@@ -99,8 +107,12 @@ export class KnowledgeCenter {
   dismiss() {
     this._cleanupSession();
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay?.remove();
     this.overlay = null;
+    this._restoreFocus?.(); // R55：模态退场后焦点回落 body → 归还打开者
+    this._restoreFocus = null;
   }
 
   async _load() {

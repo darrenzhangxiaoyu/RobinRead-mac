@@ -21,6 +21,7 @@ import {
   SEASON_PACKS,
   tokensFromTraditionalColor, pushRecent, recentThemes,
 } from './theme-engine.js';
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; // R55 浮层秩序
 
 const MODE_LIGHT = { l1: 0.5, l2: 0.56, bg: 0.952, tx: 0.16, sb: 0.929 };
 const MODE_DARK = { l1: 0.74, l2: 0.7, bg: 0.155, tx: 0.93, sb: 0.185 };
@@ -454,13 +455,21 @@ export class ThemeDesigner {
     overlay.appendChild(this.modal);
     document.body.appendChild(overlay);
     this.overlay = overlay;
-    this._esc = (event) => { if (event.key === 'Escape') this.dismiss(); };
+    this._esc = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（设计器在设置之上，Esc 先关设计器）
+      event.preventDefault();
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'theme-designer', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
     this._render();
   }
 
   dismiss() {
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.wheel?.destroy(); // B12：关闭设计器时摘除色轮的 window 监听器
     this.overlay?.remove();
     this.overlay = null;

@@ -14,6 +14,7 @@
  */
 import { t, tf } from '../i18n.js';
 import { confirmBox } from '../ui-prompt.js';
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; // R55 浮层秩序
 
 const DURATIONS = [15, 25, 45];
 
@@ -68,8 +69,14 @@ export class FocusSessionPanel {
     overlay.appendChild(panel);
     document.body.appendChild(overlay);
     this._overlay = overlay;
-    this._esc = (e) => { if (e.key === 'Escape') this.requestClose(); };
+    this._esc = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      e.preventDefault();
+      this.requestClose();
+    };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'focus-panel', isAlive: () => Boolean(this._overlay) }); // R55 浮层栈挂账
     this._renderIdle();
   }
 
@@ -90,6 +97,8 @@ export class FocusSessionPanel {
   close() {
     this._stopTimer();
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this._overlay?.remove();
     this._overlay = null;
   }

@@ -10,6 +10,7 @@
 import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer, captureFocusReturn } from './overlay-stack.js'; // R55 浮层秩序
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -67,9 +68,13 @@ export class WeeklyView {
 
     this._esc = (event) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      event.preventDefault();
       this.dismiss();
     };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'weekly-overlay', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
+    this._restoreFocus = captureFocusReturn(); // R55：关闭时焦点归还打开者
     this._unsubscribe = window.robin.onWeeklyChanged?.(() => {
       if (this.generating) {
         this.generating = null;
@@ -85,9 +90,13 @@ export class WeeklyView {
   dismiss() {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     if (this._unsubscribe) { try { this._unsubscribe(); } catch (_) { /* 已退订 */ } this._unsubscribe = null; }
     this.overlay.remove();
     this.overlay = null;
+    this._restoreFocus?.(); // R55：浮层退场后焦点归还打开者
+    this._restoreFocus = null;
     if (window.__robinWeeklyView === this) window.__robinWeeklyView = null;
   }
 

@@ -18,6 +18,7 @@ import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { renderMarkdown } from '../markdown.js';
 import { emptyArtSVG } from './empty-art.js';
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; // R55 浮层秩序
 
 function timeAgo(iso) {
   if (!iso) return '';
@@ -58,13 +59,16 @@ export class AihotView {
     document.body.appendChild(overlay);
     this.overlay = overlay;
     this._esc = (e) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
       if (this._deepReading) { this._deepReading = false; this._renderContent(); return; }
+      e.preventDefault();
       this.dismiss();
     };
     this._navKeys = (e) => this._handleNavKeys(e);
     document.addEventListener('keydown', this._esc);
     document.addEventListener('keydown', this._navKeys);
+    this._escLayer = registerEscapeLayer({ id: 'aihot-overlay', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
     this._render();
     Promise.all([window.robin.aihotSnapshot?.() || {}, this._load()]).catch(() => null);
     // 自动轮询：10 分钟静默刷新当前板块（不重建 DOM，只在数据变化时重渲染）
@@ -74,6 +78,8 @@ export class AihotView {
   dismiss() {
     document.removeEventListener('keydown', this._esc);
     document.removeEventListener('keydown', this._navKeys);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     if (this._pollTimer) clearInterval(this._pollTimer);
     this._pollTimer = null;
     this.overlay?.remove();

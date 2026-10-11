@@ -13,6 +13,7 @@
  */
 import { icon } from '../icons.js';
 import { t } from '../i18n.js';
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; // R55 浮层秩序
 
 const RECENT_KEY = 'robinread.palette.recent';
 /** 图标缺省回退（U17 图标行：每条命令都有图标，无注册图标时用通用形）。 */
@@ -107,8 +108,14 @@ export class CommandPalette {
       else if (event.key === 'Enter') { event.preventDefault(); this._run(this.filtered[this.activeIndex]); }
       else if (event.key === 'Escape') { event.preventDefault(); this.dismiss(); }
     });
-    this._escHandler = (event) => { if (event.key === 'Escape') this.dismiss(); };
+    this._escHandler = (event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      event.preventDefault();
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._escHandler);
+    this._escLayer = registerEscapeLayer({ id: 'command-palette', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
 
     overlay.appendChild(palette);
     document.body.appendChild(overlay);
@@ -149,6 +156,8 @@ export class CommandPalette {
   dismiss() {
     if (!this.overlay) return;
     document.removeEventListener('keydown', this._escHandler);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay.remove();
     this.overlay = null;
     this.previewHost = null;

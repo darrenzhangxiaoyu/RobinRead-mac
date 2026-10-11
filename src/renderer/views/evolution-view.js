@@ -7,6 +7,7 @@ import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { staggerEmptyHTML } from './empty-art.js'; // U31 空态二期：插画空态统一壳
 import { focusArrowSiblings } from './kbd-nav.js'; /* U18：模态侧栏导航 ↑↓ 补齐 */
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer } from './overlay-stack.js'; /* R55 浮层秩序 */
 
 function timeAgo(seconds) {
   if (!seconds) return '—';
@@ -33,14 +34,22 @@ export class EvolutionView {
     overlay.appendChild(this.modal);
     document.body.appendChild(overlay);
     this.overlay = overlay;
-    this._esc = (e) => { if (e.key === 'Escape') this.dismiss(); };
+    this._esc = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
+      e.preventDefault();
+      this.dismiss();
+    };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'evolution-overlay', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
     this._render();
     this._load();
   }
 
   dismiss() {
     document.removeEventListener('keydown', this._esc);
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay?.remove();
     this.overlay = null;
   }

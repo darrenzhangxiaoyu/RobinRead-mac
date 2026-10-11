@@ -14,6 +14,7 @@ import { t, tf } from '../i18n.js';
 import { icon } from '../icons.js';
 import { emptyArtSVG } from './empty-art.js';
 import { progressElement } from './toast.js'; // U32 统一进度语言：双形态令牌组件
+import { registerEscapeLayer, isTopEscapeLayer, releaseEscapeLayer, captureFocusReturn } from './overlay-stack.js'; // R55 浮层秩序
 
 const PAGE_SIZE = 100;
 
@@ -159,6 +160,7 @@ export class MediaView {
     // 搜索框有词时先清词不关窗（批 A 审查 P2-3：同设置弹窗「Esc 先清搜索、再按才关」约定）
     this._esc = (event) => {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!isTopEscapeLayer(this._escLayer)) return; // R55：顶层先关（一次 Esc 只关一层）
       if (document.querySelector('.nj-transcript-overlay')) return;
       if (this._searchInput && document.activeElement === this._searchInput && this._searchInput.value) {
         event.preventDefault();
@@ -168,9 +170,12 @@ export class MediaView {
         this._load();
         return;
       }
+      event.preventDefault();
       this.dismiss();
     };
     document.addEventListener('keydown', this._esc);
+    this._escLayer = registerEscapeLayer({ id: 'media-overlay', isAlive: () => Boolean(this.overlay) }); // R55 浮层栈挂账
+    this._restoreFocus = captureFocusReturn(); // R55：关闭时焦点归还打开者
     // 下载进度推送（主进程 → 渲染层）：单行补丁 + 终态轻刷新
     this._unsubscribeProgress = window.robin.onMediaDownloadProgress((p) => {
       if (!p || !p.itemID) return;
@@ -205,8 +210,12 @@ export class MediaView {
       this._unsubscribeTranscribe();
       this._unsubscribeTranscribe = null;
     }
+    releaseEscapeLayer(this._escLayer);
+    this._escLayer = null;
     this.overlay.remove();
     this.overlay = null;
+    this._restoreFocus?.(); // R55：浮层退场后焦点归还打开者
+    this._restoreFocus = null;
     if (window.__robinMediaView === this) window.__robinMediaView = null;
   }
 
