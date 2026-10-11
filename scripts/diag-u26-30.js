@@ -644,7 +644,7 @@ app.whenReady().then(async () => {
         label({ doc: b.docOverflow, split: b.splitOverflow, sidebar: b.sidebarOverflow, list: b.listOverflow, reader: b.readerOverflow }, `C U26 @${pct} 五容器零横向溢出（文档/三栏/两滚动区）`));
       ok(b.colMinOK && b.colWidths.every((w) => w > 0), label(b.colWidths, `C U26 @${pct} 三栏不塌（列宽均 ≥100 CSS px）`));
       ok(b.rowOverflow === 0 && b.rowMin >= 30 && b.rowSpread <= 24, label({ overflow: b.rowOverflow, min: b.rowMin, spread: b.rowSpread, heights: b.rowHeights }, `C U26 @${pct} 列表行高一致且行内零溢出`));
-      ok(b.navCols === 6 && b.navRowsOK, label({ cols: b.navCols, rowsOK: b.navRowsOK }, `C U26 @${pct} 侧栏底栏 6×2 不折行`));
+      ok(b.navCols === 7 && b.navRowsOK, label({ cols: b.navCols, rowsOK: b.navRowsOK }, `C U26 @${pct} 侧栏底栏 7 键单行不折行（实机反馈收敛）`));
       ok(b.artFits, label(b.artFits, `C U26 @${pct} 阅读器版心不溢（article 宽 ≤ 滚动区宽）`));
     }
     ok(ui.u26Settings.overflow <= 1, label(ui.u26Settings.overflow, 'C U26 @150% 设置分区零横向溢出'));

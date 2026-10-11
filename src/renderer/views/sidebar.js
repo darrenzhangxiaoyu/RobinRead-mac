@@ -508,6 +508,9 @@ export class SidebarView {
   _buildFooter() {
     this.footerEl.innerHTML = '';
 
+    // 实机反馈：12 键 6×2 双行堆在侧栏脚下太占空间。收敛为两行——
+    // 第一行常驻 7 键（账号/知识/花园/胶囊/重访/设置/更多），低频 6 键收进
+    // 「更多」第二行默认收起；徽标三件套（花园/胶囊/重访）保持外显不吃掉主动提醒。
     const nav = document.createElement('div');
     nav.className = 'footer-nav';
 
@@ -518,41 +521,13 @@ export class SidebarView {
     nav.appendChild(this.accountBtn);
     this.updateAccount(null);
 
-    const storeBtn = document.createElement('button');
-    storeBtn.className = 'footer-nav-btn';
-    storeBtn.dataset.navGroup = 'content'; // U33 底栏分组：内容（账号/商店/热点）
-    storeBtn.dataset.navSep = '1';
-    storeBtn.title = t('浏览订阅商店');
-    storeBtn.innerHTML = `${icon('store')}<span class="nav-label"></span>`;
-    storeBtn.querySelector('.nav-label').textContent = t('商店');
-    storeBtn.addEventListener('click', () => this.handlers.onOpenStore());
-    nav.appendChild(storeBtn);
-
-    const aihotBtn = document.createElement('button');
-    aihotBtn.className = 'footer-nav-btn';
-    aihotBtn.title = t('AI 热点榜');
-    aihotBtn.innerHTML = `${icon('flame')}<span class="nav-label"></span>`;
-    aihotBtn.querySelector('.nav-label').textContent = t('热点');
-    aihotBtn.addEventListener('click', () => this.handlers.onOpenAihot());
-    nav.appendChild(aihotBtn);
-
     const knowledgeBtn = document.createElement('button');
     knowledgeBtn.className = 'footer-nav-btn';
-    knowledgeBtn.dataset.navGroup = 'knowledge'; // U33 底栏分组：知识（知识/进化/花园/胶囊/周刊/课程/存档馆/重访）
-    knowledgeBtn.dataset.navSep = '1';
     knowledgeBtn.title = t('知识中心 (Ctrl+K)');
     knowledgeBtn.innerHTML = `${icon('spark')}<span class="nav-label"></span>`;
     knowledgeBtn.querySelector('.nav-label').textContent = t('知识');
     knowledgeBtn.addEventListener('click', () => this.handlers.onOpenKnowledge());
     nav.appendChild(knowledgeBtn);
-
-    const evoBtn = document.createElement('button');
-    evoBtn.className = 'footer-nav-btn';
-    evoBtn.title = t('自进化面板');
-    evoBtn.innerHTML = `${icon('heart')}<span class="nav-label"></span>`;
-    evoBtn.querySelector('.nav-label').textContent = t('进化');
-    evoBtn.addEventListener('click', () => this.handlers.onOpenEvolution());
-    nav.appendChild(evoBtn);
 
     // 知识花园徽章（F23）：小花园 + 成长阶段点，点击开花园浮层
     const gardenBtn = document.createElement('button');
@@ -576,34 +551,6 @@ export class SidebarView {
     this.capsuleBtn = capsuleBtn;
     this._refreshCapsuleBadge();
 
-    // 知更周刊入口（F29）：每周一自动把上周阅读编成一期（与书架/目标同级的常用档）
-    const weeklyBtn = document.createElement('button');
-    weeklyBtn.className = 'footer-nav-btn footer-weekly-btn';
-    weeklyBtn.title = t('知更周刊');
-    weeklyBtn.innerHTML = `${icon('newspaper')}<span class="nav-label"></span>`;
-    weeklyBtn.querySelector('.nav-label').textContent = t('周刊');
-    weeklyBtn.addEventListener('click', () => this.handlers.onOpenWeekly?.());
-    nav.appendChild(weeklyBtn);
-
-    // 自学课程入口（F30）：学习目标 → 7/14 天课程，每日「今日课」推进
-    const courseBtn = document.createElement('button');
-    courseBtn.className = 'footer-nav-btn footer-course-btn';
-    courseBtn.title = t('自学课程');
-    courseBtn.innerHTML = `${icon('bookOpen')}<span class="nav-label"></span>`;
-    courseBtn.querySelector('.nav-label').textContent = t('课程');
-    courseBtn.addEventListener('click', () => this.handlers.onOpenCourse?.());
-    nav.appendChild(courseBtn);
-
-    // 网页存档馆入口（F34）：重要文章 + 追更快照的永久本地档案馆（MHTML 可导）
-    const archiveBtn = document.createElement('button');
-    archiveBtn.className = 'footer-nav-btn footer-archive-btn';
-    archiveBtn.dataset.role = 'archive-hall';
-    archiveBtn.title = t('网页存档馆');
-    archiveBtn.innerHTML = `${icon('docText')}<span class="nav-label"></span>`;
-    archiveBtn.querySelector('.nav-label').textContent = t('存档馆');
-    archiveBtn.addEventListener('click', () => this.handlers.onOpenArchive?.());
-    nav.appendChild(archiveBtn);
-
     // 深读重访徽章（F37）：到期长文回顾卡温和浮出（徽章计数 + 每日一次呼吸动画）
     const revisitBtn = document.createElement('button');
     revisitBtn.className = 'footer-nav-btn footer-revisit-btn';
@@ -618,17 +565,113 @@ export class SidebarView {
 
     const settingsBtn = document.createElement('button');
     settingsBtn.className = 'footer-nav-btn';
-    settingsBtn.dataset.navGroup = 'system'; // U33 底栏分组：系统（设置）
-    settingsBtn.dataset.navSep = '1';
     settingsBtn.title = t('设置');
     settingsBtn.innerHTML = `${icon('gear')}<span class="nav-label"></span>`;
     settingsBtn.querySelector('.nav-label').textContent = t('设置');
     settingsBtn.addEventListener('click', () => this.handlers.onOpenSettings());
     nav.appendChild(settingsBtn);
 
+    // 「更多」开关：展开第二行低频入口（展开态记 localStorage，默认收起）
+    const moreBtn = document.createElement('button');
+    moreBtn.className = 'footer-nav-btn footer-more-btn';
+    moreBtn.title = t('更多');
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.setAttribute('aria-controls', 'nj-footer-more');
+    moreBtn.innerHTML = `${icon('chevronDown')}<span class="nav-label"></span>`;
+    moreBtn.querySelector('.nav-label').textContent = t('更多');
+    moreBtn.addEventListener('click', () => this._toggleMore());
+    nav.appendChild(moreBtn);
+
     this.footerEl.appendChild(nav);
+
+    // 第二行（更多，默认收起）：商店 / 热点 / 进化 / 周刊 / 课程 / 存档馆
+    const moreWrap = document.createElement('div');
+    moreWrap.className = 'footer-more-wrap';
+    moreWrap.id = 'nj-footer-more';
+    moreWrap.setAttribute('aria-hidden', 'true');
+    const moreInner = document.createElement('div');
+    moreInner.className = 'footer-more-inner';
+    const navMore = document.createElement('div');
+    navMore.className = 'footer-nav footer-nav-more';
+
+    const storeBtn = document.createElement('button');
+    storeBtn.className = 'footer-nav-btn';
+    storeBtn.dataset.navGroup = 'content';
+    storeBtn.title = t('浏览订阅商店');
+    storeBtn.innerHTML = `${icon('store')}<span class="nav-label"></span>`;
+    storeBtn.querySelector('.nav-label').textContent = t('商店');
+    storeBtn.addEventListener('click', () => this.handlers.onOpenStore());
+    navMore.appendChild(storeBtn);
+
+    const aihotBtn = document.createElement('button');
+    aihotBtn.className = 'footer-nav-btn';
+    aihotBtn.title = t('AI 热点榜');
+    aihotBtn.innerHTML = `${icon('flame')}<span class="nav-label"></span>`;
+    aihotBtn.querySelector('.nav-label').textContent = t('热点');
+    aihotBtn.addEventListener('click', () => this.handlers.onOpenAihot());
+    navMore.appendChild(aihotBtn);
+
+    const evoBtn = document.createElement('button');
+    evoBtn.className = 'footer-nav-btn';
+    evoBtn.dataset.navGroup = 'knowledge';
+    evoBtn.title = t('自进化面板');
+    evoBtn.innerHTML = `${icon('heart')}<span class="nav-label"></span>`;
+    evoBtn.querySelector('.nav-label').textContent = t('进化');
+    evoBtn.addEventListener('click', () => this.handlers.onOpenEvolution());
+    navMore.appendChild(evoBtn);
+
+    // 知更周刊入口（F29）：每周一自动把上周阅读编成一期（与书架/目标同级的常用档）
+    const weeklyBtn = document.createElement('button');
+    weeklyBtn.className = 'footer-nav-btn footer-weekly-btn';
+    weeklyBtn.title = t('知更周刊');
+    weeklyBtn.innerHTML = `${icon('newspaper')}<span class="nav-label"></span>`;
+    weeklyBtn.querySelector('.nav-label').textContent = t('周刊');
+    weeklyBtn.addEventListener('click', () => this.handlers.onOpenWeekly?.());
+    navMore.appendChild(weeklyBtn);
+
+    // 自学课程入口（F30）：学习目标 → 7/14 天课程，每日「今日课」推进
+    const courseBtn = document.createElement('button');
+    courseBtn.className = 'footer-nav-btn footer-course-btn';
+    courseBtn.title = t('自学课程');
+    courseBtn.innerHTML = `${icon('bookOpen')}<span class="nav-label"></span>`;
+    courseBtn.querySelector('.nav-label').textContent = t('课程');
+    courseBtn.addEventListener('click', () => this.handlers.onOpenCourse?.());
+    navMore.appendChild(courseBtn);
+
+    // 网页存档馆入口（F34）：重要文章 + 追更快照的永久本地档案馆（MHTML 可导）
+    const archiveBtn = document.createElement('button');
+    archiveBtn.className = 'footer-nav-btn footer-archive-btn';
+    archiveBtn.dataset.role = 'archive-hall';
+    archiveBtn.title = t('网页存档馆');
+    archiveBtn.innerHTML = `${icon('docText')}<span class="nav-label"></span>`;
+    archiveBtn.querySelector('.nav-label').textContent = t('存档馆');
+    archiveBtn.addEventListener('click', () => this.handlers.onOpenArchive?.());
+    navMore.appendChild(archiveBtn);
+
+    moreInner.appendChild(navMore);
+    moreWrap.appendChild(moreInner);
+    this.footerEl.appendChild(moreWrap);
+
+    // 展开态恢复（localStorage 记账；构建期直接置类不触发过渡动画）
+    let moreOpen = false;
+    try { moreOpen = localStorage.getItem('robinread.footerMore') === '1'; } catch (_) { /* 隐私模式等：默认收起 */ }
+    if (moreOpen) this._toggleMore();
+
     this.updateBadgeHost = document.createElement('span');
     this.footerEl.appendChild(this.updateBadgeHost);
+  }
+
+  /** 「更多」第二行开合：类切换 + aria 同步 + localStorage 记账。 */
+  _toggleMore(force) {
+    const wrap = this.footerEl.querySelector('.footer-more-wrap');
+    const btn = this.footerEl.querySelector('.footer-more-btn');
+    if (!wrap || !btn) return;
+    const open = typeof force === 'boolean' ? force : !wrap.classList.contains('open');
+    wrap.classList.toggle('open', open);
+    wrap.setAttribute('aria-hidden', String(!open));
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('open', open);
+    try { localStorage.setItem('robinread.footerMore', open ? '1' : '0'); } catch (_) { /* 记不住就默认收起 */ }
   }
 
   /**

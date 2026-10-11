@@ -190,12 +190,23 @@
 }
 .fs-topic-banner-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
 
-/* ── 侧栏底栏（账号/商店/热点/知识/进化/花园/胶囊/周刊/课程/设置 十入口，5×2 网格）──
-   批 F 审查 P2：6 列 × 10 键折成参差双行且高度翻倍，改 5 列两整行 */
+/* ── 侧栏底栏（实机反馈收敛：第一行常驻 7 键 账号/知识/花园/胶囊/重访/设置/更多，
+   低频 6 键 商店/热点/进化/周刊/课程/存档馆 收进「更多」第二行默认收起——
+   0fr/1fr 高度动画，展开态记 localStorage；此前 12 键 6×2 双行常驻太占空间）── */
 .footer-nav {
-  display: grid; grid-template-columns: repeat(6, 1fr); /* 批 H 审查 P2：F37 重访键入列后 12 键 = 6×2 两整行 */
-  gap: 2px; flex: 1; min-width: 0;
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 2px; min-width: 0;
 }
+.footer-nav-more { grid-template-columns: repeat(6, 1fr); margin-top: 2px; }
+.footer-more-wrap {
+  display: grid; grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-mid) var(--ease-out);
+}
+.footer-more-wrap.open { grid-template-rows: 1fr; }
+.footer-more-inner { overflow: hidden; min-height: 0; }
+.footer-more-wrap:not(.open) .footer-nav-more { visibility: hidden; }
+.footer-more-btn svg { transition: transform var(--dur-fast) var(--ease-out); }
+.footer-more-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
 .footer-nav-btn {
   appearance: none; border: none; background: transparent;
   display: flex; align-items: center; justify-content: center;

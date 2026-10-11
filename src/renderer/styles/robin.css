@@ -526,7 +526,7 @@ body.zen #split > .splitter { display: none; }
 .sidebar-footer {
   flex: 0 0 auto;
   border-top: 1px solid var(--separator);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; flex-direction: column; align-items: stretch; gap: 0; /* 实机反馈收敛：底栏两行堆叠（nav + 「更多」展开行），不再横排 */
   padding: 8px 16px;
   background: var(--sidebar-background);
   position: relative; z-index: 2;
@@ -8431,20 +8431,8 @@ html.theme-transition * {
   min-width: var(--space-8);
 }
 
-/* ── U33 侧栏 2.0：底栏 12 键 6×2 分组分隔线（组首键挂 data-nav-sep）── */
-.footer-nav-btn[data-nav-sep] {
-  position: relative;
-}
-.footer-nav-btn[data-nav-sep]::before {
-  content: '';
-  position: absolute;
-  left: calc(-1 * var(--space-1) / 2);
-  top: 20%;
-  width: 1px;
-  height: 60%;
-  background: var(--separator);
-  pointer-events: none;
-}
+/* ── U33 底栏分组分隔线已随实机反馈收敛退役：底栏改一行 7 键常驻 +「更多」展开行
+   （商店/热点/进化/周刊/课程/存档馆），data-nav-sep 不再挂载；展开动画见 store.css .footer-more-wrap ── */
 /* 拖拽悬停待展开的目标文件夹：disclosure 旋开提示（展开由 JS 计时器完成） */
 .sidebar-folder.drag-pending .sidebar-disclosure {
   transform: rotate(90deg);

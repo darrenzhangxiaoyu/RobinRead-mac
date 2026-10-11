@@ -189,7 +189,9 @@ app.whenReady().then(async () => {
   await shot('challenge.jpg');
   await esc();
 
-  // ── 4. 知更周刊 ──
+  // ── 4. 知更周刊（「更多」第二行，先保开展开）──
+  await run(`(() => { const w = document.querySelector('.footer-more-wrap'); if (w && !w.classList.contains('open')) document.querySelector('.footer-more-btn')?.click(); return true; })()`);
+  await sleep(500);
   await clickFirst('.footer-weekly-btn');
   const wkOpen = await waitSel('.nj-weekly-masthead');
   await sleep(1400);

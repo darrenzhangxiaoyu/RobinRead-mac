@@ -320,8 +320,10 @@ async function courseUIProbe(win, course) {
     };
     const out = { booted: !!window.robin };
     try {
-      // 侧栏「课程」入口 → 浮层（活动课程展开为课程卡 + 今日课面板）
+      // 侧栏「课程」入口 → 浮层（活动课程展开为课程卡 + 今日课面板；课程在「更多」第二行，先保开展开）
       const btn = await waitFor(() => document.querySelector('.footer-course-btn'));
+      const moreWrap = document.querySelector('.footer-more-wrap');
+      if (moreWrap && !moreWrap.classList.contains('open')) document.querySelector('.footer-more-btn')?.click();
       out.btnFound = !!btn;
       btn.click();
       out.opened = await waitFor(() => document.querySelector('.nj-course-modal')) != null;

@@ -322,8 +322,10 @@ async function weeklyUIProbe(win) {
     };
     const out = { booted: !!window.robin };
     try {
-      // 侧栏「周刊」入口 → 浮层
+      // 侧栏「周刊」入口 → 浮层（实机反馈收敛：周刊在「更多」第二行，先保开展开）
       const btn = await waitFor(() => document.querySelector('.footer-weekly-btn'));
+      const moreWrap = document.querySelector('.footer-more-wrap');
+      if (moreWrap && !moreWrap.classList.contains('open')) document.querySelector('.footer-more-btn')?.click();
       out.btnFound = !!btn;
       btn.click();
       const modal = await waitFor(() => document.querySelector('.nj-weekly-modal'));

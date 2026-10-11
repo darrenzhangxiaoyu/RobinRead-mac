@@ -279,6 +279,9 @@ async function archiveUIProbe(store, ids, exportPath) {
       for (;;) { let v = null; try { v = await fn(); } catch (_) {} if (v) return v; if (Date.now() - t0 > ms) return null; await sleep(150); }
     };
     const out = {};
+    // 存档馆在「更多」第二行（实机反馈收敛），先保开展开再点入口
+    const moreWrap = document.querySelector('.footer-more-wrap');
+    if (moreWrap && !moreWrap.classList.contains('open')) document.querySelector('.footer-more-btn')?.click();
     const btn = document.querySelector('.footer-archive-btn') || [...document.querySelectorAll('.footer-nav-btn')].find((b) => (b.title || '').includes('存档'));
     out.entryFound = !!btn;
     if (btn) btn.click();

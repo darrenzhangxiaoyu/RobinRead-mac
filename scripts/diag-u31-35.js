@@ -138,10 +138,12 @@ function phaseSource() {
     'A U33 折叠文件夹拖拽悬停自动展开（450ms 计时）在册');
   ok(/drag-pending/.test(sidebarSrc) && /\.sidebar-folder\.drag-pending \.sidebar-disclosure/.test(robin),
     'A U33 drag-pending 待展开提示（JS 类 + CSS disclosure 旋开）在册');
-  ok(/dataset\.navSep = '1'/.test(sidebarSrc) && (sidebarSrc.match(/dataset\.navGroup = '/g) || []).length >= 3,
-    'A U33 底栏 12 键分组锚（3 组首键 nav-sep）在册');
-  ok(/\.footer-nav-btn\[data-nav-sep\]::before \{/.test(robin) && /background: var\(--separator\)/.test(robin),
-    'A U33 底栏分组分隔线 CSS（::before 发丝线）在册');
+  ok(/_toggleMore/.test(sidebarSrc) && /footer-more-wrap/.test(sidebarSrc) && /robinread\.footerMore/.test(sidebarSrc)
+    && /aria-expanded/.test(sidebarSrc) && /aria-controls/.test(sidebarSrc),
+    'A U33 实机反馈收敛：底栏「更多」开合（_toggleMore + wrap + aria + localStorage 记账）在册');
+  ok(/\.footer-more-wrap \{/.test(read('src/renderer/styles/store.css')) && /grid-template-rows: 0fr/.test(read('src/renderer/styles/store.css'))
+    && /visibility: hidden/.test(read('src/renderer/styles/store.css')),
+    'A U33「更多」展开行 CSS（0fr/1fr 高度动画 + 收起态 visibility 退 Tab 序）在册');
   ok(/robinread\.collapsedFolders/.test(sidebarSrc) && /robinread\.collapsedAccounts/.test(sidebarSrc),
     'A U33 折叠状态 localStorage 持久化（账户/文件夹）在册');
 
@@ -336,11 +338,24 @@ async function uiProbe(store, win, seeded) {
     out.badgeNo999 = out.badgeTexts.every((t) => !t.includes('999'));
     out.ninePlus = out.badgeTexts.includes('9+');
     out.zeroHidden = [...document.querySelectorAll('.sidebar-row .sidebar-count')].filter((el) => !el.textContent).every((el) => getComputedStyle(el).visibility === 'hidden');
-    const seps = [...document.querySelectorAll('.footer-nav-btn[data-nav-sep]')];
-    out.sepCount = seps.length;
-    out.sepGroups = seps.map((b) => b.dataset.navGroup).join(',');
-    out.sepLine = seps.length ? getComputedStyle(seps[0], '::before').width : '';
-    out.navBtns = document.querySelectorAll('.footer-nav-btn').length;
+    // 实机反馈收敛：底栏一行 7 键常驻 +「更多」展开行 6 键（默认收起，开合 + 记账实测）
+    out.rowBtns = document.querySelectorAll('.footer-nav:not(.footer-nav-more) > .footer-nav-btn').length;
+    const moreBtn = document.querySelector('.footer-more-btn');
+    out.moreBtn = Boolean(moreBtn);
+    const wrap0 = document.querySelector('.footer-more-wrap');
+    out.moreClosedDefault = Boolean(wrap0) && !wrap0.classList.contains('open')
+      && getComputedStyle(document.querySelector('.footer-nav-more')).visibility === 'hidden'
+      && moreBtn?.getAttribute('aria-expanded') === 'false';
+    moreBtn?.click();
+    await new Promise((r) => setTimeout(r, 460));
+    out.moreOpened = wrap0.classList.contains('open')
+      && getComputedStyle(document.querySelector('.footer-nav-more')).visibility === 'visible'
+      && moreBtn?.getAttribute('aria-expanded') === 'true';
+    out.moreBtns = document.querySelectorAll('.footer-nav-more > .footer-nav-btn').length;
+    out.persistedOpen = localStorage.getItem('robinread.footerMore') === '1';
+    moreBtn?.click();
+    await new Promise((r) => setTimeout(r, 460));
+    out.toggledBack = !wrap0.classList.contains('open') && localStorage.getItem('robinread.footerMore') === '0';
     return out;
   })()`);
   const u33b = await js('U33 拖拽自动展开块', `(async () => {
@@ -636,10 +651,11 @@ app.whenReady().then(async () => {
     ok(ui.u33a.badgeNo999, label(ui.u33a.badgeTexts.slice(0, 6), 'C U33 全库徽标零 999 残留'));
     ok(ui.u33a.ninePlus, label(ui.u33a.badgeTexts, 'C U33 乙源 12 篇未读 → 徽标显示 9+（DOM 实证）'));
     ok(ui.u33a.zeroHidden, label(ui.u33a.zeroHidden, 'C U33 零值徽标统一隐藏（visibility）'));
-    ok(ui.u33a.sepCount === 3 && ui.u33a.sepGroups === 'content,knowledge,system',
-      label({ count: ui.u33a.sepCount, groups: ui.u33a.sepGroups }, 'C U33 底栏 12 键三分组（内容/知识/系统）组首分隔锚'));
-    ok(ui.u33a.sepLine === '1px', label(ui.u33a.sepLine, 'C U33 分组分隔线实渲染（::before 发丝线 1px）'));
-    ok(ui.u33a.navBtns === 12, label(ui.u33a.navBtns, 'C U33 底栏 12 键 6×2 布局键数不变'));
+    ok(ui.u33a.rowBtns === 7 && ui.u33a.moreBtn && ui.u33a.moreClosedDefault,
+      label({ row: ui.u33a.rowBtns, more: ui.u33a.moreBtn }, 'C U33 实机反馈收敛：底栏一行 7 键 +「更多」默认收起（visibility/aria 同步）'));
+    ok(ui.u33a.moreOpened && ui.u33a.moreBtns === 6 && ui.u33a.persistedOpen,
+      label({ btns: ui.u33a.moreBtns, persisted: ui.u33a.persistedOpen }, 'C U33「更多」展开 6 键可见（aria-expanded=true）+ localStorage 记账'));
+    ok(ui.u33a.toggledBack, label(ui.u33a.toggledBack, 'C U33「更多」再点收起 + 记账回 0'));
     ok(ui.u33b.folderFound && ui.u33b.collapsedBefore && ui.u33b.pendingMarked && ui.u33b.autoExpanded && ui.u33b.pendingCleared,
       label({ found: ui.u33b.folderFound, collapsed: ui.u33b.collapsedBefore, pending: ui.u33b.pendingMarked, expanded: ui.u33b.autoExpanded, cleared: ui.u33b.pendingCleared },
         'C U33 折叠夹拖拽悬停：drag-pending 提示 + 450ms 自动展开 + 展后清标记'));
