@@ -28,7 +28,8 @@ app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'robinread-u36-40-
 setTimeout(() => { console.error('WATCHDOG'); app.exit(3); }, 150 * 1000).unref();
 
 const ROOT = path.join(__dirname, '..');
-const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+// 归一 CRLF：本仓 EOL 混合（68b172c 同款口径）——静态锚点断言对行尾不敏感
+const read = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const waitFor = async (fn, ms = 15000) => {
   const t0 = Date.now();

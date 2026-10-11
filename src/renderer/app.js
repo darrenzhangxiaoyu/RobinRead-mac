@@ -764,7 +764,10 @@ function findFeed(feedID) {
 // MARK: - 禅模式 / 侧栏折叠
 
 let zenRitualTimer = null;
+let zenFocusReturn = null; // R68-③ 进入禅模式前的焦点（退出时归还）
 function toggleZenMode() {
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (!state.zenMode) zenFocusReturn = active; // 进入：记住来处
   state.zenMode = !state.zenMode;
   document.body.classList.toggle('zen', state.zenMode);
   // U39 全屏阅读仪式感：进入/退出的呼吸过渡编舞（遮罩→标题→正文三级 stagger；
@@ -784,7 +787,19 @@ function toggleZenMode() {
   if (state.zenMode) showToast(t('ESC 退出，按下 Ctrl+/ 查看快捷键'));
   updateToolbarState();
   syncToolbarZones();
-  requestAnimationFrame(() => views.reader?.refreshScrollMetrics());
+  requestAnimationFrame(() => {
+    // R68-③ 焦点守卫：原焦点随侧栏/列表 display:none 蒸发时，进入后落到阅读区；
+    // 退出时把焦点归还给进入前的位置（键盘用户 Esc 退出后从原处继续，不被甩回 body）。
+    const evicted = active && (!active.isConnected || active.offsetParent === null);
+    if (state.zenMode && evicted) document.getElementById('reader')?.focus();
+    if (!state.zenMode) {
+      if (zenFocusReturn?.isConnected && (document.activeElement === document.body || !document.activeElement)) {
+        zenFocusReturn.focus();
+      }
+      zenFocusReturn = null; // 归还消费后清账（进入态保留快照，退出时仍需归还）
+    }
+    views.reader?.refreshScrollMetrics();
+  });
 }
 
 // ── 版式主题预设包（方向 3）：刊物级一键排版 ──
@@ -2061,11 +2076,19 @@ function bindSplitters() {
   setupSplitter('splitter-list', 'list', 280, 560);
 }
 
+/** R68-② 出厂宽度（与 :root CSS 回退、applyColumnWidths 默认值三处同一口径）。 */
+const SIDEBAR_DEFAULT_WIDTH = 240;
+const LIST_DEFAULT_WIDTH = 340;
+
 function setupSplitter(splitterID, columnID, min, max) {
   const splitter = document.getElementById(splitterID);
   const column = document.getElementById(columnID);
   let startX = 0;
   let startWidth = 0;
+
+  // 可发现性：把手可拖拽/可双击，悬停与键盘用户都该知道（原 sidebar 把手 title 为空串）
+  splitter.title = t('拖拽调整栏宽，双击恢复默认');
+  splitter.setAttribute('aria-label', splitter.title); // R67 纯图标/无文字控件双补
 
   splitter.addEventListener('mousedown', (event) => {
     startX = event.clientX;
@@ -2085,17 +2108,33 @@ function setupSplitter(splitterID, columnID, min, max) {
       splitter.classList.remove('active');
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      const sidebarWidth = document.getElementById('sidebar').getBoundingClientRect().width;
-      const listWidth = document.getElementById('list').getBoundingClientRect().width;
-      document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
-      document.documentElement.style.setProperty('--list-width', `${listWidth}px`);
-      window.robin.setColumnWidths({ sidebarWidth, listWidth });
-      state.snapshot.preferences.sidebarWidth = sidebarWidth;
-      state.snapshot.preferences.listWidth = listWidth;
+      commitColumnWidths();
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   });
+
+  // R68-② 双击重置：把手双击回到出厂宽（清行内样式 + 变量归默认 + 持久化），与拖拽同一持久化通路
+  splitter.addEventListener('dblclick', () => {
+    column.style.width = '';
+    column.style.minWidth = '';
+    column.style.maxWidth = '';
+    document.documentElement.style.setProperty('--sidebar-width', `${SIDEBAR_DEFAULT_WIDTH}px`);
+    document.documentElement.style.setProperty('--list-width', `${LIST_DEFAULT_WIDTH}px`);
+    syncToolbarZones();
+    commitColumnWidths();
+  });
+}
+
+/** 拖拽结束/双击重置共用的持久化收口：读两列实际渲染宽 → 变量 + 偏好落库。 */
+function commitColumnWidths() {
+  const sidebarWidth = document.getElementById('sidebar').getBoundingClientRect().width;
+  const listWidth = document.getElementById('list').getBoundingClientRect().width;
+  document.documentElement.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+  document.documentElement.style.setProperty('--list-width', `${listWidth}px`);
+  window.robin.setColumnWidths({ sidebarWidth, listWidth });
+  state.snapshot.preferences.sidebarWidth = sidebarWidth;
+  state.snapshot.preferences.listWidth = listWidth;
 }
 
 // MARK: - 右键菜单
