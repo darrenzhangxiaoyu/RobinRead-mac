@@ -146,3 +146,23 @@
 - **R65-2 输入框 focus 环统一**：audit 发现 U18 三档焦点环家族已建立——input/textarea/select :focus-visible 走 --focus-ring 光环叠加 .control 系 border-color accent，搜索框家族 ：focus-within 变色，全库表单字段均在家族内——换等价题「字段级错误态补位」：.control.invalid 红边（--danger 语义令牌）+ 双端口输入落库被拒标红并 title 悬停原因、成功即摘（对勾管成功确认、.invalid 管失败反馈，表单反馈两端闭环）。
 - **R68-1 极窄窗优雅降级（<900px 侧栏）**：不成立——主窗 minWidth 980（ipc.js）使 <900px 主窗视口不可达，980-1020 窄带由 U26 @media 视口钳制家族覆盖（min(240px,24vw) 等三列），侧栏另有手动折叠+工具栏按钮迁移；真实存在的极窄场景是独立阅读窗（下限 480px），其标题省略号/阅读列 min-width:0/版心 min(40px,5vw) 均已成立——换等价题「极窄窗护栏证据链探针固化」，顺带把分栏把手（原空串 title）补上可发现性提示。
 - **R71-1 标点全角审计二期（toast/空态/按钮半角逗号句号清零）**：audit 发现句读级半角标点已清零（t()/tf() 字面量程序化扫描 CJK 邻接半角逗号句号问叹分冒=0）——唯一残留两类均属合法字面量：①3 处输入格式示例（「逗号分隔，例如：OpenAI, 芯片, Rust」类，placeholder 教的就是应用 join(', ') 解析口径的半角逗号，改全角会教错格式）②2 处文件扩展名点（.robin/.ruser，技术 token 非句读）——换等价题「句读口径探针固化」：白名单冻结 + 白名单外残留恒零断言，防新文案回流半角句读。
+
+## 审查与收口记录（四批审查全部完成）
+
+- **批 1 审查**（R54-R58）：0 BLOCKER / 3 P1 / 2 P2 / 6 P3 → 3 P1+P2-1 全修（7237ef4+4332118）：周刊条目悬停全文死代码（title 两连写互相覆盖，落点改截断 span）、命令面板退场 140ms 僵尸窗（overlay 先摘+_run 存活守卫）、ui-prompt 确认框挂账浮层栈+polite Esc（设置内确认框不再被一次 Esc 连带全关）、aihot 消费 Esc 即 preventDefault；P2-2 复核为误报（entry-source title 在 list.js:602 既有）。
+- **批 2 审查**（R59-R63）：0 B / 2 P1 / 1 P2 / 4 P3 → 全修（8645996+18f3497）：渐进渲染延迟回补击穿 resetScroll——锚定基线带渲染代际快照，scrollTop() 干预推进代际过期让位；破坏性确认键 14% 淡彩底实测对比度浅 3.33/暗 3.99 双破 AA——改 danger 实底+on-fill 墨（浅 4.89/暗 5.46），--danger 亮档深化一档离 4.50 刀刃；primary 实底 spinner 换墨环。u26-30 U28 失败经静态二分判定为环境 flake（拖拽链路零改动）。
+- **批 3 审查**（R64-R68）：0 B / 0 P1 / 2 P2 / 19 P3，verdict=PASS with follow-ups → 遗留随批 4 收口（a42d7b5）：toast 双源暂停持有计数制（holdCoordinator 挂 entry，hover×focus 双扣减修复）、列表代际通道扩面（用户滚轮 passive 监听+四处程序化平滑滚动 _bumpScrollGen）、cap-translate aria 随三模式同步；P3-15（i18n 键缺失）复核为误报（R71 已落表 2756 行）。
+- **批 4 审查**（R69-R73）：0 B / 1 P1 / 2 P2 / 5 P3，verdict=approve with findings → 全修（a42d7b5）：toast 同类合并保留最新意图（setAction 换闭包+带动作条 remaining 取 max——不同链接失败共用文案时旧闭包会把重试打到错误目标）；模板串 t() 六处转 tf 占位键+键表补录（实插值 key 永不命中键表，en 界面恒中文）；r71 扫描口径扩双引号+模板串违规清零断言。
+
+## P3 归档（34 条，均非阻塞）
+
+- **批 1（6）**：浮层栈僵尸层不清除（isAlive 中和）；context-menu Esc 无 isComposing 守卫；简报/单篇简报浮层无 Esc（递延清单）；captureFocusReturn 重复 present 覆盖首捕获；入场 once 监听不过滤 animationName；裸 scale 量纲无令牌族。
+- **批 2（4）**：edge-fade top:46px 与 list-top-inset 硬耦合；media aiBtn 复原读闭包旧值 tx.summary；_restoreScrollAnchor 隐含「变化在视口上方」假设；.list-empty-clear 纯探针钩子无 CSS（有意）。
+- **批 3（19）**：toast 合并无视 action 差异（→已随批 4 P1-1 收口）；进度条收口后仍豁免淘汰；容量淘汰可踢焦点所在条；行内对勾 22px 布局位移；端口失败红边挂已回退值；invalid×focus 绿晕双信号；store.css 等宽散栈未入扫；cap-translate aria（→已收口）；flame/chevron 16 单位口径光学描边记档；aihot 收藏键星形跨视图不同形；R68 把手缺 role=separator/tabindex；禅模式滚动保位为像素级非阅读锚；u26-30 U28 环境 flake 备案；r63 轮询超时静默（假红非假绿）；骨架同几何为对照实证非原位实测；spinner danger 组合潜伏；r69 探针杂志→列表方向断言宽松。
+- **批 4（5）**：互切保位对布防窗口内滚轮敏感（与代际语义自洽）；r69 反向断言宽松（→批 4 审查同记）；r63 轮询超时诊断性弱化（假红非假绿）；骨架摘除主通路实为构造器清空（成功路径 dismissBootSkeleton 冗余）；_retryImage 缓存戳参数累积（URL 卫生）。
+
+## 收官
+
+- 20 轮 60 细节全部交付（4 条换等价题+1 条并入验收，均有记档）；新增探针 20 个（r54-r73）注册进 run-all.js，门禁 118→138 项。
+- 四批审查合计：0 BLOCKER、6 P1、5 P2、34 P3——P1/P2 全部收口，P3 全量归档本节。
+- 审查收获的真 bug：简报强制落底（R54）、话题删除确认框幽灵键（R61）、toast 合并保留过期重试闭包（批 4 P1-1）+渐进回补击穿 resetScroll、确认框对比度双破 AA、命令面板退场僵尸窗、ui-prompt 击穿逐层裁决、周刊 title 死代码。
