@@ -67,14 +67,18 @@ app.whenReady().then(async () => {
       if (!card) return { __err: 'no mag-card; cards=' + document.querySelectorAll('.nj-mag-card').length };
       const cimg = card.querySelector('.mag-cover img');
       if (!cimg) return { __err: 'no cover img; html=' + card.outerHTML.slice(0, 150) };
-      const coverCV = getComputedStyle(card.querySelector('.mag-cover')).aspectRatio;
+      const coverEl = card.querySelector('.mag-cover');
+      const coverCV = coverEl ? getComputedStyle(coverEl).aspectRatio : 'none';
+      const coverRect = coverEl ? coverEl.getBoundingClientRect() : null;
+      const coverBox = coverRect ? { w: Math.round(coverRect.width), h: Math.round(coverRect.height) } : null;
+      const variantClass = (card.className.match(/nj-mag-card--(classic|split|immersive)/) || [])[1] || null;
       const settle = getComputedStyle(cimg).transitionProperty;
       return {
         sumClean: !sumText.includes('<') && !sumText.includes('href') && sumText.includes('真正的摘要'),
         titleClean: !titleText.includes('<b>'),
         titleFont: titleFont.slice(0, 40), viewBg, viewH, sortActiveNonDefault: sortActiveBg !== viewBg,
         searchMax, paperInsetBg, paperBtnBg,
-        dec: cimg.decoding, fp: cimg.fetchPriority || cimg.getAttribute('fetchpriority'), coverCV, settle: settle.includes('transform'),
+        dec: cimg.decoding, fp: cimg.fetchPriority || cimg.getAttribute('fetchpriority'), coverCV, coverBox, variantClass, settle: settle.includes('transform'),
       };
     `);
     if (a.__err) throw new Error('polish: ' + a.__err);
@@ -89,7 +93,9 @@ app.whenReady().then(async () => {
     ok(String(a.paperBtnBg).includes('255, 253, 246'), '纸感主题按钮纸片底（' + a.paperBtnBg + '）');
     ok(a.dec === 'async', '封面 decoding=async（' + a.dec + '）');
     ok(a.fp === 'low', '封面 fetchPriority=low（' + a.fp + '）');
-    ok(a.coverCV !== 'auto' && a.coverCV.includes('/'), '封面 aspect-ratio 占位（' + a.coverCV + '）');
+    // U36 杂志卡 2.0：三变体（classic 隐槽/split 44%/immersive 满卡）封面尺寸随卡片——
+    // 断言改为「封面参与布局」（有非零包围盒+归属变体类），不再锁死 16/9 旧占位（批 H 收口裁定）
+    ok(a.coverBox && a.variantClass, '封面 aspect-ratio 随变体（box=' + JSON.stringify(a.coverBox) + '，variant=' + a.variantClass + '）');
     ok(a.settle, '落位 settle 含 transform 过渡');
     if (failed) { console.error(failed + ' 项失败'); app.exit(1); }
     else { console.log('ALL PASSED'); app.exit(0); }
