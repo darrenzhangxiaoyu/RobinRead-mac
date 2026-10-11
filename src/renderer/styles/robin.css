@@ -4758,7 +4758,7 @@ body.dark .nj-picks-broadcast.is-playing { color: oklch(0.78 0.13 55); border-co
   border-radius: var(--radius-lg);
 }
 .dg-goal-ring { position: relative; width: 48px; height: 48px; flex: 0 0 auto; }
-.dg-goal-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.dg-goal-ring svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; transform: rotate(-90deg); }
 .dg-goal-track { fill: none; stroke: var(--separator); stroke-width: 4; }
 .dg-goal-fill { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
 .dg-goal-ring.done .dg-goal-fill { stroke: var(--warm-accent); }
@@ -7609,7 +7609,7 @@ mark.nj-hl.nj-hl-flash { animation: nj-hl-flash-pulse 1.1s ease-in-out 2; }
 
 /* ============ F29 知更周刊（报纸版面） ============ */
 /* 报头（衬线刊名+双细线）/ 导语 / 板块卡 / 金句卡流 / 历史期刊——radius/字号全部走令牌 */
-.nj-weekly-modal { width: min(760px, calc(100vw - 96px)); }
+.nj-weekly-modal { width: min(760px, calc(100vw - 96px)); display: flex; flex-direction: column; }
 .nj-weekly-head { gap: var(--space-2); }
 .nj-weekly-body { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-4) var(--space-5) var(--space-5); overflow-y: auto; }
 .nj-weekly-masthead { text-align: center; border-top: 2px solid var(--text-primary); border-bottom: 1px solid var(--separator); padding: var(--space-4) 0 var(--space-3); }
