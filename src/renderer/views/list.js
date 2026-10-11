@@ -1598,6 +1598,9 @@ export class ListView {
     els.forEach((el) => {
       el.classList.add('nj-reveal-pending');
       this._revealObserver.observe(el);
+      // 批4门禁收口 failsafe：IO 在隐藏窗/离屏/后台节流下可能永不派发——
+      // reveal-pending（opacity 0）不得长存，期限落定；正常路径 settle 已摘类，此处幂等
+      setTimeout(() => { el.classList.remove('nj-reveal-pending', 'nj-revealed'); }, 1600);
     });
   }
 

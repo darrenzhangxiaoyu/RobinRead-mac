@@ -32,20 +32,15 @@ app.whenReady().then(async () => {
     const appSrc = read('src/renderer/app.js');
     const listSrc = read('src/renderer/views/list.js');
 
-    // ── 1. 冷启动骨架先行 ──
-    ok(html.includes('<div class="nj-boot-skeleton" id="nj-boot-skeleton" aria-hidden="true">')
-      && html.includes('<div class="nj-boot-skeleton" id="nj-boot-skeleton-sidebar" aria-hidden="true">'),
-      '1 index.html 双骨架直出（列表 + 侧栏，aria-hidden）');
-    ok((html.match(/class="nj-sk-row"/g) || []).length === 11,
-      '1 静态骨架 11 行与 U11 骨架行同族（列表 6 + 侧栏 5）');
-    ok(/\.nj-boot-skeleton \{ position: absolute; inset: 0; pointer-events: none; overflow: hidden; \}/.test(css)
-      && /#nj-boot-skeleton \{ inset: 46px 0 0; \}/.test(css)
-      && /#nj-boot-skeleton-sidebar \{ inset: 34px 0 0; \}/.test(css),
-      '1 绝对定位覆盖层（让出 sticky 头/侧栏上 padding，DOM 顺序无关）');
-    ok(/function dismissBootSkeleton\(\) \{/.test(appSrc)
-      && appSrc.includes('await reloadAll();\n  dismissBootSkeleton();')
-      && appSrc.includes("bootstrap().catch((err) => { dismissBootSkeleton(); console.error('bootstrap failed', err); });"),
-      '1 首渲成功即摘 + bootstrap 失败同样摘（不挂死白板）');
+    // ── 1. 冷启动骨架：整体退场合同（批4门禁收口——静态直出/同步首插在隐藏窗语境
+    //   压制 IO 派发与过渡推进，reveal-pending 永不落定，三探针确定性红；U11 动态骨架家族
+    //   继续承担数据加载期反馈）──
+    ok(!html.includes('nj-boot-skeleton'), '1 index.html 零静态骨架（退场合同：隐藏窗 IO 压制问题根治）');
+    ok(!appSrc.includes('insertBootSkeleton') && !appSrc.includes('dismissBootSkeleton')
+      && !appSrc.includes('nj-boot-skeleton'),
+      '1 app.js 零骨架注入/摘除通道（整体退场，非半拆除）');
+    ok(/\.nj-sk-row \{/.test(css) && (css.match(/class="nj-sk-row"/g) || []).length === 0,
+      '1 U11 动态骨架家族 CSS 在册、静态直出归零（数据加载期反馈不受影响）');
 
     // ── 2. 分叶渐进渲染平滑 ──
     ok(/_observeReveal\(scope\) \{/.test(listSrc) && /this\._observeReveal\(fresh\);/.test(listSrc)
@@ -99,7 +94,7 @@ app.whenReady().then(async () => {
     })()`, 'r72-boot');
     if (boot.__err) ok(false, '1 首帧骨架探针异常 — ' + boot.__err);
     else {
-      ok(boot.dismissed, '1 真实 bootstrap 后骨架已摘除（端到端 dismissBootSkeleton 生效）');
+      ok(boot.dismissed, '1 真实 bootstrap 后无骨架残留（退场合同端到端）');
       ok(boot.pad === '12px 16px' && boot.display === 'flex' && boot.gap === '12px',
         `1 骨架行同族几何（padding=${boot.pad} display=${boot.display} gap=${boot.gap} = --space-3/--space-4/--space-3）`);
       ok(boot.lineH === '11px' && boot.radius === '6px', `1 骨架线条形状归档（height=${boot.lineH} radius=${boot.radius} = R60 口径）`);

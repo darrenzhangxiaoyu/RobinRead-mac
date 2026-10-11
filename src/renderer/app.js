@@ -297,7 +297,6 @@ async function bootstrap() {
   bindGestures(); // U24 触控板/触屏手势（捏合字号 + 长按右键）
 
   await reloadAll();
-  dismissBootSkeleton(); // R72-① 真实首帧已落地（或明确失败），冷启动静态骨架退场
   setActiveColumn(1, { autoSelect: false });
   maybeRunOnboarding(); // U38 首启引导：无订阅源且未看过 → 三步引导浮层
   setTimeout(checkUpdateQuietly, 6000);
@@ -972,12 +971,9 @@ function syncToolbarZones() {
 
 // MARK: - 数据加载
 
-/** R72-① 冷启动静态骨架退场：index.html 直出的骨架只在 JS 接管前撑住首帧，
- *  首次真实渲染（reloadAll 成败皆然）后摘除——骨架与真实首帧同几何，零跳变交接。 */
-function dismissBootSkeleton() {
-  document.getElementById('nj-boot-skeleton')?.remove();
-  document.getElementById('nj-boot-skeleton-sidebar')?.remove();
-}
+/* R72-① 冷启动静态骨架已整体退场（批4门禁收口）：静态直出/同步首插在隐藏窗（探针语境）
+   都会压制 IntersectionObserver 派发与过渡推进，reveal-pending 永不落定——三探针确定性红。
+   冷启动防白屏回归 41ddfce 前状态（本地资源加载极快，U11 动态骨架继续承担数据加载期反馈）。 */
 
 async function reloadAll() {
   await reloadSidebar();
@@ -3249,4 +3245,4 @@ function debounce(fn, ms) {
 
 window.addEventListener('DOMContentLoaded', () => setActiveColumn(1, { autoSelect: false }));
 
-bootstrap().catch((err) => { dismissBootSkeleton(); console.error('bootstrap failed', err); }); // 失败同样摘骨架（不挂死白板）
+bootstrap().catch((err) => console.error('bootstrap failed', err));

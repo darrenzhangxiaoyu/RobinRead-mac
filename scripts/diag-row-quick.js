@@ -55,6 +55,7 @@ app.whenReady().then(async () => {
       rows[0].querySelector('.q-star').focus();
       await new Promise(r => setTimeout(r, 400));
       const focusOpacity = getComputedStyle(bar).opacity;
+      const fDbg = { rowConn: rows[0].isConnected, rowCls: rows[0].className.slice(0,90), rowOp: getComputedStyle(rows[0]).opacity, barOp: focusOpacity, active: document.activeElement?.className?.slice(0,36)||null, reduced: window.matchMedia('(prefers-reduced-motion: reduce)').matches };
       // 点击收藏：不打开整行、IPC 正确
       rows[0].querySelector('.q-star').click();
       await new Promise(r => setTimeout(r, 80));
@@ -74,14 +75,14 @@ app.whenReady().then(async () => {
       lv.render([mk(0), mk(1, { isStarred: true })], { kind: 'all' }, null, true);
       await new Promise(r => setTimeout(r, 250));
       const cardBtns = [...document.querySelectorAll('.nj-mag-card')].map((c) => c.querySelectorAll('.row-quick-btn').length);
-      return { btnsPerRow, restOpacity, focusOpacity, opened, starTitle, laterTitle, cardBtns };
+      return { btnsPerRow, restOpacity, focusOpacity, opened, starTitle, laterTitle, cardBtns, fDbg };
     `);
     if (a.__err) throw new Error('list: ' + a.__err);
     const readCalls = ipcCalls.read.map((x) => x[1]);
     const laterCalls = ipcCalls.later.map((x) => x[1]);
     ok(a.btnsPerRow.join(',') === '3,3,3,3', '每行挂 3 键（' + a.btnsPerRow.join(',') + '）');
     ok(parseFloat(a.restOpacity) === 0, '静止态隐藏（opacity ' + a.restOpacity + '）');
-    ok(parseFloat(a.focusOpacity) === 1, 'focus-within 浮现（opacity ' + a.focusOpacity + '）');
+    ok(parseFloat(a.focusOpacity) === 1, 'focus-within 浮现（opacity ' + a.focusOpacity + '）'); console.log('FDBG', JSON.stringify(a.fDbg));
     ok(a.opened === 0 && ipcCalls.star.length === 1, '点击收藏不触发整行打开且只调一次 IPC（star ' + ipcCalls.star.length + ' 次）');
     ok(readCalls.join(',') === 'true,false', '已读切换两端正确（' + readCalls.join(',') + '）');
     ok(laterCalls.join(',') === 'true,false', '稍后读 toggle 两端正确（' + laterCalls.join(',') + '）');
