@@ -423,6 +423,7 @@ class AppStore extends EventEmitter {
     const now = Date.now();
     if (now - this._lastEmitAt >= 80) {
       if (this._emitTimer) { clearTimeout(this._emitTimer); this._emitTimer = null; }
+      if (this._dbClosed()) return; // 真关守卫（批4门禁收口）：探针直关库绕过 shutdown，定时器/推送残余不再弹错
       this._lastEmitAt = now;
       this.emit('state:changed', this.snapshot());
       return;
@@ -430,10 +431,16 @@ class AppStore extends EventEmitter {
     if (this._emitTimer) return;
     this._emitTimer = setTimeout(() => {
       this._emitTimer = null;
-      if (this._closed) return; // 退出竞态（批 H 审查 P2 同族：关库后防抖定时器触发 → snapshot 抛错弹窗）
+      if (this._dbClosed()) return; // 退出竞态（批 H 审查 P2 同族：关库后防抖定时器触发 → snapshot 抛错弹窗）
       this._lastEmitAt = Date.now();
       this.emit('state:changed', this.snapshot());
     }, 80);
+  }
+
+  /** 库真关判定（批4门禁收口）：_closed 只覆盖 shutdown() 通路——探针直调 database.close()
+   *  绕过它，_closed 恒 false 而库已关；三定时器（emit/outbox/refresh）回调统一以此短路。 */
+  _dbClosed() {
+    return this._closed || this.database?.isOpen === false;
   }
 
   /** 条目读/星变更：失效计数缓存 + 记录增量（渲染层免重拉、只打补丁）。 */
@@ -2470,6 +2477,7 @@ class AppStore extends EventEmitter {
     const seconds = refreshIntervalSeconds(raw);
     if (seconds) {
       this._refreshTimer = setInterval(() => {
+        if (this._dbClosed()) return; // 批4门禁收口：真关守卫（30 分钟 interval 在探针直关后不再弹错）
         this.refresh('scheduled').catch(() => { /* 状态已在内部记录 */ });
       }, seconds * 1000);
     }
@@ -2753,7 +2761,7 @@ class AppStore extends EventEmitter {
     if (this._outboxTimer) return;
     this._outboxTimer = setTimeout(() => {
       this._outboxTimer = null;
-      if (this._closed) return; // 退出竞态（二轮修复：will-quit 关库后定时器仍触发 → prepare 抛 "database is not open" 弹窗）
+      if (this._dbClosed()) return; // 退出竞态/探针直关（批4门禁收口统一真关守卫）
       try {
         for (const account of this.accounts.enabledAccounts()) {
           if (account.type !== 'freshRSS') continue;

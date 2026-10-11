@@ -67,11 +67,14 @@ class LibraryDatabase {
       try { this.db.exec('ROLLBACK'); } catch (_) { /* 已回滚 */ }
       throw err;
     } finally {
-      this._txDepth = 0;
-    }
+    this._txDepth = 0;
+    this.isOpen = true; // 真实开态（批4门禁收口）：close() 置 false——探针直关数据库绕过 AppStore.shutdown，
+                        // 定时器回调据此短路，杜绝 "database is not open" 模态弹窗阻塞探针进程
+  }
   }
 
   close() {
+    this.isOpen = false;
     try { this.db.close(); } catch (_) { /* 忽略关闭错误 */ }
   }
 }
