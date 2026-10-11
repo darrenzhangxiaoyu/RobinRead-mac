@@ -2,9 +2,10 @@
 /**
  * toast.js — U13 自绘通知 Toast 栈
  *
- * 能力：可堆叠（上限 4，超出即弃最旧）/ 成功·警告·错误三态图标 / 进出动画 /
- *       hover 暂停自动消退（离场剩余时间续走）/ 进度通知（长任务：刷新/导出等，
- *       set 百分比 → done/fail 收口）/ 动作按钮（兼容旧 showToast 第三参）。
+ * 能力：可堆叠（R64 秩序：上限 3，超出请最旧普通条走）/ 同类合并计数（同文案+同 tone
+ *       不重复堆叠，计数「×N」内联升级并重置计时）/ 成功·警告·错误三态图标 /
+ *       进出动画（退场与入场 12px 镜像对称）/ hover·键盘焦点暂停自动消退（离场剩余时间续走）/
+ *       进度通知（长任务：刷新/导出等，set 百分比 → done/fail 收口）/ 动作按钮（兼容旧 showToast 第三参）。
  *
  * 兼容合同：app.js 与 dialogs.js 的旧 showToast(message, duration?, action?) 签名
  * 委托到 Toast.show，全部既有调用点零改动。reduced-motion 由 robin.css 全局收敛块兜底。
@@ -13,7 +14,7 @@ import { t } from '../i18n.js'; /* 7042fbe 补 aria-label 时漏带本导入（T
 import { icon } from '../icons.js';
 
 const STACK_ID = 'nj-toast-stack';
-const CAP = 4;
+const CAP = 3; // R64 秩序：同屏至多 3 条（超出请最旧普通条走；进度条豁免淘汰）
 const LEAVE_MS = 250; // 与 .toast-capsule.leaving 过渡（--dur-mid）对齐
 
 /** 三态图标（内联 1.75 描边，与 icons.js 同语言）。
@@ -79,6 +80,50 @@ function wireHoverPause(entry) {
   });
 }
 
+/** R64 键盘可达：动作按钮获得焦点即暂停自动消退（同 hover 暂停语言），失焦按剩余续走——
+ *  Tab 逐层走到 toast 按钮时它不会在阅读/按下途中消失；Enter 触发由原生 button 语义承担。 */
+function wireFocusHold(entry, btn) {
+  btn.addEventListener('focus', () => {
+    if (!entry.duration) return;
+    clearTimeout(entry.timer);
+    entry.remaining -= Date.now() - entry.startedAt;
+    entry.el.classList.add('hold');
+  });
+  btn.addEventListener('blur', () => {
+    if (!entry.duration) return;
+    entry.el.classList.remove('hold');
+    entry.startedAt = Date.now();
+    entry.timer = setTimeout(() => leave(entry), Math.max(0, entry.remaining));
+  });
+}
+
+/** R64 同类合并：在场条里找同文案+同 tone 的普通条——命中则计数「×N」内联升级
+ *  （数字弹一拍提示「又来了一条」）并重置计时；不新增第 N 条堆叠。 */
+function mergeIntoExisting(message, tone, effDuration) {
+  for (const e of live) {
+    if (e.progress || e.msg !== message || e.tone !== tone) continue;
+    e.count += 1;
+    let badge = e.el.querySelector('.toast-merge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'toast-merge';
+      e.el.querySelector('.toast-msg').after(badge);
+    }
+    badge.textContent = `×${e.count}`;
+    badge.classList.remove('bump'); // 强制重排重放弹跳
+    void badge.offsetWidth;
+    badge.classList.add('bump');
+    e.remaining = effDuration;
+    if (effDuration > 0 && !e.el.classList.contains('hold')) {
+      clearTimeout(e.timer);
+      e.startedAt = Date.now();
+      e.timer = setTimeout(() => leave(e), effDuration);
+    }
+    return e.el;
+  }
+  return null;
+}
+
 /**
  * 压入一条 toast。
  * @param {string} message 文案
@@ -94,6 +139,9 @@ export function showToast(message, opts = {}) {
   // 带动作的提示保底 ≥4.2s（审查 P1：动作按钮需要阅读+点击时间，默认 1.8s 基本点不到）
   const effDuration = action?.label ? Math.max(duration, 4200) : duration;
   const stack = ensureStack();
+  // R64 同类合并先于容量护栏：同文案+同 tone 不再新增第 4 条
+  const merged = mergeIntoExisting(message, tone, effDuration);
+  if (merged) return merged;
   while (live.size >= CAP) evictOldestNormal();
 
   const el = document.createElement('div');
@@ -102,7 +150,7 @@ export function showToast(message, opts = {}) {
   el.innerHTML = `<span class="toast-ic">${TONE_ICON[tone] || TONE_ICON.success}</span><span class="toast-msg"></span>`;
   el.querySelector('.toast-msg').textContent = message;
 
-  const entry = { el, duration: effDuration, timer: 0, startedAt: Date.now(), remaining: effDuration };
+  const entry = { el, duration: effDuration, timer: 0, startedAt: Date.now(), remaining: effDuration, msg: message, tone, count: 1 };
   if (action?.label) {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -114,6 +162,7 @@ export function showToast(message, opts = {}) {
       action.onClick?.();
     });
     el.appendChild(btn);
+    wireFocusHold(entry, btn);
   }
   stack.appendChild(el);
   live.add(entry);

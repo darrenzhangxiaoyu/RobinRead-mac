@@ -76,10 +76,10 @@ app.whenReady().then(async () => {
 
     // U13：toast 栈模块与兼容委托
     ok(/export function showToast/.test(toastSrc) && /export function showProgress/.test(toastSrc), 'U13 toast.js showToast/showProgress 导出在册');
-    ok(/const CAP = 4;/.test(toastSrc), 'U13 栈容量上限 4 在册');
+    ok(/const CAP = 3;/.test(toastSrc), 'U13 栈容量上限在册（R64 秩序：4→3）');
     ok(/mouseenter/.test(toastSrc) && /mouseleave/.test(toastSrc) && /classList\.add\('hold'\)/.test(toastSrc), 'U13 hover 暂停（hold 挂载/摘除）在册');
     ok(/done\(message\)|fail\(message\)/.test(toastSrc) && /TONE_ICON\.success/.test(toastSrc), 'U13 进度通知 done/fail 三态收口在册');
-    ok(/import \{ Toast \} from '\.\/views\/toast\.js'/.test(appSrc) && /return Toast\.show\(message, \{ duration, action \}\);/.test(appSrc), 'U13 app.js showToast 委托 toast 栈（具名导入 Toast 对象）');
+    ok(/import \{ Toast \} from '\.\/views\/toast\.js'/.test(appSrc) && /return Toast\.show\(message, \{ duration, action, tone \}\);/.test(appSrc), 'U13 app.js showToast 委托 toast 栈（具名导入 Toast 对象；R61 tone 透传口径）');
     ok(!/document\.getElementById\('toast-capsule'\)/.test(appSrc), 'U13 app.js 旧单例 id 残留清零');
     ok(dialogsSrc.includes('Toast.show(message, { duration })'), 'U13 dialogs.js showToast 委托 toast 栈');
     ok(/Toast\.progress\(t\('正在导出 Obsidian 库…'\)/.test(dialogsSrc) && /Toast\.progress\(t\('正在清理历史文章…'\)/.test(dialogsSrc), 'U13 长任务进度通知接线（导出/清理）');
@@ -187,9 +187,9 @@ app.whenReady().then(async () => {
       out.tones = ['success', 'warn', 'error'].every((tn) => !!document.querySelector('.toast-capsule.' + tn + ' .toast-ic svg'));
       await new Promise((r) => setTimeout(r, 340)); // 10ms 定时 + 250ms 离场动画预算
       out.errorLeft = !document.body.contains(errEl);
-      // 堆叠上限：连打 7 条最多留 4
+      // 堆叠上限：连打 7 条最多留 3（R64 秩序 4→3；同文案会合并计数，此处 7 条互异）
       for (let i = 0; i < 7; i += 1) Toast.show('m' + i, { duration: 4000 });
-      out.cap4 = Toast.liveCount() === 4;
+      out.cap3 = Toast.liveCount() === 3;
       // hover 暂停：进入悬停挂 hold、离开摘除并续期
       const hEl = Toast.show('悬停我', { duration: 900 });
       hEl.dispatchEvent(new Event('mouseenter'));
@@ -273,7 +273,7 @@ app.whenReady().then(async () => {
     ok(b.stack, 'U13 toast 栈容器 #nj-toast-stack 真实挂载');
     ok(b.live3 && b.tones, 'U13 三态图标（success/warn/error）真实渲染');
     ok(b.errorLeft, 'U13 短时长 toast 自动离场');
-    ok(b.cap4, 'U13 可堆叠且上限 4（连打 7 条留 4）');
+    ok(b.cap3, 'U13 可堆叠且上限 3（连打 7 条留 3；R64 秩序）');
     ok(b.holdOn && b.holdOff, 'U13 hover 暂停：mouseenter 挂 hold / mouseleave 摘除续期');
     ok(b.progressDom && b.barWidth, 'U13 进度通知 DOM 与 set(40) 精确落条');
     ok(b.doneMorph && b.progressGone, 'U13 done() 收口成功态并移除进度态');
