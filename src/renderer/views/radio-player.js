@@ -286,7 +286,7 @@ export class RadioPlayer {
     } catch (error) {
       if (gen !== this._gen) return;
       this.stop();
-      this.deps.toast?.(`${t('神经语音暂时不可用，已停止播报')}：${String(error?.message || error || '').slice(0, 80)}`);
+      this.deps.toast?.(`${t('神经语音暂时不可用，已停止播报')}：${String(error?.message || error || '').slice(0, 80)}`, { tone: 'error' });
       return;
     }
     if (gen !== this._gen) return;
@@ -318,7 +318,7 @@ export class RadioPlayer {
     const synth = window.speechSynthesis;
     if (!synth || typeof synth.speak !== 'function') {
       this.stop();
-      this.deps.toast?.(t('当前环境不支持语音朗读（speechSynthesis 不可用）'));
+      this.deps.toast?.(t('当前环境不支持语音朗读（speechSynthesis 不可用）'), { tone: 'warn' });
       return;
     }
     this._synth = synth;

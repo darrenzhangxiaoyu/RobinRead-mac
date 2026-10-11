@@ -16,11 +16,12 @@ const STACK_ID = 'nj-toast-stack';
 const CAP = 4;
 const LEAVE_MS = 250; // 与 .toast-capsule.leaving 过渡（--dur-mid）对齐
 
-/** 三态图标（内联 1.75 描边，与 icons.js 同语言）。 */
+/** 三态图标（内联 1.75 描边，与 icons.js 同语言）。
+ *  R61 语义统一：成功=绿勾（--accent）、警告=暖赭三角（--warm-accent）、失败=暖红叹号（--danger）。 */
 const TONE_ICON = {
   success: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/><path d="M5.2 8.2l1.9 1.9 3.7-4"/></svg>',
   warn: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4L14.4 13.3H1.6L8 2.4z"/><path d="M8 6.6v3"/><circle cx="8" cy="11.6" r="0.1"/></svg>',
-  error: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/></svg>',
+  error: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.6v4"/><circle cx="8" cy="11.2" r="0.1"/></svg>',
   progress: '<svg class="toast-spin" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="8" cy="8" r="6.25" opacity="0.25"/><path d="M8 1.75a6.25 6.25 0 0 1 6.25 6.25"/></svg>',
 };
 

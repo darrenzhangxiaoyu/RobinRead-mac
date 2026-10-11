@@ -180,7 +180,7 @@ export class TopicView {
         this.deps.toast?.(t('聚合完成') + summary);
         this._showManage();
       } catch (e) {
-        this.deps.toast?.(t('聚合失败') + '：' + String(e && e.message || e));
+        this.deps.toast?.(t('聚合失败') + '：' + String(e && e.message || e), { tone: 'error' });
       }
     }, t('马上按关键词聚合一次')));
     actions.appendChild(mk(t('编辑'), 'btn-text', () => this._showForm({
@@ -191,7 +191,8 @@ export class TopicView {
       const { confirmBox } = await import('../ui-prompt.js');
       const ok = await confirmBox(t('删除话题'), {
         message: tf('确定删除话题「%@」吗？命中记录会一并删除。', topic.name),
-        confirmLabel: t('删除'),
+        okLabel: t('删除'),
+        danger: true, // R61：破坏性确认主按钮统一警示色（原 confirmLabel 键名不被读取，按钮实为「确定」）
       });
       if (!ok) return;
       try {
@@ -352,7 +353,7 @@ export class TopicView {
           await this._showStream(topic);
         }
       } catch (e) {
-        this.deps.toast?.(t('聚合失败') + '：' + String(e && e.message || e));
+        this.deps.toast?.(t('聚合失败') + '：' + String(e && e.message || e), { tone: 'error' });
       } finally { refresh.disabled = false; }
     });
     const close = el('button', 'btn icon-only');

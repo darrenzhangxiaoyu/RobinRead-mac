@@ -96,7 +96,7 @@ export class MediaMiniPlayer {
     try { source = await window.robin.mediaSource(itemID); } catch (_) { source = null; }
     if (gen !== this._openGen) return false; // 期间已有更新的打开请求：本次作废
     if (!source || !source.url) {
-      this.deps.toast?.(t('媒体不可用（可能已被删除）。'));
+      this.deps.toast?.(t('媒体不可用（可能已被删除）。'), { tone: 'error' });
       return false;
     }
     this._ensureAudio();
@@ -180,7 +180,7 @@ export class MediaMiniPlayer {
       }
     } catch (_) {
       // P2：连播 IPC 拒绝不得成为未处理 rejection——停在结束态并提示
-      this.deps.toast?.(t('自动连播失败，已停止播放。'));
+      this.deps.toast?.(t('自动连播失败，已停止播放。'), { tone: 'error' });
     }
   }
 

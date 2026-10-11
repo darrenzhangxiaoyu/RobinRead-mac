@@ -162,7 +162,7 @@ export class GardenView {
       this.report = report || null;
       this._renderBody();
     } catch (err) {
-      if (!silent && this.deps.toast) this.deps.toast(t('花园暂时打不开，稍后再试试。'));
+      if (!silent && this.deps.toast) this.deps.toast(t('花园暂时打不开，稍后再试试。'), { tone: 'error' });
     }
   }
 
@@ -374,7 +374,7 @@ export class GardenView {
         btn.disabled = true;
         try {
           const res = await window.robin.challengeCreate?.({ templateID: tpl.id });
-          if (res && res.ok === false) { if (this.deps.toast) this.deps.toast(String(res.error || t('创建失败'))); btn.disabled = false; return; }
+          if (res && res.ok === false) { if (this.deps.toast) this.deps.toast(String(res.error || t('创建失败')), { tone: 'error' }); btn.disabled = false; return; }
           if (this.deps.toast) this.deps.toast(t('新赛季开跑了！'));
         } catch (err) {
           if (this.deps.toast) this.deps.toast(String((err && err.message) || err));
@@ -414,7 +414,7 @@ export class GardenView {
           days: Number(daysInput.value) || 7,
           target: Number(targetInput.value) || 10,
         });
-        if (res && res.ok === false) { if (this.deps.toast) this.deps.toast(String(res.error || t('创建失败'))); createBtn.disabled = false; return; }
+        if (res && res.ok === false) { if (this.deps.toast) this.deps.toast(String(res.error || t('创建失败')), { tone: 'error' }); createBtn.disabled = false; return; }
         if (this.deps.toast) this.deps.toast(t('新赛季开跑了！'));
         this.challenges = null;
         this._renderChallenge();

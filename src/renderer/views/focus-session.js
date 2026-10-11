@@ -257,7 +257,8 @@ export class FocusSessionPanel {
     panel.querySelector('.nj-fp-copy').addEventListener('click', async () => {
       const text = this.summaryText();
       const ok = await window.robin.copyText(text);
-      this.deps.toast?.(ok ? t('已复制专注小结') : t('复制失败'));
+      if (ok) this.deps.toast?.(t('已复制专注小结'));
+      else this.deps.toast?.(t('复制失败'), { tone: 'error' }); // R61 失败暖红叹号
     });
     panel.querySelector('.nj-fp-done').textContent = t('完成');
     panel.querySelector('.nj-fp-done').addEventListener('click', () => this.close());

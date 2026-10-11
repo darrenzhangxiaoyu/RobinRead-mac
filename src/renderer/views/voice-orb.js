@@ -206,7 +206,7 @@ export class VoiceOrb {
     try {
       if (typeof handler === 'function') { await handler(); ok = true; }
     } catch (err) {
-      this.deps.toast?.(`${t('语音指令执行失败')}：${String(err && err.message || err).slice(0, 60)}`);
+      this.deps.toast?.(`${t('语音指令执行失败')}：${String(err && err.message || err).slice(0, 60)}`, { tone: 'error' });
     }
     const label = matched ? t(matched.label) : this._actionLabel(action);
     this._showCaption(matched ? `${this._lastTranscript || ''}`.trim() : '', ok ? action : null, label);

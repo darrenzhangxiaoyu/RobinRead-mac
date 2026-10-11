@@ -109,7 +109,7 @@ export class WeeklyView {
       else this.current = null;
       this._render();
     } catch (_) {
-      if (!silent) this.deps.toast?.(t('周刊暂时打不开，稍后再试试。'));
+      if (!silent) this.deps.toast?.(t('周刊暂时打不开，稍后再试试。'), { tone: 'error' });
       this._render();
     }
   }
@@ -128,7 +128,7 @@ export class WeeklyView {
     } catch (err) {
       this.generating = null;
       this._syncButtons();
-      this.deps.toast?.(String(err.message || err).slice(0, 120));
+      this.deps.toast?.(String(err.message || err).slice(0, 120), { tone: 'error' });
       await this._load();
     }
   }
@@ -144,7 +144,7 @@ export class WeeklyView {
       await this._load();
     } catch (err) {
       this.generating = null;
-      this.deps.toast?.(String(err.message || err).slice(0, 120));
+      this.deps.toast?.(String(err.message || err).slice(0, 120), { tone: 'error' });
       await this._load();
     }
   }
@@ -156,7 +156,7 @@ export class WeeklyView {
       if (result?.ok === false) throw new Error(String(result.error || t('导出失败')));
       if (result?.data) this.deps.toast?.(t('EPUB 已导出')); // data=null=取消保存对话框，不提示（批 E 审查 P2）
     } catch (err) {
-      this.deps.toast?.(String(err.message || err).slice(0, 120));
+      this.deps.toast?.(String(err.message || err).slice(0, 120), { tone: 'error' });
     }
   }
 

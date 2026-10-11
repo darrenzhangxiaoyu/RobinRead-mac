@@ -308,7 +308,7 @@ export class MediaView {
           const tx = await window.robin.transcribeMedia(item.itemID);
           this._transcribeProgress.set(item.itemID, { itemID: item.itemID, state: tx?.status || 'queued' });
         } catch (e) {
-          this.deps.toast?.(String(e && e.message || e) || t('转写失败'));
+          this.deps.toast?.(String(e && e.message || e) || t('转写失败'), { tone: 'error' });
         }
         this._patchRow(item.itemID); // 整行动作区重建：徽标随最新状态切换（排队中/转写中）
       });
@@ -413,7 +413,7 @@ export class MediaView {
         ? tx.segments.map((s) => `[${fmtTimestamp(s.start)}] ${s.text || ''}`).join('\n')
         : tx.text;
       try { await window.robin.copyText(plain); this.deps.toast?.(t('已复制文字稿')); }
-      catch (_) { this.deps.toast?.(t('复制失败')); }
+      catch (_) { this.deps.toast?.(t('复制失败'), { tone: 'error' }); }
     });
     const aiBtn = el('button', 'btn-text primary', tx.summary ? t('重新生成 AI 摘要') : t('AI 摘要'));
     aiBtn.type = 'button';
@@ -440,7 +440,7 @@ export class MediaView {
         this.deps.toast?.(t('摘要已生成'));
         aiBtn.textContent = t('重新生成 AI 摘要');
       } catch (e) {
-        this.deps.toast?.(String(e && e.message || e) || t('摘要生成失败'));
+        this.deps.toast?.(String(e && e.message || e) || t('摘要生成失败'), { tone: 'error' });
         aiBtn.textContent = tx.summary ? t('重新生成 AI 摘要') : t('AI 摘要');
       }
       aiBtn.classList.remove('spinning');
@@ -597,7 +597,7 @@ export class MediaView {
             this._downloadProgress.set(item.itemID, { itemID: item.itemID, state: 'downloading', received: 0, total: item.sizeBytes ?? null });
             refreshState();
             const res = await window.robin.mediaDownload(item.itemID);
-            if (res && res.ok === false) this.deps.toast?.(String(res.error || t('下载失败')));
+            if (res && res.ok === false) this.deps.toast?.(String(res.error || t('下载失败')), { tone: 'error' });
           });
           stateWrap.appendChild(dlBtn);
         }

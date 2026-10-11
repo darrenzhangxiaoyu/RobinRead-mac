@@ -783,7 +783,7 @@ export class SettingsView {
         try {
           const path2 = await window.robin.backupAutoNow?.();
           showToast(path2 ? t('已备份') + '：' + path2 : t('今日已备份'));
-        } catch (e) { showToast(t('备份失败') + '：' + String(e?.message || e)); }
+        } catch (e) { showToast(t('备份失败') + '：' + String(e?.message || e), { tone: 'error' }); }
         nowBtn.disabled = false;
         nowBtn.textContent = t('立即备份');
       });
@@ -2622,6 +2622,7 @@ export class SettingsView {
       const go = await confirmBox(t('重新生成令牌？'), {
         message: t('旧令牌即刻失效，已接入的仪表盘需要换成新令牌。'),
         okLabel: t('重新生成'),
+        danger: true, // R61：破坏性确认主按钮统一警示色（旧令牌即刻失效属破坏性动作）
       });
       if (!go) return;
       const result = await window.robin.apiRegenerateToken?.().catch(() => null);
@@ -2701,7 +2702,7 @@ export class SettingsView {
           if (!go) { this.render(); return; }
         }
         const res = await window.robin.pocketSetConfig?.({ bind: value, confirmLan: value === 'lan' }).catch(() => null);
-        if (res && res.ok === false) showToast(String(res.error || t('设置失败')));
+        if (res && res.ok === false) showToast(String(res.error || t('设置失败')), { tone: 'error' });
         this.render();
       },
     );
@@ -2719,7 +2720,7 @@ export class SettingsView {
       const next = Number(portInput.value);
       const res = await window.robin.pocketSetConfig?.({ port: next }).catch(() => null);
       if (res && res.ok === false) {
-        showToast(String(res.error || t('设置失败')));
+        showToast(String(res.error || t('设置失败')), { tone: 'error' });
         portInput.value = String(conf.port ?? 7963);
       } else if (st.running && next !== st.port) {
         showToast(t('端口已保存——重启应用或关闭再开启开关后生效。'));
@@ -2792,7 +2793,7 @@ export class SettingsView {
     importBtn.addEventListener('click', async () => {
       const res = await window.robin.userScriptsImportPick?.().catch(() => null);
       if (!res) return;
-      if (res.ok === false) { showToast(String(res.error || t('导入失败'))); return; }
+      if (res.ok === false) { showToast(String(res.error || t('导入失败')), { tone: 'error' }); return; }
       if (res.data?.script) { showToast(tf('已导入「%@」', res.data.script.name)); refresh(); }
     });
 
@@ -2802,7 +2803,7 @@ export class SettingsView {
     exportBtn.textContent = t('示例导出');
     exportBtn.addEventListener('click', async () => {
       const res = await window.robin.userScriptsExportExample?.().catch(() => null);
-      if (res && res.ok === false) showToast(String(res.error || t('导出失败')));
+      if (res && res.ok === false) showToast(String(res.error || t('导出失败')), { tone: 'error' });
     });
 
     container.appendChild(group(t('知更实验室'), t('用户脚本在沙箱里跑：无文件、无网络、无 DOM——只能「输入正文 → 输出正文」与「声明正文底部按钮」。异常全隔离，坏脚本只会被跳过并计数。'), [
@@ -2929,7 +2930,8 @@ export class SettingsView {
         feeds: sidebarFeeds(),
         onCreate: async ({ title, feedIDs }) => {
           const res = await window.robin.booksCreate({ title, feedIDs, schedule: 'manual' }).catch(() => null);
-          showToast(res?.ok ? t('文集已创建') : String(res?.error || t('创建失败')));
+          if (res?.ok) showToast(t('文集已创建'));
+      else showToast(String(res?.error || t('创建失败')), { tone: 'error' }); // R61 失败暖红叹号
         },
       });
       refresh();
@@ -3026,7 +3028,8 @@ export class SettingsView {
         });
         if (!go) return;
         const res = await window.robin.booksDelete(book.id).catch(() => null);
-        showToast(res?.ok ? t('文集已删除') : String(res?.error || t('删除失败')));
+        if (res?.ok) showToast(t('文集已删除'));
+      else showToast(String(res?.error || t('删除失败')), { tone: 'error' }); // R61 失败暖红叹号
         refresh();
       }));
       actions.appendChild(btnLine);
@@ -4052,8 +4055,10 @@ function regexProblem(value) {
   return null;
 }
 
-/** 设置弹层内轻量 toast（U13：委托自绘 toast 栈，与 app.js 全局提示同栈同语言）。 */
+/** 设置弹层内轻量 toast（U13：委托自绘 toast 栈，与 app.js 全局提示同栈同语言）。
+ *  R61 反馈语义：第二参可传数字时长或 { duration?, tone? } 选项对象（失败路径 tone:'error'）。 */
 function showToast(message, duration = 1800) {
+  if (duration && typeof duration === 'object') return Toast.show(message, duration);
   return Toast.show(message, { duration });
 }
 

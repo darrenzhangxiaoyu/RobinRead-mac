@@ -661,7 +661,7 @@ function toggleStarWithGuide() {
     }
   }
   Promise.resolve(window.robin.toggleStar(state.selectedEntryID)).catch((e) => {
-    showToast(`${t('操作失败')}：${String(e?.message || e)}`);
+    showToast(`${t('操作失败')}：${String(e?.message || e)}`, { tone: 'error' });
   });
 }
 
@@ -792,7 +792,7 @@ function applyPreset(name) {
 
 let readingControls = null;
 function openReadingControls() {
-  if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; }
+  if (!state.selectedEntryID) { showToast(t('先打开一篇文章'), { tone: 'warn' }); return; }
   readingControls = readingControls || new ReadingControls(views.reader, {
     onToggleFocus: () => toggleFocusMode(),
     onToggleZen: () => toggleZenMode(),
@@ -844,7 +844,7 @@ function buildPaletteCommands() {
     { label: t('来源立场光谱'), keywords: 'spectrum 光谱 立场 源 画像 媒介素养 open', icon: 'spectrum', desc: t('常读的订阅源按立场/风格排成光谱，读文章时标出当前源的位置。'), action: () => openKnowledgeCenter('spectrum') },
     { label: t('导入批注包…'), keywords: 'bundle robin 导入 批注 包 漂流 分享 import', icon: 'import', desc: t('导入 .robin 批注包：读对方的划线与笔记，续写后可导回合并。'), action: () => importRobinBundle() },
     { label: t('AI 深度研究…'), keywords: 'research 深度 研究 报告 ai open', icon: 'spark', action: () => openResearchView() },
-    { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章')); return; } views.reader?.articleSearch?.open(); } },
+    { label: t('搜索正文'), keywords: 'find search 搜索 正文 查找', icon: 'search', hint: 'Ctrl+F', action: () => { if (!state.selectedEntryID) { showToast(t('先打开一篇文章'), { tone: 'warn' }); return; } views.reader?.articleSearch?.open(); } },
     { label: t('从链接精读…'), keywords: 'url link 链接 精读 extract openUrl', icon: 'globe', action: () => readFromUrlPrompt() },
     { label: t('设置'), keywords: 'settings 设置 preference open', icon: 'gear', desc: t('外观、账户、同步与 AI 配置都在这里。'), action: () => showSettings('appearance') },
     { label: t('刷新全部订阅'), keywords: 'refresh 刷新 订阅', icon: 'refresh', action: () => window.robin.refresh() },
@@ -1029,7 +1029,7 @@ async function rebuildEventsIndex() {
     if (eventsState.on) await reloadList(); // 事件模式开着：补跑后立即刷新分组
     showToast(tf('事件索引已重建：扫描 %lld 篇 · 新并 %lld 次', result?.scanned || 0, result?.clustered || 0));
   } catch (_) {
-    showToast(t('重建事件索引失败，请稍后再试。'));
+    showToast(t('重建事件索引失败，请稍后再试。'), { tone: 'error' });
   }
 }
 
@@ -1054,7 +1054,7 @@ async function refreshSmartPicks({ resetScroll = false } = {}) {
   const payload = await window.robin.picksGet();
   if (seq !== picksState.seq) return; // 快速切换/重排竞态：过期载荷丢弃
   if (!payload || !Array.isArray(payload.picks)) {
-    showToast(t('精选暂时不可用，请稍后再试。'));
+    showToast(t('精选暂时不可用，请稍后再试。'), { tone: 'error' });
     return;
   }
   views.list.setPicks(payload);
@@ -1105,7 +1105,7 @@ async function dismissSmartPick(entryID) {
     await window.robin.picksExclude(entryID);
     showToast(t('已移出精选，24 小时内不再推荐。'));
   } catch (e) {
-    showToast(String(e && e.message || e) || t('操作失败'));
+    showToast(String(e && e.message || e) || t('操作失败'), { tone: 'error' });
   }
   await refreshSmartPicks();
 }
@@ -1342,7 +1342,8 @@ async function showTodayDigest({ forceRegenerate = false, mode = 'brief' } = {})
   let lastRefs = [];
   copyBtn.addEventListener('click', async () => {
     const ok = await window.robin.copyText(lastContent);
-    showToast(ok ? t('已复制简报全文') : t('复制失败'));
+    if (ok) showToast(t('已复制简报全文'));
+    else showToast(t('复制失败'), { tone: 'error' }); // R61 失败暖红叹号
   });
   regenBtn.addEventListener('click', () => {
     overlay.remove();
@@ -1483,7 +1484,7 @@ async function showClusterBrief(items) {
   const list = (items || []).filter((it) => it && it.title);
   if (list.length < 2) return;
   if (!(await views.account?.gateAI())) {
-    showToast(t('对比速读需要会员或每日 AI 额度。'));
+    showToast(t('对比速读需要会员或每日 AI 额度。'), { tone: 'warn' });
     return;
   }
   const overlay = document.createElement('div');
@@ -1510,7 +1511,8 @@ async function showClusterBrief(items) {
   let lastContent = '';
   copyBtn.addEventListener('click', async () => {
     const ok = await window.robin.copyText(lastContent);
-    showToast(ok ? t('已复制') : t('复制失败'));
+    if (ok) showToast(t('已复制'));
+    else showToast(t('复制失败'), { tone: 'error' }); // R61 失败暖红叹号
   });
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
@@ -1554,7 +1556,7 @@ async function showEditionExport(entryIDs) {
     if (!written?.ok) throw new Error(written?.error || t('写入文件失败'));
     showToast(t('已导出'));
   } catch (err) {
-    showToast(`${t('导出失败')}：${err?.message || err}`);
+    showToast(`${t('导出失败')}：${err?.message || err}`, { tone: 'error' });
   }
 }
 async function loadMoreEntries() {
@@ -1768,9 +1770,15 @@ function cancelNavConfirmation(dismissToastAlso) {
 
 // MARK: - Toast（U13 自绘栈；旧 showToast 签名委托 toast.js，全部既有调用点零改动）
 
-/** showToast(message, duration?, action?) — action: { label, onClick }（收藏后「查看收藏」直达）。 */
-function showToast(message, duration = 1800, action = null) {
-  return Toast.show(message, { duration, action }); // 带动作的提示在 toast.js 内保底 ≥4.2s
+/** showToast(message, duration?, action?, tone?) — action: { label, onClick }（收藏后「查看收藏」直达）。
+ *  R61 反馈语义：第二参可传 { duration?, action?, tone? } 选项对象；失败路径传 { tone: 'error' }、
+ *  前置条件提醒传 { tone: 'warn' }（toast 三态图标/色随之：绿勾 / 暖赭三角 / 暖红叹号）。 */
+function showToast(message, duration = 1800, action = null, tone = 'success') {
+  if (duration && typeof duration === 'object') {
+    const opts = duration;
+    return Toast.show(message, { duration: opts.duration, action: opts.action, tone: opts.tone });
+  }
+  return Toast.show(message, { duration, action, tone }); // 带动作的提示在 toast.js 内保底 ≥4.2s
 }
 
 function dismissToast() {
@@ -2092,7 +2100,7 @@ function setupSplitter(splitterID, columnID, min, max) {
 function openReaderWindow(entryID) {
   if (!entryID) return;
   window.robin.openReaderWindow(entryID).then((result) => {
-    if (!result.ok) showToast(String(result.error || t('打开失败')));
+    if (!result.ok) showToast(String(result.error || t('打开失败')), { tone: 'error' });
   }).catch(() => {});
 }
 
@@ -2108,7 +2116,7 @@ async function fetchBooksForMenu() {
 async function addFeedsToBook(bookID, feedIDs) {
   const result = await window.robin.booksAddFeeds({ id: bookID, feedIDs }).catch(() => null);
   if (result?.ok) showToast(t('已加入文集'));
-  else showToast(String(result?.error || t('加入文集失败')));
+  else showToast(String(result?.error || t('加入文集失败')), { tone: 'error' });
 }
 
 /** 「加入文集」子菜单项（既有文集 + 新建文集入口；文集可含多源）。 */
@@ -2126,7 +2134,8 @@ async function addToBookMenuItems(feedIDs) {
         preselectedFeedIDs: ids,
         onCreate: async ({ title, feedIDs: picked }) => {
           const result = await window.robin.booksCreate({ title, feedIDs: picked, schedule: 'manual' }).catch(() => null);
-          showToast(result?.ok ? t('文集已创建') : String(result?.error || t('创建失败')));
+          if (result?.ok) showToast(t('文集已创建'));
+    else showToast(String(result?.error || t('创建失败')), { tone: 'error' }); // R61 失败暖红叹号
         },
       });
     },
@@ -2198,7 +2207,7 @@ async function onFeedContext(event, { feed, selectedFeedIDs }) {
     { label: t('刷新此源'), icon: 'refresh', onClick: async (item) => {
       const result = await window.robin.refreshFeed(feed.id);
       if (result.ok) { await reloadAll(); showToast(t('已刷新')); }
-      else showToast(result.error || t('刷新失败'));
+    else showToast(result.error || t('刷新失败'), { tone: 'error' });
     } },
     { label: t('全部已读'), icon: 'checkAll', onClick: () => window.robin.markAllRead({ kind: 'feed', feedID: feed.id }) },
     { label: t('复制订阅'), icon: 'copy', onClick: () => navigator.clipboard.writeText(feed.feedURL) },
@@ -2269,7 +2278,7 @@ function monitorFeedMenuItems(feed) {
           showToast(t('选择器已更新，正在重抓基线'));
           await refreshState();
         } else {
-          showToast(String(result.error || t('更新失败')));
+          showToast(String(result.error || t('更新失败')), { tone: 'error' });
         }
       },
     },
@@ -2287,14 +2296,14 @@ function monitorFeedMenuItems(feed) {
     {
       label: t('停止追更'), icon: 'close',
       onClick: async () => {
-        const ok = await confirmBox(t('停止追更'), { message: t('停止后将不再自动抓取该网页，已有文章保留。'), okLabel: t('停止') });
+        const ok = await confirmBox(t('停止追更'), { message: t('停止后将不再自动抓取该网页，已有文章保留。'), okLabel: t('停止'), danger: true }); // R61：破坏性确认统一警示主按钮
         if (!ok) return;
         const result = await window.robin.monitorStop(feed.id);
         if (result.ok) {
           showToast(t('已停止追更'));
           await refreshState();
         } else {
-          showToast(String(result.error || t('操作失败')));
+          showToast(String(result.error || t('操作失败')), { tone: 'error' });
         }
       },
     },
@@ -2378,7 +2387,7 @@ async function exportRobinBundle(entryID) {
       ? tf('已打包：1 篇文章 + %lld 条批注', result.data.annotationCount)
       : t('已打包：1 篇文章（暂无批注）'));
   } else {
-    showToast(String(result?.error || t('打包失败')));
+    showToast(String(result?.error || t('打包失败')), { tone: 'error' });
   }
 }
 
@@ -2397,7 +2406,7 @@ async function importRobinBundle() {
     showToast(parts.join('，'));
     reloadAll();
   } else {
-    showToast(String(result?.error || t('导入失败')));
+    showToast(String(result?.error || t('导入失败')), { tone: 'error' });
   }
 }
 
@@ -2620,7 +2629,7 @@ async function openCapsuleView() {
     card.querySelector('.nj-capsule-card-meta').textContent = `${title} · ${t('当时写下的')}`;
     card.addEventListener('click', async () => {
       const result = await window.robin.capsuleOpen(capsule.id).catch(() => null);
-      if (!result?.ok) { showToast(String(result?.error || t('开启失败'))); return; }
+      if (!result?.ok) { showToast(String(result?.error || t('开启失败')), { tone: 'error' }); return; }
       openCapsuleCeremony(result.data, { from: overlay });
       refreshSidebarBadges();
     });
@@ -2723,19 +2732,19 @@ function voiceCommandActions() {
     prev: () => voiceGoto('prev'),
     star: async () => {
       const entryID = state.selectedEntryID || views.reader?.entryID;
-      if (!entryID) { showToast(t('没有正在阅读的文章')); return; }
+      if (!entryID) { showToast(t('没有正在阅读的文章'), { tone: 'warn' }); return; }
       const next = await window.robin.toggleStar(entryID);
       showToast(next ? t('已收藏') : t('已取消收藏'));
     },
     summarize: async () => {
       const entryID = state.selectedEntryID || views.reader?.entryID;
-      if (!entryID) { showToast(t('没有正在阅读的文章')); return; }
+      if (!entryID) { showToast(t('没有正在阅读的文章'), { tone: 'warn' }); return; }
       // 无 Key 降级：跳到下一篇（口令闭环不断）
-      if (!state.snapshot?.hasAPIKey) { showToast(t('未配置 AI Key，跳到下一篇')); await voiceGoto('next'); return; }
+      if (!state.snapshot?.hasAPIKey) { showToast(t('未配置 AI Key，跳到下一篇'), { tone: 'warn' }); await voiceGoto('next'); return; }
       const result = await window.robin.generateSummary(entryID).catch((err) => ({ ok: false, error: String(err?.message || err) }));
       const content = result?.ok ? String(result.data?.content || '').trim() : '';
       if (!content) {
-        showToast(t('摘要生成失败，跳到下一篇'));
+        showToast(t('摘要生成失败，跳到下一篇'), { tone: 'error' });
         await voiceGoto('next');
         return;
       }
@@ -2833,7 +2842,7 @@ async function mountDigestCapsules(body) {
         card.querySelector('.dg-capsule-meta').textContent = `${t('当时写下的')} · 《${title}》 · ${tf('%lld 天前封存', item.daysAgo)}`;
         card.addEventListener('click', async () => {
           const result = await window.robin.capsuleOpen(item.id).catch(() => null);
-          if (!result?.ok) { showToast(String(result?.error || t('开启失败'))); return; }
+          if (!result?.ok) { showToast(String(result?.error || t('开启失败')), { tone: 'error' }); return; }
           openCapsuleCeremony(result.data);
           refreshSidebarBadges();
         });
