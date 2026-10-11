@@ -76,11 +76,18 @@ app.whenReady().then(async () => {
     // ── 3. 滚动锚定（静态锚点）──
     ok(listSrc.includes('const anchorTop = this.scrollEl.scrollTop;') && listSrc.includes('const anchorHeight = this.scrollEl.scrollHeight;'),
       '3 重绘前基线捕获在册');
-    ok(listSrc.includes('_restoreScrollAnchor(anchorTop, anchorHeight); // R63-③ 新文章到达：顶部之外保持阅读位置'),
+    ok(listSrc.includes('_restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③ 新文章到达：顶部之外保持阅读位置'),
       '3 常规路径锚定回补在册');
-    ok(/_renderingPages = false;\n\s*this\.markSelected\(selectedID\); this\._observeReveal\(\); this\._mountResumeCard\(\);\n\s*this\._restoreScrollAnchor\(anchorTop, anchorHeight\);/.test(listSrc),
+    ok(/_restoreScrollAnchor\(anchorTop, anchorHeight, anchorGen\); \/\/ R63-③：渐进渲染完成后高度才有代表性/.test(listSrc),
       '3 渐进路径完成后回补（高度有代表性后再回补）');
     ok(/if \(!prevTop || !prevHeight\) return;/.test(listSrc), '3 在顶部不介入（新文章自然到顶）');
+    // 批2审查P1-1 收口：代际作废——外部滚动干预使在途延迟回补让位
+    ok(listSrc.includes('const anchorGen = this._scrollGen || 0;') && /_restoreScrollAnchor\(prevTop, prevHeight, gen\) \{/.test(listSrc),
+      '3 锚定基线带代际快照（capture/restore 同 gen 通道）');
+    ok(listSrc.includes('this._scrollGen = (this._scrollGen || 0) + 1; // 批2审查P1-1'),
+      '3 scrollTop() 外部干预推进代际（resetScroll 击穿在途回补的修复）');
+    ok(/gen !== undefined && gen !== \(this\._scrollGen \|\| 0\)\) return;/.test(listSrc),
+      '3 代际过期回补让位（切视野后视口不被拽回旧阅读位）');
 
     // ── UI 行为断言（真实 ListView + 真滚动）──
     const win = new BrowserWindow({
@@ -149,8 +156,16 @@ app.whenReady().then(async () => {
         await sleep(700);
         const freshFirstTitle = scrollEl.querySelector('.entry-row .entry-title')?.textContent || '';
         const topAfterFresh = scrollEl.scrollTop;
+        // 批2审查P1-1 收口：渐进渲染 × scrollTop() 干预交叉——在途锚定回补必须作废（视口不被拽回旧位）
+        scrollEl.scrollTop = 900;
+        await sleep(200);
+        lv.render(Array.from({ length: 80 }, (_, i) => mk('z' + (1000 + i))), { kind: 'all' }, null, true);
+        lv.scrollTop(); // app 级 resetScroll 同帧干预（切视野路径）
+        await sleep(700); // 渐进链完成
+        const afterInterveneTop = scrollEl.scrollTop;
         return { strips, atTopCls, topOpacityAtTop, bottomOpacityAtTop, midCls, topOpacityMid,
           prevTop, afterTop, beforeRectTop, afterRectTop, wanted, freshFirstTitle, topAfterFresh,
+          afterInterveneTop,
           rowH: (rows2[1]?.getBoundingClientRect().height) || 0 };
       } catch (e) { return { __err: String(e && e.stack || e) }; }
     })()`, 'r63-flow');
@@ -167,6 +182,7 @@ app.whenReady().then(async () => {
         ok(drift <= 2, `3 视口顶行逐字不换（同一行位移 ${drift.toFixed(1)}px ≤2；scrollTop ${flow.prevTop} → ${flow.afterTop} 随内容差回补）`);
       ok(String(flow.freshFirstTitle).includes('N900X'), `3 在顶部时新文章自然到顶（首行=${flow.freshFirstTitle}）`);
       ok(flow.topAfterFresh === 0, '3 顶部对照：scrollTop 保持 0');
+      ok(flow.afterInterveneTop < 40, `3 交叉用例：渐进渲染 × scrollTop() 干预——在途回补作废、视口不被拽回旧位（top=${flow.afterInterveneTop}）`);
     }
 
     // 滚动条计算样式（真实容器）

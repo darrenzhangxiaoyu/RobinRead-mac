@@ -417,8 +417,10 @@ export class ListView {
     // R33 新到高亮：已见识过列表（非首屏）时，不在 known 集合里的行标记 row-new
     this._markNew = this._knownIds.size > 0;
     // R63-③ 滚动锚定基线：重绘前记录位置/高度，行插入后再回补（用户在顶部之外时阅读位置不被顶走）
+    // 批2审查P1-1 收口：基线随代际快照——scrollTop() 等外部干预会推进代际，使在途的延迟回补作废
     const anchorTop = this.scrollEl.scrollTop;
     const anchorHeight = this.scrollEl.scrollHeight;
+    const anchorGen = this._scrollGen || 0;
     requestAnimationFrame(() => this._syncEdgeFades()); // R63-②：重绘后同步淡出遮（高度已变，滚动事件未必再来）
     this.topInset.querySelector('.list-top-title').textContent = this.titleForScope(scope);
     this.rowsHost.innerHTML = '';
@@ -490,13 +492,13 @@ export class ListView {
     if (this.eventsMode) {
       this.rowsHost.closest('.list-scroll')?.classList.remove('nj-mag-paper', 'nj-mag-white', 'nj-mag-book');
       this._renderEvents(items, selectedID);
-      this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③
+      this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③
       return;
     }
 
     if (this.viewMode === 'magazine') {
       this._renderMagazine(items, selectedID);
-      this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③
+      this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③
       this._knownIds = new Set(items.map((it) => it.id));
       this._markNew = false;
       return;
@@ -524,7 +526,7 @@ export class ListView {
         else {
           this._renderingPages = false;
           this.markSelected(selectedID); this._observeReveal(); this._mountResumeCard();
-          this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③：渐进渲染完成后高度才有代表性，此刻回补
+          this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③：渐进渲染完成后高度才有代表性，此刻回补（代际过期则让位 resetScroll）
         }
       };
       appendNext();
@@ -541,7 +543,7 @@ export class ListView {
       }
     }
     this.rowsHost.appendChild(fragment);
-    this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③ 新文章到达：顶部之外保持阅读位置
+    this._restoreScrollAnchor(anchorTop, anchorHeight, anchorGen); // R63-③ 新文章到达：顶部之外保持阅读位置
     this.markSelected(selectedID);
     this._observeReveal();
     this._mountResumeCard();
@@ -1252,6 +1254,7 @@ export class ListView {
   }
 
   scrollTop() {
+    this._scrollGen = (this._scrollGen || 0) + 1; // 批2审查P1-1：外部干预滚动位——在途的延迟锚定回补即刻作废
     this.scrollEl.scrollTop = 0;
   }
 
@@ -1735,8 +1738,9 @@ export class ListView {
    * 会让原阅读位置整体下移——按重绘前后 scrollHeight 差回补 scrollTop，保持视口锚定同几行。
    * 在顶部（scrollTop≈0）不介入：新文章自然到顶正是期待行为。
    */
-  _restoreScrollAnchor(prevTop, prevHeight) {
+  _restoreScrollAnchor(prevTop, prevHeight, gen) {
     if (!prevTop || !prevHeight) return;
+    if (gen !== undefined && gen !== (this._scrollGen || 0)) return; // 批2审查P1-1：期间有外部滚动干预（如切视野 resetScroll）——旧锚让位
     const el = this.scrollEl;
     const delta = el.scrollHeight - prevHeight;
     if (delta !== 0) el.scrollTop = prevTop + delta;
