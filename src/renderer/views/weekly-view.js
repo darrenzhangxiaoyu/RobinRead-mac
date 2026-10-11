@@ -254,7 +254,9 @@ export class WeeklyView {
       const row = el('button', 'nj-weekly-entry');
       row.type = 'button';
       row.innerHTML = `<span class="nj-weekly-entry-title"></span><span class="nj-weekly-entry-src"></span>`;
-      row.querySelector('.nj-weekly-entry-title').textContent = entry.title || entry.entryID;
+      const entryTitle = entry.title || entry.entryID;
+      row.querySelector('.nj-weekly-entry-title').textContent = entryTitle;
+      row.title = entryTitle; // R58：周刊条目标题单行截断的悬停全文（取代泛提示）
       row.querySelector('.nj-weekly-entry-src').textContent = entry.sourceTitle || '';
       row.title = t('打开这篇文章');
       row.addEventListener('click', () => {

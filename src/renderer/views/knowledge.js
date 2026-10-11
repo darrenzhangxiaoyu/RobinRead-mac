@@ -948,6 +948,7 @@ export class KnowledgeCenter {
         ${col.description ? `<div class="kb-col-desc"></div>` : ''}
         <div class="kb-col-count">${col.item_count || 0} 篇文章</div>`;
       card.querySelector('.kb-col-name').textContent = col.name;
+      card.querySelector('.kb-col-name').title = col.name; // R58：收藏集名单行截断的悬停全文
       if (col.description) card.querySelector('.kb-col-desc').textContent = col.description;
       card.querySelector('.kb-col-rename').addEventListener('click', async (e) => {
         e.stopPropagation();

@@ -391,6 +391,7 @@ export class TopicView {
     laneBadge.textContent = { local: t('本库'), aihot: 'AIHOT', pool: t('源池') }[hit.lane] || hit.lane;
     const main = el('div', 'nj-topic-hit-main');
     const title = el('div', 'nj-topic-hit-title', hit.title || hit.url);
+    title.title = hit.title || hit.url; // R58：话题命中标题 2 行截断的悬停全文
     const meta = el('div', 'nj-topic-hit-meta', `${hit.sourceName || ''} · ${fmtWhen(hit.publishedAt || hit.hitAt)}`);
     main.append(title, meta);
     row.append(laneBadge, main);

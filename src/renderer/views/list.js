@@ -578,6 +578,7 @@ export class ListView {
       </div>
     `;
     row.querySelector('.entry-title').textContent = cleanTitle;
+    row.querySelector('.entry-title').title = cleanTitle; // R58：截断必有出路——悬停看全文
     if (showSummary) row.querySelector('.entry-summary').textContent = cleanSummary;
     row.querySelector('.entry-source').textContent = item.sourceTitle;
     if (badge) row.querySelector('.entry-account-badge').textContent = badge;
@@ -804,7 +805,9 @@ export class ListView {
       <span class="cluster-hint">${escapeHTML(t('同题报道 · 点击展开'))}</span>
       <span class="entry-time" data-ts="${Number(cluster.items[0].publishedAt) || 0}" title="${attr(fullTime(cluster.items[0].publishedAt))}">${escapeHTML(formatTime(cluster.items[0].publishedAt))}</span>`;
     row.querySelector('.cluster-count').textContent = t('%lld 篇').replace('%lld', String(cluster.items.length));
-    row.querySelector('span:nth-child(2)').textContent = stripHtml(cluster.items[0].title);
+    const clusterTitleEl = row.querySelector('span:nth-child(2)');
+    clusterTitleEl.textContent = stripHtml(cluster.items[0].title);
+    clusterTitleEl.title = stripHtml(cluster.items[0].title); // R58：聚簇行标题单行截断的悬停全文
     row.title = t('多源相似报道，点击展开');
     // AI 对比速读（方向 14 v1）：一键融合多源同题报道（弹窗与生成在 app 层，与今日简报同管线）
     if (cluster.items.length >= 2) {
@@ -1147,7 +1150,9 @@ export class ListView {
         <span class="entry-time" data-ts="${Number(item.publishedAt) || 0}">${escapeHTML(formatTime(item.publishedAt))}</span>
       </div>`;
     body.querySelector('.mag-title').textContent = stripHtml(item.title) || t('未命名文章');
+    body.querySelector('.mag-title').title = stripHtml(item.title) || t('未命名文章'); // R58：杂志卡标题 3 行截断的悬停全文
     body.querySelector('.mag-feed').textContent = item.sourceTitle || '';
+    body.querySelector('.mag-feed').title = item.sourceTitle || ''; // R58：杂志卡来源名单行截断的悬停全文
 
     card.appendChild(cover);
     card.appendChild(body);
