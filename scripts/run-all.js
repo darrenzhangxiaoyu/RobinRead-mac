@@ -92,6 +92,8 @@ const OFFLINE = [
   { file: 'scripts/diag-r69-gesture.js', runner: 'electron', desc: 'R69 手势与滚动三连：阅读器滚轮过滚动不冒泡/双击正文空白回顶/列表杂志互切保持滚动位置（离线）' },
   { file: 'scripts/diag-r70-retry.js', runner: 'electron', desc: 'R70 错误与重试三连：网络失败toast带重试动作/图片批量全部重试/AI面板inline重试（离线）' },
   { file: 'scripts/diag-r71-i18n.js', runner: 'electron', desc: 'R71 文案与国际化三连：句读全角口径固化/t()键表差集清零(160键补录)/日期本地化跟随界面语言（离线）' },
+  { file: 'scripts/diag-r72-perceive.js', runner: 'electron', desc: 'R72 性能感知三连：冷启动静态骨架先行/长文分叶渐进渲染平滑/视图互切保位合并验收（离线）' },
+  { file: 'scripts/diag-r73-consistency.js', runner: 'electron', desc: 'R73 收官一致性三连：z-index谱表文档化+值域固化/焦点环选区滚动条三件套accent终检/reduced-motion全量断言（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

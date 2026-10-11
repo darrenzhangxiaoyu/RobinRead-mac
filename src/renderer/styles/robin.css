@@ -129,6 +129,33 @@
   --focus-off-in: -2px;  /* 列表项/导航档：环画在元素内（贴边不裁切） */
 }
 
+/* ==========================================================================
+   R73-① z-index 谱表（全库冻结口径 · diag-r73-consistency 固化）
+   新代码取值必须落在下列档位内；越界值探针即红。
+   ── 局部层叠（组件内部 0-120）──
+   0-7   组件内元素（行卡/淡出遮/sticky inset/滚动条/翻页叶·封面·折角）
+   20    主工具栏
+   25-50 阅读区浮动小件（翻译进度 30 / 批注·TTS 浮球·媒体卡 40-44 / er 翻页件 / 划词进度 90）
+   60    窗口级暗示层（snap 提示 / 聚焦模式遮 / 光谱 popover / er 滑轨）
+   70-85 er 面板件（速查卡 70 / 状态条 85）
+   110   期刊内面板（排版面板 / 滑轨目录 / 段落聚焦面板）
+   115   刊头 popover（期号 / 封面故事）
+   120   期刊灯箱与工具条
+   ── 全局浮层底座（body 级 fixed 240-1200，自下而上）──
+   240   测验浮层          380  复习会话遮罩
+   500   批量操作条        600  列表搜索历史 / 快捷键速查（body 级浮层压列表容器）
+   780   首启引导（低于模态——引导内动作要能打开模态）
+   800   模态遮罩 / 媒体中心 / 话题视图
+   850   迷你播放器        860  文字稿浮层
+   900   期刊阅读器 / 研读 popover / 胶囊仪式（--z-modal,900）
+   920   命令面板（压期刊 overlay——期刊打开时面板可用，R20）
+   950   期刊划词条 / 划词 popover（压期刊 overlay）
+   980   期刊状态条        999  正文灯箱
+   1000  toast 栈          1200 右键菜单（全库之顶）
+   ── 划词/批注强占位族（2147483645-47，上限三档冻结）──
+   45 划词浮条 / 更多折叠   46 划词 popover / 高亮菜单 / 笔记卡   47 笔记编辑器
+   纸感期刊系统（--erp-*）自成 accent/纸面档位，R17 记档口径不并入全局 accent。 */
+
 body.dark {
   --chrome-background: #21201c;
   --page-background: #1b1a17;
@@ -788,7 +815,7 @@ body.zen .list-top-inset { display: none; }
 .reader-article div > p:last-child, .reader-article div > p:only-child { margin-bottom: 0; }
 .reader-article .table-scroll { overflow-x: auto; margin: 1.3em 0; border-radius: var(--radius-md); }
 .reader-article .table-scroll table { margin: 0; min-width: 480px; }
-.reader-article ::selection { background: rgba(116, 137, 100, 0.24); }
+.reader-article ::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); } /* R73-② 选区色跟随 accent（原 rgba 硬编码缺省值退役） */
 
 /* ── 排版引擎 v2：段落风格 / 对齐 / 字距 / 中文微排版 / 首字下沉（调研报告 2026-09-26 方向 1/4/7）── */
 .reader-article pre, .reader-article code, .reader-article kbd, .reader-article samp { letter-spacing: 0; }
@@ -4479,8 +4506,8 @@ body.nj-resizing *, body.nj-resizing *::before, body.nj-resizing *::after {
   transition: none !important;
 }
 
-/* 全局选区：纸感绿（阅读区原有规则保持兼容） */
-::selection { background: rgba(116, 137, 100, 0.26); }
+/* 全局选区：跟随 accent（R73-② 三件套终检；原 rgba 硬编码缺省值退役——主题设计器换色时选区同步） */
+::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
 
 /* 空状态精修：装饰圆底 + 衬线标题（R59：垂直节奏令牌化——art/标题/文案/出路按钮四拍
    间距归 --space-*，10px/30px 裸值退役进 4px 网格档） */
