@@ -91,6 +91,24 @@ app.whenReady().then(async () => {
     ok(/\.reader-article a \{\s*\n\s*color: var\(--accent\);/.test(css) && /color: var\(--accent\);/.test(css.match(/\.list-empty-refresh \{[^}]*\}/)[0]),
       '1 链接与空态 CTA 消费 accent（对比度审计落在真实消费面）');
 
+    // ── 1b. 批2审查收口：混合填充消费面（danger 实底确认键 + primary spinner 墨环）──
+    const lightDanger = tokenHex(rootBlock, 'danger');
+    const darkInk = tokenHex(darkBlock, 'accent-ink');
+    const lightInk = tokenHex(rootBlock, 'accent-ink');
+    ok(lightDanger && lightInk && darkInk, '1b danger/accent-ink 亮暗令牌齐备');
+    const cdLight = contrast(hexRgb(lightInk), hexRgb(lightDanger));
+    const cdDark = contrast(hexRgb(darkTokens['danger']), hexRgb(darkInk));
+    ok(cdLight >= 4.5, `1b danger 实底·浅色：on-fill 墨 = ${cdLight.toFixed(2)}:1 ≥4.5（原 14% 淡彩底 3.33）`);
+    ok(cdDark >= 4.5, `1b danger 实底·暗色：danger 底 vs 深墨 = ${cdDark.toFixed(2)}:1 ≥4.5（原 3.99 回归点）`);
+    ok(/\.modal-footer \.btn-text\.danger \{[^}]*background: var\(--danger\);[^}]*color: var\(--accent-ink\);/.test(css),
+      '1b 破坏性确认按钮真实消费 danger 实底 + on-fill 墨（审计面即渲染面）');
+    ok(/\.btn-text\.primary\.spinning::after \{[^}]*border-top-color: var\(--accent-ink\);/.test(css),
+      '1b primary spinner 换 on-fill 墨环（row-selected 顶弧在 accent 底不可见——P2-1 收口）');
+    const ringLight = contrast(hexRgb(lightInk), hexRgb(tokenHex(rootBlock, 'accent')));
+    const ringDark = contrast(hexRgb(darkTokens['accent']), hexRgb(darkInk));
+    ok(ringLight >= 3 && ringDark >= 3,
+      `1b spinner 顶弧 vs primary 底双主题 ≥3:1 非文本线（浅 ${ringLight.toFixed(2)} / 暗 ${ringDark.toFixed(2)}）`);
+
     // ── 2. 封面滤镜档 ──
     ok(/--cover-filter: none;/.test(rootBlock), '2 --cover-filter 亮色档 = none（浅色不滤镜）');
     ok(/--cover-filter: brightness\(0\.86\) saturate\(0\.92\);/.test(darkBlock), '2 --cover-filter 暗色档 = brightness(.86) saturate(.92)');

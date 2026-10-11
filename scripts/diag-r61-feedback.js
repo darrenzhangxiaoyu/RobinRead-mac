@@ -74,8 +74,8 @@ app.whenReady().then(async () => {
     ok(toneErrCount >= 25, `1 失败语义已落地（tone:'error' ${toneErrCount} 处）`);
 
     // ── 2. 破坏性确认警示色 ──
-    ok(/\.modal-footer \.btn-text\.danger \{[^}]*color-mix\(in srgb, var\(--danger\) 14%[^}]*\}/.test(css.replace(/\n/g, ' ')),
-      '2 破坏性确认主按钮警示填充在册（danger 14% 底 + 52% 边）');
+    ok(/\.modal-footer \.btn-text\.danger \{[^}]*background: var\(--danger\);[^}]*color: var\(--accent-ink\);/.test(css.replace(/\r\n/g, '\n')),
+      '2 破坏性确认主按钮 danger 实底 + on-fill 墨在册（批2审查P1-2 收口：14% 淡彩底对比度 3.33/3.99 跌破 AA 退役）');
     ok(/danger \? 'danger' : 'primary'/.test(uiPromptSrc), '2 confirmBox danger 开关在册（ui-prompt 合同）');
     ok(/okLabel: t\('删除'\),\s*\n\s*danger: true, \/\/ R61：破坏性确认主按钮统一警示色（原 confirmLabel 键名不被读取/.test(topicSrc),
       '2 话题删除确认修复（confirmLabel 键名失效真 bug → okLabel + danger）');
@@ -163,14 +163,15 @@ app.whenReady().then(async () => {
     else {
       ok(flow.errCls.includes('error'), '1 失败 toast 挂 error 态类');
       ok(flow.errIcon, '1 失败 toast 图标为叹号（真实渲染）');
-      ok(flow.errColor === 'rgb(201, 59, 59)', `1 失败图标色 = --danger 亮档（实际 ${flow.errColor}）`);
+      ok(flow.errColor === 'rgb(191, 56, 56)', `1 失败图标色 = --danger 亮档（批2审查P1-2 深化档，实际 ${flow.errColor}）`);
       ok(flow.warnColor !== flow.errColor && flow.okColor !== flow.errColor,
         `1 三态色互异（ok=${flow.okColor} warn=${flow.warnColor} err=${flow.errColor}）`);
       ok(flow.dangerBtn, '2 破坏性确认主按钮挂 .btn-text.danger');
-      // Chromium 对 color-mix 返回 color(srgb …) 计算值：danger 14% 叠 note 底 ≈ rgb(0.893, 0.808, 0.754)
-      const mix = flow.dangerBg.match(/color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/);
-      const tinted = mix && Number(mix[1]) > 0.88 && Number(mix[1]) < 0.90 && Number(mix[3]) > 0.74 && Number(mix[3]) < 0.77;
-      ok(tinted, `2 警示填充生效（bg ${flow.dangerBg}）`);
+      // 批2审查P1-2 收口：danger 实底——Chromium 对不透明直填返回 rgb(r, g, b) = #bf3838
+      const fill = flow.dangerBg.match(/(?:rgb|color\(srgb)\(?([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)/);
+      const fr = fill ? [Number(fill[1]), Number(fill[2]), Number(fill[3])].map((v) => (v > 1 ? v / 255 : v)) : [0, 0, 0];
+      const solid = fr[0] > 0.70 && fr[0] < 0.79 && fr[1] > 0.18 && fr[1] < 0.26;
+      ok(solid, `2 警示实底生效（bg ${flow.dangerBg}）`);
       ok(flow.starAnim === 'star-pop@0.25s', `3 收藏星 pop（${flow.starAnim}）`);
       ok(flow.laterAnim === 'later-pop@0.25s', `3 稍后读时钟 pop 对称（${flow.laterAnim}）`);
     }

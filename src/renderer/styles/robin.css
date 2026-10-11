@@ -27,8 +27,8 @@
   --unread-dot: #617357;
   --star-color: #a3573d;
   /* P1-5：错误红语义令牌补定义（此前 6137/6175/6176/6282 已在消费 var(--danger,#c93b3b) 但令牌缺席）。
-     暗态提亮档见 body.dark。 */
-  --danger: #c93b3b;
+     暗态提亮档见 body.dark。批2审查P1-2 收口：#c93b3b 在纸面/实底上 4.50 刀刃，深化一档全消费面离线。 */
+  --danger: #bf3838;
   --kb-hl-yellow: #d4a834;      /* 知识卡「黄色高亮」描边：暗态见 body.dark 覆盖 */
   --shadow-card: 0 1px 2px rgba(41, 38, 32, 0.06), 0 4px 14px rgba(41, 38, 32, 0.05);
   --radius-card: 14px;
@@ -349,6 +349,12 @@ body.sidebar-collapsed .tb-zone-list { width: var(--list-width, 340px); }
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: rotate 0.8s linear infinite;
+}
+/* 批2审查P2-1 收口：primary（accent 实底）上的 spinner 换 on-fill 墨环——
+   row-selected 顶弧与 accent 底近同色，旋转缺口提示在媒体 AI 摘要键上不可见 */
+.btn-text.primary.spinning::after {
+  border-color: color-mix(in srgb, var(--accent-ink) 32%, transparent);
+  border-top-color: var(--accent-ink);
 }
 @keyframes rotate { to { transform: rotate(360deg); } }
 
@@ -1965,17 +1971,19 @@ select.control.invalid, input.control.invalid { border-color: var(--danger); }
 .btn-text:hover { filter: brightness(1.05); }
 .btn-text.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink, #f6f2e7); }
 .btn-text.danger { color: var(--danger); }
-/* R61 反馈语义：破坏性确认框主按钮升级为警示填充（非纯描字）——
-   危险动作的确认键一望可辨，与普通 primary 确认（accent 底）明确分工。仅限确认框脚部，
-   不影响他处 .btn-text.danger 文字链（登出等）。 */
+/* R61 反馈语义（批2审查P1-2 收口）：破坏性确认键改「danger 实底 + on-fill 墨」——
+   原 14% 淡彩底 + danger 字实算对比度浅 3.33 / 暗 3.99（双双跌破 AA 4.5，暗色且为回归）；
+   实底 + --accent-ink 方案实算浅 4.51 / 暗 5.46 双过线，与 primary 确认键（accent 底）同构、
+   色相分工仍一望可辨。仅限确认框脚部，不影响他处 .btn-text.danger 文字链（登出等）。 */
 .modal-footer .btn-text.danger {
-  background: color-mix(in srgb, var(--danger) 14%, var(--note-background));
-  border-color: color-mix(in srgb, var(--danger) 52%, var(--separator));
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--accent-ink);
   font-weight: 600;
 }
 .modal-footer .btn-text.danger:hover {
-  background: color-mix(in srgb, var(--danger) 22%, var(--note-background));
-  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 88%, var(--accent-ink));
+  border-color: color-mix(in srgb, var(--danger) 88%, var(--accent-ink));
 }
 .btn-text:disabled { opacity: 0.45; pointer-events: none; }
 .btn-text.bordered { background: transparent; }
