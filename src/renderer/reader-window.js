@@ -93,7 +93,10 @@ async function bootstrap() {
     const el = document.getElementById(id);
     if (!el) return;
     el.innerHTML = svg;
-    if (title) el.title = t(title);
+    if (title) {
+      el.title = t(title);
+      el.setAttribute('aria-label', el.title); // R67 纯图标按钮 title+aria 双补
+    }
   };
   setBtn('rw-font-minus', icon('textSmaller'), '缩小正文字号');
   setBtn('rw-font-plus', icon('textLarger'), '放大正文字号');

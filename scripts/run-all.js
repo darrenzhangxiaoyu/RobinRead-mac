@@ -87,6 +87,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r64-toastorder.js', runner: 'electron', desc: 'R64 toast 秩序三连：堆叠上限3+同类合并×N计数/退场12px镜像对称/按钮键盘可达焦点暂停（离线）' },
   { file: 'scripts/diag-r65-forms.js', runner: 'electron', desc: 'R65 设置与表单三连：开关命中区≥40px+表格行hover同语言/focus环audit+字段级错误态/改动行内对勾确认样板（离线）' },
   { file: 'scripts/diag-r66-typo.js', runner: 'electron', desc: 'R66 阅读排版三连：标题断行balance扩面/--font-mono等宽单一事实源+引用块三家族归U5正典/hover零布局位移程序化固化（离线）' },
+  { file: 'scripts/diag-r67-icons.js', runner: 'electron', desc: 'R67 图标语义三连：收藏星/稍后读时钟/已读勾全域同形/stroke 1.75归簇全量扫描/纯图标按钮title+aria双补（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

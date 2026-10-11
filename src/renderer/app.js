@@ -476,18 +476,21 @@ function buildToolbar() {
   const set = (id, svg, title) => {
     const el = document.getElementById(id);
     el.innerHTML = svg;
-    if (title) el.title = title;
+    if (title) {
+      el.title = title;
+      el.setAttribute('aria-label', title); // R67 纯图标按钮 title+aria-label 双补（辅助技术不读 title）
+    }
   };
   set('btn-toggle-sidebar', icon('sidebarLeft'), t('切换侧栏'));
   set('btn-refresh', icon('refresh'), t('刷新所有订阅'));
   set('btn-add', icon('plus'), t('新建与更多'));
-  set('btn-mark-all', icon('envelopeOpen'), t('将当前列表全部标为已读'));
-  set('cap-translate', icon('translate'));
+  set('btn-mark-all', icon('checkAll'), t('将当前列表全部标为已读')); // R67 已读同形：全部已读=勾（与行内快捷/阅读胶囊同一已读语言）
+  set('cap-translate', icon('translate'), t('翻译：关闭')); // 静态兜底（i18n 在册键）：updateCapStates 按模式覆写
   set('cap-deepread', icon('bookOpen'), t('一键精读：论证/概念/证据/金句 (D)'));
   set('cap-rsummary', icon('docText'), t('高质量中文摘要 (S)'));
-  set('cap-read', icon('envelopeClosed'));
-  set('cap-star', icon('star'));
-  set('cap-zen', icon('expand'));
+  set('cap-read', icon('checkAll'), t('标为已读')); // R67 已读同形：未读态提供「标为已读」=勾（updateCapStates 按态换形）
+  set('cap-star', icon('star'), `${t('收藏')} (M)`); // R67 静态兜底：未选中文章前按钮也有可读名
+  set('cap-zen', icon('expand'), t('禅模式全屏阅读'));
   set('cap-focus-session', icon('clock'), t('专注会话：设定时长开始沉浸阅读'));
   set('cap-autoscroll', icon('chevronDown'), t('自动滚动阅读'));
   set('cap-focus', icon('eye'), t('聚焦模式：非当前段落渐暗（F）'));
@@ -507,6 +510,7 @@ function updateMaximizeGlyph(isMaximized) {
   if (!btn) return;
   btn.innerHTML = icon(isMaximized ? 'winRestore' : 'winMaximize');
   btn.title = isMaximized ? t('向下还原') : t('最大化');
+  btn.setAttribute('aria-label', btn.title); // R67 纯图标按钮 title+aria 双补（换形时同步）
 }
 
 function bindWindowControls() {
@@ -682,16 +686,19 @@ function updateToolbarState() {
   capTranslate.classList.toggle('active', tMode !== 'off');
   capTranslate.title = `${modeLabels[tMode]} (C · 点击切换模式)`;
   const capRead = document.getElementById('cap-read');
-  capRead.innerHTML = icon(item?.isRead ? 'envelopeOpen' : 'envelopeClosed');
+  capRead.innerHTML = icon(item?.isRead ? 'envelopeOpen' : 'checkAll'); // R67 已读同形：勾=标为已读 / 开信封=标为未读（与行内快捷 q-read 同一二元）
   capRead.title = t(item?.isRead ? '标为未读' : '标为已读');
+  capRead.setAttribute('aria-label', capRead.title);
   const capStar = document.getElementById('cap-star');
   capStar.classList.toggle('active', Boolean(item?.isStarred));
   capStar.innerHTML = icon(item?.isStarred ? 'starFilled' : 'star');
   capStar.title = `${t(item?.isStarred ? '取消收藏' : '收藏')} (M)`;
+  capStar.setAttribute('aria-label', capStar.title); // R67 纯图标按钮双补
   const capZen = document.getElementById('cap-zen');
   capZen.classList.toggle('active', state.zenMode);
   capZen.innerHTML = icon(state.zenMode ? 'collapse' : 'expand');
   capZen.title = t(state.zenMode ? '退出禅模式' : '禅模式全屏阅读');
+  capZen.setAttribute('aria-label', capZen.title); // R67 纯图标按钮双补
 }
 
 function headerTitle() {

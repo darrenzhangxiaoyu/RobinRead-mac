@@ -4,6 +4,12 @@
  * 轻量线条图标集。
  * U8：全库描边统一——线框图标 stroke-width 一律 1.75（16 单位 viewBox 口径）；
  * 窗口控制 10×10 像素级字形按同一光学权重等比缩放：1.75 × 10/16 ≈ 1.1。
+ * R67 语义同形约定：
+ *  - 收藏 = star（动作，描边）/ starFilled（状态，填充）——全域同形；
+ *  - 稍后读/时间 = clock——全域同形；
+ *  - 已读动作 = checkAll（勾）；未读动作/状态 = envelopeOpen（开信封）；
+ *    envelopeClosed 仅保留给「未读筛选/邮件账户」等状态语义（命令面板未读筛选、邮箱图标）。
+ * R67 描边归簇：除上述窗口控制 1.1 例外，逐项核查零偏差（冗余的 per-path stroke-width 已退役）。
  */
 const ICON_STROKE = 1.75;
 const i = (body, vb = '0 0 16 16', w = 15, h = 15) =>
@@ -48,7 +54,7 @@ export const icons = {
   checkCircle: i('<circle cx="8" cy="8" r="6.4"/><path d="M5.2 8.2l1.9 1.9 3.7-4"/>'),
   expand: i('<path d="M9.4 2.2h4.4v4.4M6.6 13.8H2.2V9.4M13.8 2.2L9 7M2.2 13.8L7 9"/>', '0 0 16 16', 13, 13),
   collapse: i('<path d="M13.8 6.6H9.4V2.2M2.2 9.4h4.4v4.4M9.4 6.6l4.4-4.4M6.6 9.4l-4.4 4.4"/>', '0 0 16 16', 13, 13),
-  keyboard: i('<rect x="1.4" y="4" width="13.2" height="8.4" rx="1.4"/><path d="M4 6.6h.01M6.4 6.6h.01M8.8 6.6h.01M11.2 6.6h.01M4 9.4h.01M6.4 9.4h.01M8.8 9.4h.01M11.2 9.4h.01M5 11h6" stroke-width="1.75"/>'),
+  keyboard: i('<rect x="1.4" y="4" width="13.2" height="8.4" rx="1.4"/><path d="M4 6.6h.01M6.4 6.6h.01M8.8 6.6h.01M11.2 6.6h.01M4 9.4h.01M6.4 9.4h.01M8.8 9.4h.01M11.2 9.4h.01M5 11h6"/>'),
   cloud: i('<path d="M4.6 12.6h7a2.8 2.8 0 0 0 .5-5.6 4.2 4.2 0 0 0-8.1-.9 2.9 2.9 0 0 0 .6 6.5z"/>'),
   globe: i('<circle cx="8" cy="8" r="6.3"/><path d="M1.7 8h12.6M8 1.7c-2.2 2.2-3.2 4-3.2 6.3s1 4.1 3.2 6.3c2.2-2.2 3.2-4 3.2-6.3S10.2 3.9 8 1.7z"/>'),
   appearance: i('<path d="M8 1.8a6.2 6.2 0 1 0 0 12.4V1.8z" fill="currentColor" stroke="none" opacity="0.85"/><path d="M8 1.8a6.2 6.2 0 1 0 0 12.4V1.8z"/><circle cx="8" cy="8" r="6.2"/>'),
@@ -56,7 +62,7 @@ export const icons = {
   heart: i('<path d="M8 13.4C4.6 11 2 8.8 2 6.1 2 4.4 3.3 3 5 3c1.2 0 2.3.7 3 1.7C8.7 3.7 9.8 3 11 3c1.7 0 3 1.4 3 3.1 0 2.7-2.6 4.9-6 7.3z"/>'),
   bubble: i('<path d="M2.4 4c0-.9.7-1.6 1.6-1.6h8c.9 0 1.6.7 1.6 1.6v5.4c0 .9-.7 1.6-1.6 1.6H5.6L3 13.6V4z"/><path d="M5 6.4h6M5 8.6h4"/>'),
   eye: i('<path d="M1.6 8s2.2-4 6.4-4 6.4 4 6.4 4-2.2 4-6.4 4S1.6 8 1.6 8z"/><circle cx="8" cy="8" r="1.9"/>'),
-  server: i('<rect x="1.8" y="2.4" width="12.4" height="4.6" rx="1.2"/><rect x="1.8" y="9" width="12.4" height="4.6" rx="1.2"/><path d="M4.2 4.7h.01M4.2 11.3h.01" stroke-width="1.75"/>'),
+  server: i('<rect x="1.8" y="2.4" width="12.4" height="4.6" rx="1.2"/><rect x="1.8" y="9" width="12.4" height="4.6" rx="1.2"/><path d="M4.2 4.7h.01M4.2 11.3h.01"/>'),
   macDevices: i('<rect x="1.4" y="2.6" width="9" height="6.4" rx="1.2"/><path d="M3.6 10.6h4.6"/><rect x="10" y="5" width="4.6" height="8.4" rx="1.2"/>'),
   info: i('<circle cx="8" cy="8" r="6.3"/><path d="M8 7.2v4"/><circle cx="8" cy="5" r="0.65" fill="currentColor" stroke="none"/>'),
   wand: i('<path d="M10.6 2l.8 1.8 1.8.8-1.8.8-.8 1.8-.8-1.8L8 4.6l1.8-.8L10.6 2z"/><path d="M2 14l7.4-7.4"/><path d="M13 9.6l.5 1.1 1.1.5-1.1.5-.5 1.1-.5-1.1-1.1-.5 1.1-.5.5-1.1z"/>'),

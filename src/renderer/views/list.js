@@ -814,6 +814,7 @@ export class ListView {
       b.type = 'button';
       b.className = `row-quick-btn ${cls}`;
       b.title = title;
+      b.setAttribute('aria-label', title); // R67 纯图标按钮 title+aria 双补
       b.innerHTML = icon(icon_);
       b.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -1521,6 +1522,7 @@ export class ListView {
     btn.type = 'button';
     btn.className = 'row-quick-btn q-dismiss nj-picks-dismiss';
     btn.title = t('把这篇移出精选（24 小时内不再出现）');
+    btn.setAttribute('aria-label', btn.title); // R67 纯图标按钮 title+aria 双补
     btn.innerHTML = icon('close');
     btn.addEventListener('click', (event) => {
       event.stopPropagation();

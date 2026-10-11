@@ -394,9 +394,9 @@ export class AihotView {
         ${kw.length ? `<div class="aihot-kw-hit">${esc(t('关注'))}：${kw.map(esc).join('、')}</div>` : ''}
       </div>
       <div class="aihot-card-actions">
-        <button class="aihot-act aihot-fav" title="${esc(t('收藏'))}">${icon('star')}</button>
-        <button class="aihot-act aihot-deep" title="${esc(t('AI 深读'))}">${icon('spark')}</button>
-        ${it.originalURL ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}
+        <button class="aihot-act aihot-fav" title="${esc(t('收藏'))}" aria-label="${esc(t('收藏'))}">${icon('star')}</button>
+        <button class="aihot-act aihot-deep" title="${esc(t('AI 深读'))}" aria-label="${esc(t('AI 深读'))}">${icon('spark')}</button>
+        ${it.originalURL ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}" aria-label="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}
       </div>`;
     card.querySelector('.aihot-title').textContent = it.title;
     const key = it.id || it.title;
@@ -497,7 +497,7 @@ export class AihotView {
         const card = document.createElement('div');
         card.className = 'aihot-card clickable';
         card.innerHTML = `<div class="aihot-main"><div class="aihot-title"></div>${it.summary ? '<div class="aihot-summary"></div>' : ''}</div>
-          <div class="aihot-card-actions">${it.url ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}</div>`;
+          <div class="aihot-card-actions">${it.url ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}" aria-label="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}</div>`;
         card.querySelector('.aihot-title').textContent = it.title;
         if (it.summary) card.querySelector('.aihot-summary').textContent = it.summary;
         if (it.url) card.addEventListener('click', () => this.handlers.onOpenURL?.(it.url));
@@ -591,9 +591,9 @@ export class AihotView {
         </div>
       </div>
       <div class="aihot-card-actions">
-        <button class="aihot-act aihot-fav" title="${esc(t('收藏'))}">${icon('star')}</button>
-        <button class="aihot-act aihot-deep" title="${esc(t('AI 深读'))}">${icon('spark')}</button>
-        ${it.originalURL ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}
+        <button class="aihot-act aihot-fav" title="${esc(t('收藏'))}" aria-label="${esc(t('收藏'))}">${icon('star')}</button>
+        <button class="aihot-act aihot-deep" title="${esc(t('AI 深读'))}" aria-label="${esc(t('AI 深读'))}">${icon('spark')}</button>
+        ${it.originalURL ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}" aria-label="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}
       </div>`;
     card.querySelector('.aihot-title').textContent = it.title;
     if (it.summary) card.querySelector('.aihot-summary').textContent = it.summary;
@@ -636,8 +636,8 @@ export class AihotView {
           <div class="aihot-meta">${it.meta ? `<span class="aihot-source">${esc(it.meta)}</span>` : ''}<span class="aihot-time">${esc(timeAgo(it.savedAt))}</span></div>
         </div>
         <div class="aihot-card-actions">
-          <button class="aihot-act aihot-unfav active" title="${esc(t('取消收藏'))}">${icon('star')}</button>
-          ${it.originalURL ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}
+          <button class="aihot-act aihot-unfav active" title="${esc(t('取消收藏'))}" aria-label="${esc(t('取消收藏'))}">${icon('star')}</button>
+          ${it.originalURL ? `<button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}" aria-label="${esc(t('复制链接'))}">${icon('copy')}</button>` : ''}
         </div>`;
       card.querySelector('.aihot-title').textContent = it.title;
       if (it.summary) card.querySelector('.aihot-summary').textContent = it.summary;
@@ -912,7 +912,7 @@ export class AihotView {
             ${r.summary ? '<div class="aihot-summary"></div>' : ''}
             <div class="aihot-meta">${r.source ? `<span class="aihot-source">${esc(r.source)}</span>` : ''}${r.publishedAt ? `<span class="aihot-time">${esc(timeAgo(r.publishedAt))}</span>` : ''}</div>
           </div>
-          ${r.links?.original ? `<div class="aihot-card-actions"><button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}">${icon('copy')}</button></div>` : ''}`;
+          ${r.links?.original ? `<div class="aihot-card-actions"><button class="aihot-act aihot-copy" title="${esc(t('复制链接'))}" aria-label="${esc(t('复制链接'))}">${icon('copy')}</button></div>` : ''}`;
         card.querySelector('.aihot-title').textContent = r.title;
         if (r.summary) card.querySelector('.aihot-summary').textContent = r.summary;
         if (r.links?.original) {
