@@ -114,6 +114,14 @@
 
 （每轮完成后记：commit + 探针数 + 审查发现）
 
+- **R54 开卷**（06c8328，diag-r54-openfeed.js 21 项全绿）：真 bug 修复——简报缓存命中 renderInto 无条件 `scrollTop=scrollHeight` 落底 → 仅流式生成分支跟随落底，非流式（缓存/终稿）重绘保位（缓存首帧 prevTop=0 即报头）；文章微入场 nj-article-enter（淡入+scale 0.985，--dur-fast+--ease-out 令牌，翻页动效在场时让位不叠两场）；续读提示降噪 audit = 延迟窗口内已先行翻页不再补过时提示（er-notice 本就 pointer-events:none/z85/单实例计时器，audit 锚点固化）。复跑 f36/f20 绿。
+- **R55 浮层秩序**（eb599a7，diag-r55-escorder.js 19 项全绿）：新增 views/overlay-stack.js 浮层栈（registerEscapeLayer 入栈 / isTopEscapeLayer 顶层先关 / captureFocusReturn 焦点归还），15 个浮层家族挂账（右键菜单/设置/知识中心/周刊/花园/媒体/课程/重访/存档馆/热点/命令面板/主题设计器/订阅源管理/专注面板/自进化）；裁决模型 = 各浮层保留自身 Esc 监听、关窗前问 isTop + 消费即 preventDefault（polite 约定全库统一），右键菜单补 Esc 关闭（capture 独占，此前不响应 Esc 会关到底下浮层）；胶囊开启仪式 Esc=先收下（onEsc→close 同通路）；设置/知识中心/周刊/媒体四模态焦点归还（dismiss 先 remove 再 restore，焦点已回落 body 才归还）。复跑 f23/f27/f29/f20 绿。
+- **R56 按压纪律**（c036c3d，diag-r56-press.js 19 项全绿）：U12 按压家族补 footer-nav-btn / dg-mode-seg button / nj-garden-tab（roadmap 写 scale(0.97)，归簇进既有 --press-scale=0.96 令牌，零新量纲）；悬停去位移四处按钮级小控件（批注图标/传统色 chip/笔记锚点/语音浮球——提亮或微放大替代 translateY），卡片 lift 家族（prov/td/kb/mag）保留；命令面板执行（Enter/点选）退场 120ms 淡出+0.98 缩放（--dur-instant，与 cmd-in 入场镜像，leave 计时器防退场途中重开误删），Esc/点外部保持即时收。复跑 edition-palette/palette-groups/palette-move 绿。审查发现：设置行非按钮级容器（行内开关/下拉已有按压态），整行 scale 反而失真——按压补齐落在真实按钮家族。
+- **R57 数字纪律**（1f81121，diag-r57-numeric.js 16 项全绿）：tabular-nums 全量——程序化审计（类名时间/计数暗示 × 规则块扫描）后 38 个缺口类入组（播放器时间/媒体时长/阅读剩余/批处理计数/各视图统计数字），15 关键样本复扫零缺口；相对时间静默刷新 refreshEntryTimes（60s 心跳挂 rowsHost、data-ts 定位、只改文本节点不重绘、幂等、formatTime 可注入时钟）；时长口径 audit 三场景各归各位固化锚点（阅读「约 N 分钟」/播客进度 H:MM:SS/列表时长「N 分钟」，文字稿时间戳与播放器同族）。复跑 u1-u5 绿。
+- **R58 截断与光学**（91cb262，diag-r58-truncate.js 18 项全绿）：line-clamp 口径表冻结 11 处逐一断言（列表行 2/无摘要 4/摘要 2/杂志卡 3/aihot 3/批注 3+2/话题 2/胶囊引文 2×2/订阅卡 2）+ 周刊条目 1 行 nowrap；截断必有出路七处补 title 悬停全文（列表行标题/杂志卡标题/杂志卡来源/聚簇行标题/话题命中标题/收藏集名/周刊条目——周刊由泛提示「打开这篇文章」升级为全文）；meta 行光学——entry-meta 裸 6px 间距退役归 --space-1，字符串点分隔 meta（话题/文字稿/书架/胶囊）统一「 · 」全角口径锚点固化。复跑 f29/r39/r51/u26-30 绿。
+
 ## 换题记档
 
 （实现中发现不成立/已存在的细节，记档换题，不硬凑）
+
+- **R57-2 列表「N 分钟前」60s 刷新**：主列表时间实为 HH:MM（当日）/日期桶口径，并无「N 分钟前」相对文案（相对时间仅存在于热点/知识/设置等视图，且各有热刷新）——换等价题「跨日时间桶翻转静默刷新」（refreshEntryTimes，60s 心跳 + 只改文本节点，机制与意图不变：可见时间恒新鲜、不整页重绘）。
