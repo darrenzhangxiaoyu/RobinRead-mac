@@ -61,12 +61,35 @@
     </div>
     <div id="split">
       <aside class="column column-sidebar robin-surface" id="sidebar" tabindex="0">
-        <div class="sidebar-scroll" id="sidebar-scroll"></div>
+        <div class="sidebar-scroll" id="sidebar-scroll">
+          <!-- R72-① 冷启动静态骨架：JS 接管前撑住首帧（与 U11 骨架行同几何 → 真实首帧零跳变）；
+               bootstrap 首次真实渲染（或明确失败）后由 app.js dismissBootSkeleton 摘除 -->
+          <div class="nj-boot-skeleton" id="nj-boot-skeleton-sidebar" aria-hidden="true">
+            <div class="nj-skeleton-list">
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w100"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w45"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w100"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w70"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w45"></i><i class="nj-sk nj-sk-line w100"></i></span></div>
+            </div>
+          </div>
+        </div>
         <div class="sidebar-footer" id="sidebar-footer"></div>
       </aside>
       <div class="splitter" id="splitter-sidebar"></div>
       <section class="column column-list robin-surface" id="list" tabindex="0">
-        <div class="list-scroll" id="list-scroll"></div>
+        <div class="list-scroll" id="list-scroll">
+          <div class="nj-boot-skeleton" id="nj-boot-skeleton" aria-hidden="true">
+            <div class="nj-skeleton-list">
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w45"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w45"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w45"></i><i class="nj-sk nj-sk-line w100"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w45"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w45"></i><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w100"></i></span></div>
+              <div class="nj-sk-row"><span class="nj-sk nj-sk-dot"></span><span class="nj-sk-lines"><i class="nj-sk nj-sk-line w70"></i><i class="nj-sk nj-sk-line w100"></i><i class="nj-sk nj-sk-line w45"></i></span></div>
+            </div>
+          </div>
+        </div>
       </section>
       <div class="splitter" id="splitter-list"></div>
       <section class="column column-reader robin-surface" id="reader" tabindex="0">

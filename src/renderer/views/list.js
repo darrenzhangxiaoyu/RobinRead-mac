@@ -542,7 +542,11 @@ export class ListView {
         const end = Math.min(clusters.length, idx + BATCH);
         const frag = document.createDocumentFragment();
         for (; idx < end; idx += 1) frag.appendChild(renderEntry(clusters[idx]));
+        const fresh = [...frag.children];
         this.rowsHost.appendChild(frag);
+        // R72-② 分叶边界平滑：本叶新行即时入渐显观察（淡入而非瞬现）+ edge 淡出遮随高度同步
+        this._observeReveal(fresh);
+        this._syncEdgeFades();
         if (idx < clusters.length) requestAnimationFrame(appendNext);
         else {
           this._renderingPages = false;
@@ -1553,27 +1557,38 @@ export class ListView {
   }
 
   /** 智能稍后读（方向 23）：稍后读视野且存在超龄项时显示「清理超龄」。 */
-  /** 滚动渐显（前端美化）：进入视口的行淡入上移一次；尊重 prefers-reduced-motion。 */
-  _observeReveal() {
+  /**
+   * 滚动渐显（前端美化）：进入视口的行淡入上移一次；尊重 prefers-reduced-motion。
+   * R72-② 分叶渐进渲染平滑：可传 scope 只观察本叶新行（复用同一 observer、不掐断
+   * 既有观察）——叶边界行即时获得渐显语言而非瞬现；不传参保持整体重绘的全量观察。
+   */
+  _observeReveal(scope) {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
-    this._revealObserver?.disconnect();
-    const targets = this.rowsHost?.querySelectorAll('.entry-row:not(.nj-revealed), .nj-mag-card:not(.nj-revealed), .nj-edition:not(.nj-revealed)');
-    if (!targets?.length) return;
-    this._revealObserver = new IntersectionObserver((entries, observer) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          const el = entry.target;
-          el.classList.add('nj-revealed');
-          observer.unobserve(el);
-          // U1-U5 审查 P1-1：落定后摘除 reveal 类——否则 reveal 的 0.4s 过渡规则
-          // 永久接管行卡 transition，U4 悬停微抬升/阴影的 --dur-fast 永不生效
-          const settle = () => { el.classList.remove('nj-reveal-pending', 'nj-revealed'); };
-          el.addEventListener('transitionend', settle, { once: true });
-          setTimeout(settle, 600); // 兜底：transitionend 被 reduced-motion/离屏吞掉时也能落定
+    let els;
+    if (scope) {
+      els = (scope.length !== undefined && typeof scope !== 'string') ? [...scope] : [scope];
+    } else {
+      this._revealObserver?.disconnect();
+      els = [...(this.rowsHost?.querySelectorAll('.entry-row:not(.nj-revealed), .nj-mag-card:not(.nj-revealed), .nj-edition:not(.nj-revealed)') || [])];
+    }
+    if (!els.length) return;
+    if (!this._revealObserver) {
+      this._revealObserver = new IntersectionObserver((entries, observer) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const el = entry.target;
+            el.classList.add('nj-revealed');
+            observer.unobserve(el);
+            // U1-U5 审查 P1-1：落定后摘除 reveal 类——否则 reveal 的 0.4s 过渡规则
+            // 永久接管行卡 transition，U4 悬停微抬升/阴影的 --dur-fast 永不生效
+            const settle = () => { el.classList.remove('nj-reveal-pending', 'nj-revealed'); };
+            el.addEventListener('transitionend', settle, { once: true });
+            setTimeout(settle, 600); // 兜底：transitionend 被 reduced-motion/离屏吞掉时也能落定
+          }
         }
-      }
-    }, { root: null, rootMargin: '0px 0px -6% 0px', threshold: 0.04 });
-    targets.forEach((el) => {
+      }, { root: null, rootMargin: '0px 0px -6% 0px', threshold: 0.04 });
+    }
+    els.forEach((el) => {
       el.classList.add('nj-reveal-pending');
       this._revealObserver.observe(el);
     });

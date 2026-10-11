@@ -6810,6 +6810,12 @@ body.dark .kb-dash-score-badge.bad { color: color-mix(in oklch, var(--accent) 24
 .nj-sk-lines { flex: 1 1 auto; display: flex; flex-direction: column; gap: var(--space-2); }
 .nj-sk-lines .nj-sk-line { height: 11px; margin-bottom: 0; }
 .w45 { width: 45%; }
+/* ── R72-① 冷启动静态骨架：index.html 直出，JS 接管前撑住首帧（防白板窗）。
+   绝对定位覆盖层（两滚动容器皆 relative）→ DOM 顺序无关、sticky 头在上层（z 3>自动），
+   行形状与 U11 动态骨架同族 → 真实首帧零跳变；bootstrap 首渲（或失败）后摘除。 */
+.nj-boot-skeleton { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#nj-boot-skeleton { inset: 46px 0 0; }         /* 列表：让出 sticky 头（list-top-inset 46px） */
+#nj-boot-skeleton-sidebar { inset: 34px 0 0; } /* 侧栏：让出滚动区上 padding */
 /* ── P2-1：shimmer 位移层统一收口为伪元素 translateX（合成器路径，替代 background-position 逐帧重绘）──
    消费方只保留底色，光带由 ::before 绘制；reduced-motion 由全局收敛块（*::before）覆盖。 */
 .nj-sk, .nj-sk-dot, .aihot-skeleton-rank, .aihot-skeleton-line {

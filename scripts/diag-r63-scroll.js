@@ -122,21 +122,45 @@ app.whenReady().then(async () => {
           return { id, title: 'N' + n + 'X' + (n * 7919).toString(36) + 'hao', summaryPreview: '摘要', sourceTitle: '来源', publishedAt: TS, contentHead: '' };
         };
         const ids = (n, pfx) => Array.from({ length: n }, (_, i) => pfx + i);
+        // R72-② 探针加固：渐进完成时刻改轮询（隐藏窗 rAF ≈250-600ms/叶，固定 sleep 对叶数敏感，
+        // R72-② 逐叶同步后旧 500/700ms 预算失准——断言语义不变，等待改为等 renderGen 链走完）
+        const waitProgressiveDone = async (maxMs = 12000) => {
+          const t0 = Date.now();
+          while (Date.now() - t0 < maxMs) {
+            await sleep(60);
+            if (!lv._renderingPages) return;
+          }
+        };
+        const waitTransitionSettled = async (el, maxMs = 4000) => {
+          const t0 = Date.now();
+          let last = '';
+          while (Date.now() - t0 < maxMs) {
+            await sleep(80);
+            const now = getComputedStyle(el).opacity;
+            if (now === last) return now; // 两拍不变 = 过渡已落定
+            last = now;
+          }
+          return getComputedStyle(el).opacity;
+        };
         // 80 行（渐进渲染路径：>BATCH 60）
         lv.setViewMode('list');
         lv.render(ids(80, 'a').map(mk), { kind: 'all' }, null, true);
-        await sleep(500); // 渐进渲染两帧批
+        await waitProgressiveDone();
+        await sleep(350); // 留 --dur-mid 让渐显遮过渡走完
         const scrollEl = host; // host 即 .list-scroll（构造器直接用传入元素）
         const strips = { top: !!scrollEl.querySelector('.list-edge-fade-top'), bottom: !!scrollEl.querySelector('.list-edge-fade-bottom') };
         // 初始（在顶部）：只应亮底遮
         const atTopCls = { up: scrollEl.classList.contains('nj-can-scroll-up'), down: scrollEl.classList.contains('nj-can-scroll-down') };
-        const topOpacityAtTop = getComputedStyle(scrollEl.querySelector('.list-edge-fade-top')).opacity;
+        const topOpacityAtTop = await waitTransitionSettled(scrollEl.querySelector('.list-edge-fade-top'));
         const bottomOpacityAtTop = getComputedStyle(scrollEl.querySelector('.list-edge-fade-bottom')).opacity;
-        // 滚到中部（留足 --dur-fast 过渡时长让透明度走完）
+        // 滚到中部（滚动事件经渲染帧派发，隐藏窗帧间隔大 → 轮询至类随滚动位翻转再读数，语义不变）
         scrollEl.scrollTop = 900;
-        await sleep(350);
+        const midT0 = Date.now();
+        while (Date.now() - midT0 < 6000 && !scrollEl.classList.contains('nj-can-scroll-up')) await sleep(60);
         const midCls = { up: scrollEl.classList.contains('nj-can-scroll-up'), down: scrollEl.classList.contains('nj-can-scroll-down') };
-        const topOpacityMid = getComputedStyle(scrollEl.querySelector('.list-edge-fade-top')).opacity;
+        const midScrollTop = scrollEl.scrollTop;
+        await sleep(300); // 留 --dur-mid 让顶遮透明度过渡走完
+        const topOpacityMid = await waitTransitionSettled(scrollEl.querySelector('.list-edge-fade-top'));
         // 锚定：记录当前视口顶行
         const rows = [...scrollEl.querySelectorAll('.entry-row')];
         const before = rows.find((r) => r.getBoundingClientRect().top >= scrollEl.getBoundingClientRect().top);
@@ -145,7 +169,8 @@ app.whenReady().then(async () => {
         // 新文章到达：顶部插 5 条（总高差 = 5 行高）
         const news = ids(5, 'new').map(mk);
         lv.render(news.concat(ids(80, 'a').map(mk)), { kind: 'all' }, null, true);
-        await sleep(700); // 等渐进渲染完成
+        await waitProgressiveDone(); // 等渐进渲染完成（回补在完成时刻执行）
+        await sleep(120);
         const afterTop = scrollEl.scrollTop;
         const rows2 = [...scrollEl.querySelectorAll('.entry-row')];
         // 按重绘前视口顶行的标题文本找回同一行，比较视口位移
@@ -156,7 +181,8 @@ app.whenReady().then(async () => {
         scrollEl.scrollTop = 0;
         await sleep(120);
         lv.render(['w900', 'w901', 'w902'].map(mk).concat(ids(80, 'a').map(mk)), { kind: 'all' }, null, true);
-        await sleep(700);
+        await waitProgressiveDone();
+        await sleep(120);
         const freshFirstTitle = scrollEl.querySelector('.entry-row .entry-title')?.textContent || '';
         const topAfterFresh = scrollEl.scrollTop;
         // 批2审查P1-1 收口：渐进渲染 × scrollTop() 干预交叉——在途锚定回补必须作废（视口不被拽回旧位）
@@ -164,10 +190,11 @@ app.whenReady().then(async () => {
         await sleep(200);
         lv.render(Array.from({ length: 80 }, (_, i) => mk('z' + (1000 + i))), { kind: 'all' }, null, true);
         lv.scrollTop(); // app 级 resetScroll 同帧干预（切视野路径）
-        await sleep(700); // 渐进链完成
+        await waitProgressiveDone(); // 渐进链完成
+        await sleep(120);
         const afterInterveneTop = scrollEl.scrollTop;
         return { strips, atTopCls, topOpacityAtTop, bottomOpacityAtTop, midCls, topOpacityMid,
-          prevTop, afterTop, beforeRectTop, afterRectTop, wanted, freshFirstTitle, topAfterFresh,
+          prevTop, afterTop, beforeRectTop, afterRectTop, wanted, freshFirstTitle, topAfterFresh, midScrollTop,
           afterInterveneTop,
           rowH: (rows2[1]?.getBoundingClientRect().height) || 0 };
       } catch (e) { return { __err: String(e && e.stack || e) }; }
@@ -177,7 +204,7 @@ app.whenReady().then(async () => {
       ok(flow.strips.top && flow.strips.bottom, '2 顶/底淡出遮条真实挂载');
       ok(flow.atTopCls.up === false && flow.atTopCls.down === true, '2 在顶部：顶遮隐、底遮现（类切换正确）');
       ok(flow.topOpacityAtTop === '0' && flow.bottomOpacityAtTop === '1', `2 在顶部计算透明度（top=${flow.topOpacityAtTop} bottom=${flow.bottomOpacityAtTop}）`);
-      ok(flow.midCls.up === true && flow.midCls.down === true, '2 滚出顶部：双遮齐现');
+      ok(flow.midCls.up === true && flow.midCls.down === true, `2 滚出顶部：双遮齐现（up=${flow.midCls.up} down=${flow.midCls.down} st=${flow.midScrollTop}）`);
       ok(flow.topOpacityMid === '1', `2 顶遮计算透明度浮现（${flow.topOpacityMid}）`);
       // 锚定：同一行视口位置几乎不变（±2px 容差）
         // 锚定合同 = 同一行视口位移 ≤2px（回补量可为负：行海上方内容收缩时同样保位）
