@@ -207,6 +207,16 @@ export class ListView {
     this.scrollEl.appendChild(this.topInset);
     this.rowsHost = document.createElement('div');
     this.scrollEl.appendChild(this.rowsHost);
+    // R63-② 顶/底 edge 淡出遮：sticky 双条（零布局占位），滚出顶部/未到底时暗示可滚
+    this.edgeTop = document.createElement('div');
+    this.edgeTop.className = 'list-edge-fade list-edge-fade-top';
+    this.edgeTop.setAttribute('aria-hidden', 'true');
+    this.edgeBottom = document.createElement('div');
+    this.edgeBottom.className = 'list-edge-fade list-edge-fade-bottom';
+    this.edgeBottom.setAttribute('aria-hidden', 'true');
+    this.scrollEl.insertBefore(this.edgeTop, this.rowsHost); // 顶遮须在 rowsHost 之前（sticky top 语义）
+    this.scrollEl.appendChild(this.edgeBottom); // 底遮须在 rowsHost 之后
+    this._syncEdgeFades();
     // R57 数字纪律：列表在场上时每 60s 静默刷新时间桶（跨日 HH:MM→日期翻转），只改文本节点不重绘
     this._timeTicker = setInterval(() => refreshEntryTimes(this.rowsHost), 60000);
 
@@ -406,6 +416,10 @@ export class ListView {
     this.selectedID = selectedID;
     // R33 新到高亮：已见识过列表（非首屏）时，不在 known 集合里的行标记 row-new
     this._markNew = this._knownIds.size > 0;
+    // R63-③ 滚动锚定基线：重绘前记录位置/高度，行插入后再回补（用户在顶部之外时阅读位置不被顶走）
+    const anchorTop = this.scrollEl.scrollTop;
+    const anchorHeight = this.scrollEl.scrollHeight;
+    requestAnimationFrame(() => this._syncEdgeFades()); // R63-②：重绘后同步淡出遮（高度已变，滚动事件未必再来）
     this.topInset.querySelector('.list-top-title').textContent = this.titleForScope(scope);
     this.rowsHost.innerHTML = '';
     // P1-1：rowsHost 已整体清空——渲染代际 +1，旧渐进渲染 rAF 链（appendNext 闭包）即刻失效，
@@ -476,11 +490,13 @@ export class ListView {
     if (this.eventsMode) {
       this.rowsHost.closest('.list-scroll')?.classList.remove('nj-mag-paper', 'nj-mag-white', 'nj-mag-book');
       this._renderEvents(items, selectedID);
+      this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③
       return;
     }
 
     if (this.viewMode === 'magazine') {
       this._renderMagazine(items, selectedID);
+      this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③
       this._knownIds = new Set(items.map((it) => it.id));
       this._markNew = false;
       return;
@@ -508,6 +524,7 @@ export class ListView {
         else {
           this._renderingPages = false;
           this.markSelected(selectedID); this._observeReveal(); this._mountResumeCard();
+          this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③：渐进渲染完成后高度才有代表性，此刻回补
         }
       };
       appendNext();
@@ -524,6 +541,7 @@ export class ListView {
       }
     }
     this.rowsHost.appendChild(fragment);
+    this._restoreScrollAnchor(anchorTop, anchorHeight); // R63-③ 新文章到达：顶部之外保持阅读位置
     this.markSelected(selectedID);
     this._observeReveal();
     this._mountResumeCard();
@@ -1694,6 +1712,7 @@ export class ListView {
   }
 
   _onScroll() {
+    this._syncEdgeFades(); // R63-② 顶/底淡出遮随滚动位浮现/隐去
     // 滚动接近底部 → 加载下一页（对应 onAppear loadNextPage）
     if (this._renderingPages) return; // 渐进渲染未完成：scrollHeight 在增长，不构成"到底"
     const el = this.scrollEl;
@@ -1701,6 +1720,27 @@ export class ListView {
       this._showLoadingMore(); // R46：底部呼吸点指示
       this.handlers.onLoadMore?.();
     }
+  }
+
+  /** R63-② 顶/底 edge 淡出遮同步：滚出顶部 / 尚未到底时浮现（在位即隐，暗示可滚而不打扰）。 */
+  _syncEdgeFades() {
+    const el = this.scrollEl;
+    if (!el) return;
+    el.classList.toggle('nj-can-scroll-up', el.scrollTop > 4);
+    el.classList.toggle('nj-can-scroll-down', el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+  }
+
+  /**
+   * R63-③ 新文章到达滚动锚定：用户停在顶部之外（scrollTop>0）时，重绘插入顶部落rows
+   * 会让原阅读位置整体下移——按重绘前后 scrollHeight 差回补 scrollTop，保持视口锚定同几行。
+   * 在顶部（scrollTop≈0）不介入：新文章自然到顶正是期待行为。
+   */
+  _restoreScrollAnchor(prevTop, prevHeight) {
+    if (!prevTop || !prevHeight) return;
+    const el = this.scrollEl;
+    const delta = el.scrollHeight - prevHeight;
+    if (delta !== 0) el.scrollTop = prevTop + delta;
+    this._syncEdgeFades();
   }
 
   /** 底部加载指示（R46）：三点呼吸，appendRows 到达后自动移除。 */

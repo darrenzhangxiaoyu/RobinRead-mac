@@ -8406,6 +8406,57 @@ html.theme-transition * {
 }
 
 /* ==========================================================================
+   体验批 2（R63）滚动细节：浮层内滚动条全量主题化 / 列表顶底 edge 淡出遮
+   护栏口径：本段零裸字号 / 零裸圆角 / 零裸时长（一律令牌）。
+   ========================================================================== */
+
+/* ── R63-① 浮层内滚动条全量主题化：media/garden/weekly/挑战/订阅源网格内滚容器
+   入 5px 悬停主题色家族（与 modal-scroll / cmd-palette-list / cardx 同语言：
+   默认隐藏、容器悬停浮现 accent 细条）── */
+.nj-media-list, .nj-garden-modal, .nj-weekly-body, .nj-challenge-list, .fs-grid-host {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.nj-media-list::-webkit-scrollbar, .nj-garden-modal::-webkit-scrollbar, .nj-weekly-body::-webkit-scrollbar,
+.nj-challenge-list::-webkit-scrollbar, .fs-grid-host::-webkit-scrollbar { width: 5px; }
+.nj-media-list::-webkit-scrollbar-thumb, .nj-garden-modal::-webkit-scrollbar-thumb,
+.nj-weekly-body::-webkit-scrollbar-thumb, .nj-challenge-list::-webkit-scrollbar-thumb,
+.fs-grid-host::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--radius-full);
+  transition: background var(--dur-mid) var(--ease-out);
+}
+.nj-media-list:hover::-webkit-scrollbar-thumb, .nj-garden-modal:hover::-webkit-scrollbar-thumb,
+.nj-weekly-body:hover::-webkit-scrollbar-thumb, .nj-challenge-list:hover::-webkit-scrollbar-thumb,
+.fs-grid-host:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.nj-media-list::-webkit-scrollbar-track, .nj-garden-modal::-webkit-scrollbar-track,
+.nj-weekly-body::-webkit-scrollbar-track, .nj-challenge-list::-webkit-scrollbar-track,
+.fs-grid-host::-webkit-scrollbar-track { background: transparent; }
+
+/* ── R63-② 列表顶/底 edge 淡出遮：sticky 双条零布局占位（负 margin 抵消），
+   渐变自 --article-list-background 派生（暗色自动跟随）；
+   滚出顶部/未到底时浮现（.nj-can-scroll-*），暗示可滚，在位即隐（不打扰）── */
+.list-edge-fade {
+  position: sticky; z-index: 2;
+  pointer-events: none;
+  height: var(--space-6);
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.list-edge-fade-top {
+  top: 46px; /* 与 .list-top-inset 有效高度对齐（min-height 46px），淡出遮从毛玻璃下缘开始 */
+  margin-bottom: calc(-1 * var(--space-6));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--article-list-background) 94%, transparent), transparent);
+}
+.list-edge-fade-bottom {
+  bottom: 0;
+  margin-top: calc(-1 * var(--space-6));
+  background: linear-gradient(to top, color-mix(in srgb, var(--article-list-background) 94%, transparent), transparent);
+}
+.list-scroll.nj-can-scroll-up .list-edge-fade-top { opacity: 1; }
+.list-scroll.nj-can-scroll-down .list-edge-fade-bottom { opacity: 1; }
+
+/* ==========================================================================
    视觉批 3（U31–U35）：空态错峰 / 统一进度语言 / 侧栏 2.0 / 阅读器边注 / 划词浮条 2.0
    护栏口径：本段零裸字号 / 零裸圆角 / 零裸时长（一律令牌）。
    ========================================================================== */
