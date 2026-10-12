@@ -13,6 +13,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let failed = 0;
 const ok = (c, l) => { if (c) console.log('PASS ' + l); else { failed += 1; console.error('FAIL ' + l); } };
 
+
+// 批外实修自证：&amp; 实体 src 解码（用户实见：桥代理图链封面在期刊视图 404）
+{
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src/renderer/views/edition-reader.js'), 'utf8');
+  ok(src.includes('d.innerHTML = m[1]') && src.includes('d.value.trim()'), '附 _firstImage 实体解码在册（&amp; 代理图链修复）');
+}
 app.whenReady().then(async () => {
   try {
     const win = new BrowserWindow({

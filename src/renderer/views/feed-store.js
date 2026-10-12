@@ -15,6 +15,7 @@ import { icon } from '../icons.js';
 import { alertBox, confirmBox } from '../ui-prompt.js';
 import { CATALOG_EXTRA } from './feed-store-extra.js';
 import { CATALOG_EXTRA2 } from './feed-store-extra2.js';
+import { CATALOG_EXTRA3 } from './feed-store-extra3.js';
 import { CATALOG_CN } from './feed-store-cn.js';
 import { CATALOG_TIDINGS, TIDINGS_TOPICS } from './feed-store-tidings.js';
 import { WECHAT_ACCOUNTS } from './wechat-accounts.js';
@@ -103,10 +104,13 @@ const CATALOG_BASE = [
 ];
 
 // 合并中文新批次（scripts/gen-cn-catalog.js 从候选池生成，rank 320 起）→ 合并后 URL 唯一
-// Tidings 专题为增量目录：与既有目录重复的源（知名源双向收录）以现有条目优先
-const _existingUrls = new Set([...CATALOG_BASE, ...CATALOG_EXTRA, ...CATALOG_EXTRA2, ...CATALOG_CN].map((e) => e.url));
+// EXTRA3 = 中文独立博客大批次（timqian/chinese-independent-blogs，988 源，rank 1307 起）
+// 批4门禁收口：全局 URL 去重（先到先得）——EXTRA3 与 Tidings 专题天然重叠（双方都收中文独立博客）
+const _existingUrls = new Set([...CATALOG_BASE, ...CATALOG_EXTRA, ...CATALOG_EXTRA2, ...CATALOG_CN, ...CATALOG_EXTRA3].map((e) => e.url));
 const CATALOG_TIDINGS_INCREMENT = CATALOG_TIDINGS.filter((e) => !_existingUrls.has(e.url));
-export const CATALOG = [...CATALOG_BASE, ...CATALOG_EXTRA, ...CATALOG_EXTRA2, ...CATALOG_CN, ...CATALOG_TIDINGS_INCREMENT];
+const _catalogSeen = new Set();
+const _dedupeCatalog = (list) => list.filter((e) => (_catalogSeen.has(e.url) ? false : (_catalogSeen.add(e.url), true)));
+export const CATALOG = _dedupeCatalog([...CATALOG_BASE, ...CATALOG_EXTRA, ...CATALOG_EXTRA2, ...CATALOG_CN, ...CATALOG_EXTRA3, ...CATALOG_TIDINGS_INCREMENT]);
 
 const CATEGORIES = [
   { id: 'ai', label: 'AI 前沿', hue: 210 },
@@ -155,6 +159,7 @@ export const TOPICS = [
   { id: 'agents', name: 'Agent 工程', desc: 'LangChain / AutoGen / Latent Space：多智能体与编排范式', hue: 142, urls: ['https://blog.langchain.dev/rss.xml', 'https://microsoft.github.io/autogen/blog/rss.xml', 'https://www.latent.space/feed', 'https://simonwillison.net/atom/everything/'] },
   { id: 'deepread', name: '深度长文', desc: 'gwern / Dan Luu / 阮一峰：值得坐下慢慢读的长内容', hue: 35, urls: ['https://gwern.net/feed', 'https://danluu.com/atom.xml', 'https://www.ruanyifeng.com/blog/atom.xml', 'https://fs.blog/feed/', 'https://www.themarginalian.org/feed/'] },
   { id: 'cn', name: '中文技术圈', desc: '美团 / 少数派 / InfoQ / Solidot：中文工程实践与效率文化', hue: 170, urls: ['https://tech.meituan.com/feed/', 'https://sspai.com/feed', 'https://www.infoq.cn/feed', 'https://www.ruanyifeng.com/blog/atom.xml', 'https://www.solidot.org/index.rss'] },
+  { id: 'cnblogs', name: '中文独立博客', desc: 'timqian 中文独立博客列表精选：量子位 / 人人都是产品经理 / 安全客 / 独立写作者', hue: 96, urls: ['https://www.qbitai.com/feed', 'https://www.leiphone.com/feed', 'https://www.woshipm.com/feed', 'https://www.freebuf.com/feed', 'https://www.manjusaka.blog/atom.xml', 'https://s5s5.me/feed/', 'https://lenciel.com/feed.xml', 'https://zu1k.com/rss.xml'] },
 ];
 
 /** 从 URL 推导站点 favicon：走主进程 robin-icon:// 三级缓存协议（google s2 热链在大陆不可达且无缓存），失败回退字母 monogram。 */

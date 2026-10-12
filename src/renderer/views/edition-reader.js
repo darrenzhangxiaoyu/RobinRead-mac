@@ -122,7 +122,12 @@ export class EditionReader {
   _firstImage(html) {
     if (!html) return '';
     const m = String(html).match(/<img[^>]+src=["']([^"']+)["']/i);
-    return m && /^https?:|data:/.test(m[1]) ? m[1] : '';
+    if (!m || !/^https?:|data:/.test(m[1])) return '';
+    // 实修：RSS HTML 属性里的 & 是 &amp; 实体——不解码则带查询参数的图片 URL（如代理图链
+    // ?k=…&u=…）参数名变 amp;u → 图片 404，封面永远占位（直链无参图不受影响——「有的能出有的不能」）
+    const d = document.createElement('textarea');
+    d.innerHTML = m[1];
+    return d.value.trim();
   }
 
   /** 剥 HTML 标签 + 解常见实体（RSS 摘要/标题常含片段 HTML，杂志卡片只显示纯文本）。 */
