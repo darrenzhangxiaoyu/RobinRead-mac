@@ -1874,7 +1874,7 @@ export class EditionReader {
     bar.style.left = `${x}px`;
     bar.style.top = `${y}px`;
     setTimeout(() => {
-      this._selBarDismiss = (ev) => { if (!bar.contains(ev.target) && !this.selPopover?.contains(ev.target)) this._dismissSelBar(); };
+      this._selBarDismiss = (ev) => { if (ev.button !== 0) return; if (!bar.contains(ev.target) && !this.selPopover?.contains(ev.target)) this._dismissSelBar(); }; // 批·实修：右键不清划词条（保留复制入口）
       document.addEventListener('mousedown', this._selBarDismiss);
     }, 0);
   }
@@ -2522,12 +2522,15 @@ export class EditionReader {
     const x = e.clientX - rect.left, y = e.clientY - rect.top;
     if (y > rect.height - RAIL_H) return; // 滑轨区域另算
     if (!this.open) return; // 封面态：click 由封面元素处理
-    const down = { x, y, t: performance.now(), onStory: !!e.target.closest('.er-story'), moved: false, turnStarted: false };
+    const onText = this.mode === 'article' && !!e.target.closest?.('.er-article'); // 批·实修：正文面（用户实报：右键/拖拽选择文本与翻页冲突）
+    const down = { x, y, t: performance.now(), onStory: !!e.target.closest('.er-story'), moved: false, turnStarted: false, onText };
     const move = (ev) => {
       const dx = ev.clientX - rect.left - down.x, dy = ev.clientY - rect.top - down.y;
       if (!down.moved && Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
       if (!down.moved) {
         if (Math.abs(dx) <= Math.abs(dy) * 1.5) { cleanup(); return; } // 纵向：不抢
+        // 正文面横向拖拽 = 选择文本（浏览器原生选区），不抢翻页——翻页保留点击分区/滚轮/键盘/滑轨全通道
+        if (down.onText) { cleanup(); return; }
         down.moved = true;
       }
       if (!this.open) return;
