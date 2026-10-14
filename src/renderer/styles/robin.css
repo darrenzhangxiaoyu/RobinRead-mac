@@ -1408,6 +1408,15 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
   left: 0;
   background: linear-gradient(to right, var(--page-background), transparent);
 }
+/* R78-③ 代码块横滚提示：与表格同族右缘渐隐（左缘避让 pre[data-lang] 语言标签，只做右单侧） */
+.reader-article pre.can-right::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0; bottom: 0;
+  width: 22px;
+  pointer-events: none;
+  background: linear-gradient(to left, var(--note-background), transparent);
+}
 /* R76-③ 嵌套列表层级语言：逐级缩进收紧 + marker 形态演进（disc→circle→square），
    多级清单的层级关系一眼可辨（此前各级同形同距糊成一片） */
 .reader-article li > ul, .reader-article li > ol { margin: 0.3em 0 0.4em; padding-left: 1.4em; }

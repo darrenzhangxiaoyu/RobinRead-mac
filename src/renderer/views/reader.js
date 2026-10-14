@@ -831,6 +831,7 @@ export class ReaderView {
     // 代码高亮与公式渲染必须在段落标注（data-nj-id）/批注锚点之前完成：
     // 两者都只做「节点内部」的文本拆分与包裹，不改块结构，不会使后续锚点失效
     this._highlightCodeBlocks();
+    this._syncTableScrollHints(); // R78-③：代码块横滚提示（高亮换壳后再量宽）
     this._renderMath();
     this._annotateParagraphs();
     this._wrapSentenceUnits();
@@ -1212,6 +1213,11 @@ export class ReaderView {
   _showFullTranslation(mode) {
     this._fullTranslationMode = mode === 'translated' && this._fullTranslation?.html ? 'translated' : 'original';
     if (!this.body || !this.translatedBody) return;
+    // R78-① 译文切换保位：原文⇄译文两容器高度不同，绝对像素会错位到别的段落——
+    // 切换前记比率，容器互换布局稳定后按比率恢复（双 rAF 等高度撑开）
+    const scrollEl = this.scrollEl;
+    const maxBefore = scrollEl ? scrollEl.scrollHeight - scrollEl.clientHeight : 0;
+    const ratio = maxBefore > 0 ? clamp01(scrollEl.scrollTop / maxBefore) : 0;
     if (this._fullTranslationMode === 'translated') {
       this.translatedBody.innerHTML = this._fullTranslation.html;
       // 轻量归一：图片防盗链 + iframe 懒加载（译文 HTML 主进程已过消毒白名单）
@@ -1223,15 +1229,41 @@ export class ReaderView {
         }
       });
       this.translatedBody.querySelectorAll('iframe').forEach((f) => { f.loading = 'lazy'; });
+      // R78-② 译文容器微排版：盘古之白此前只处理原文容器（译文中西文混排同样受益）
+      try {
+        CJKMicro.removeGaps(this.translatedBody);
+        if ((window.__robinReaderLayout || {}).microTypography !== 'off') CJKMicro.insertGaps(this.translatedBody);
+      } catch (_) { /* 微排版失败不影响译文阅读 */ }
+      // R78-② 译文表格同享横滚容器 + 缘提示（与原文同一语言）
+      this.translatedBody.querySelectorAll('table').forEach((table) => {
+        if (table.parentElement?.classList.contains('table-scroll')) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'table-scroll';
+        table.replaceWith(wrap);
+        wrap.appendChild(table);
+        wrap.addEventListener('scroll', () => this._syncOneTableScrollHint(wrap), { passive: true });
+      });
+      this.translatedBody.querySelectorAll('.table-scroll').forEach((wrap) => this._syncOneTableScrollHint(wrap));
       this.body.style.display = 'none';
-      this.translatedBody.style.display = '';
+      // R78 真 bug 修复（F33 家族）：.robin-body-translated 的 CSS 默认 display:none 是安全初始态，
+      // 但此前「显示」也只写 style.display=''（空串回落 CSS none）——译文容器从未显形过。
+      // 显示必须显式 'block'，隐藏回落 ''（CSS 默认接管）
+      this.translatedBody.style.display = 'block';
       // 译文容器内链接同样在浏览器打开（_interceptLinks 只处理原容器，这里就地补）
       this.translatedBody.querySelectorAll('a[href]').forEach((anchor) => {
-        if (/^https?:/i.test(anchor.getAttribute('href') || '')) anchor.title = t('在浏览器打开外部链接');
+        const href = anchor.getAttribute('href');
+        if (/^https?:/i.test(href || '')) {
+          try { anchor.title = tf('%@ · 在浏览器打开', new URL(href).hostname); }
+          catch (_) { anchor.title = t('在浏览器打开外部链接'); }
+        }
         anchor.addEventListener('click', (event) => {
           event.preventDefault();
-          const href = anchor.getAttribute('href');
+          if (event.target instanceof Element && event.target.closest('img')) return; // R75-③ 图链让位灯箱语义同享
           if (href && /^https?:/i.test(href)) window.robin.openLink(href);
+          else if (href && href.startsWith('#')) {
+            // R75-① 译文内锚点同享寻址（译文容器在 scrollEl 内，_navigateToAnchor 全域查）
+            this._navigateToAnchor(href.slice(1));
+          }
         });
       });
     } else {
@@ -1239,6 +1271,12 @@ export class ReaderView {
       this.body.style.display = '';
     }
     this._syncTranslationButton();
+    if (scrollEl) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const maxAfter = scrollEl.scrollHeight - scrollEl.clientHeight;
+        if (maxAfter > 0) scrollEl.scrollTop = ratio * maxAfter; // R78-① 比率恢复
+      }));
+    }
   }
 
 
@@ -1418,9 +1456,17 @@ export class ReaderView {
     this._syncTableScrollHints();
   }
 
-  /** R76-②：全量表格横滚提示同步（渲染后调用；字体/图片加载后宽度变化由 resize 兜底）。 */
+  /** R76-②/R78-③：横滚提示同步（表格容器 + 代码块同族；渲染后调用，宽度变化由滚轮滚动自续）。 */
   _syncTableScrollHints() {
-    this.body?.querySelectorAll('.table-scroll').forEach((wrap) => this._syncOneTableScrollHint(wrap));
+    if (!this.body) return;
+    this.body.querySelectorAll('.table-scroll').forEach((wrap) => this._syncOneTableScrollHint(wrap));
+    this.body.querySelectorAll('pre').forEach((pre) => {
+      if (!pre.dataset.njHintBound) {
+        pre.dataset.njHintBound = '1';
+        pre.addEventListener('scroll', () => this._syncOneTableScrollHint(pre), { passive: true });
+      }
+      this._syncOneTableScrollHint(pre);
+    });
   }
 
   _syncOneTableScrollHint(wrap) {
