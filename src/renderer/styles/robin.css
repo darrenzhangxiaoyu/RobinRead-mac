@@ -453,6 +453,15 @@ body.zen #split > .splitter { display: none; }
 .column-sidebar { width: var(--sidebar-width, 240px); min-width: 240px; max-width: 340px; flex: 0 0 auto; background: var(--sidebar-background); }
 .column-list { width: var(--list-width, 340px); min-width: 280px; flex: 0 0 auto; background: var(--article-list-background); }
 .column-reader { flex: 1 1 auto; min-width: 400px; background: var(--page-background); }
+/* R81-② 纸面微肌理：阅读面叠极淡网点（纸齿感，浅 2.6%/暗 1.6% 墨）——
+   平涂底色的「塑料感」退场，纸的物性回来；纯 CSS 平铺零运行时成本 */
+.column-reader {
+  background-image: radial-gradient(color-mix(in srgb, var(--text-primary) 2.6%, transparent) 0.5px, transparent 0.5px);
+  background-size: 22px 22px;
+}
+body.dark .column-reader {
+  background-image: radial-gradient(color-mix(in srgb, var(--text-primary) 1.6%, transparent) 0.5px, transparent 0.5px);
+}
 
 .splitter {
   width: 5px; cursor: col-resize; background: transparent;
@@ -3861,15 +3870,17 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
    迷你播放器：正文底部居中悬浮胶囊（纸片底、圆角、克制的阴影）。
    仅追加，不改上方任何既有规则。
    ========================================================================== */
+/* R81-③ TTS 段落高亮质感：硬编码 rgba 缺省色退役 → accent color-mix 派生（跟主题走），
+   洗底半径归 --radius-sm（原裸 3px），随朗读行进的「纸面笔触」更柔 */
 .reader-article .nj-tts-active {
   box-shadow: inset 3px 0 0 var(--accent);
-  background: rgba(97, 115, 87, 0.07);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  border-radius: var(--radius-sm);
   transition: background-color var(--dur-slow) ease, box-shadow var(--dur-slow) ease;
 }
 .reader-article h1.robin-header-title.nj-tts-active {
   box-shadow: inset 3px 0 0 var(--accent);
-  background: rgba(97, 115, 87, 0.07);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 .nj-tts-header-btn.is-playing {
   color: var(--accent);
@@ -4760,6 +4771,12 @@ body.dark .favicon-badge { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
 .robin-header-kicker::before {
   content: ''; width: 22px; height: 2px; flex: none;
   background: var(--accent); border-radius: var(--radius-full); opacity: 0.85;
+}
+/* R81-① 眉题 folio 线：accent 短标之后的余行以发丝线延展到行尾——杂志刊头语言 */
+.robin-header-kicker::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--separator);
 }
 .reader-article .robin-header-title { font-size: 1.92em; line-height: 1.28; letter-spacing: 0.01em; text-wrap: balance; }
 .robin-header-meta { font-variant-numeric: tabular-nums; } /* U20：gap 分叉声明已并入基础块（6px 8px） */
