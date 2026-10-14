@@ -172,7 +172,9 @@ function sanitizedHTML(html, baseURL = null) {
     // 整颗剥掉后勾选态丢失（待办全变裸文本）。此处转存为只读状态 span（一体 token：
     // 开闭标签同发，无悬挂结构；渲染端 .nj-task 呈现 ☑/☐，li.task-list-item 去 marker）
     if (name === 'input' && /type\s*=\s*["']?checkbox["']?/i.test(rawAttributes)) {
-      const checked = /(?:^|\s)checked(?:\s|$|\/)/i.test(` ${rawAttributes} `) ? '1' : '0';
+      // 自检R4-P2：带值形态收全——机器生成的任务清单几乎全是 checked=""/"checked"（尾随 = 号），
+      // 旧正则只认裸 checked/checked/ → GitHub 待办勾选态全灭。HTML 语义：属性在场即真
+      const checked = /(?:^|\s)checked(?=[\s=/>]|$)/i.test(` ${rawAttributes} `) ? '1' : '0';
       // 自检R2-P3：只读勾选语义（role/aria-checked——屏幕阅读器可通告勾选态，非仅颜色传达）
       result += `<span class="nj-task" data-task="${checked}" role="checkbox" aria-checked="${checked === '1'}" aria-readonly="true"></span>`;
       continue;
@@ -346,21 +348,26 @@ function sanitizedAttributes(source, tag, baseURL, eagerImage = false) {
   const allowed = ATTRIBUTES_FOR_TAG[tag];
   // R75-① 文内锚点转存：id 不在白名单（防与 app 层 DOM 冲突），但合法 slug 转存
   // data-nj-anchor 保真——渲染端 #fragment 链接据此导航（脚注/回跳）。
-  // 注意：须在「无白名单标签全剥属性」的通用路径上先行提取（p/li/h* 等不在
-  // ATTRIBUTES_FOR_TAG 里，走不到白名单循环），死锚/非法 slug 静默丢弃。
-  const anchorSlugMatch = /(?:^|\s)id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(source);
-  const anchorPrefix = (() => {
-    const slug = (anchorSlugMatch && (anchorSlugMatch[1] ?? anchorSlugMatch[2] ?? anchorSlugMatch[3]) || '').trim();
-    return /^[A-Za-z][A-Za-z0-9_:.-]{0,99}$/.test(slug) ? ` data-nj-anchor="${escapeAttribute(slug)}"` : '';
-  })();
-  if (!allowed) return anchorPrefix;
+  // 自检R4-P3：在属性令牌循环内捕获（循环正则引号感知——title="Issue id=42" 值内的
+  // id 不会误捕；此前的预扫描正则会捕错/遮蔽真 id）。无白名单标签（p/li/h*）也走
+  // 循环——只为捕锚，其余属性照旧全剥。死锚/非法 slug 静默丢弃。
+  let anchorAttr = '';
+  const ANCHOR_SLUG_RE = /^[A-Za-z][A-Za-z0-9_:.-]{0,99}$/;
   const pattern = /([a-z][a-z0-9:-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/gis;
-  const attributes = anchorPrefix ? [anchorPrefix] : [];
+  const attributes = [];
   const seenNames = new Set();
   let match;
   while ((match = pattern.exec(source)) !== null) {
     const name = match[1].toLowerCase();
-    if (!allowed.has(name) || seenNames.has(name)) continue;
+    // 自检R4-P3：引号感知的 id 捕获（在令牌层——值内伪 id 不可达）
+    if (name === 'id') {
+      if (!anchorAttr) {
+        const slug = (match[2] ?? match[3] ?? match[4] ?? '').trim();
+        if (ANCHOR_SLUG_RE.test(slug)) anchorAttr = ` data-nj-anchor="${escapeAttribute(slug)}"`;
+      }
+      continue; // id 本身不出清（防与 app 层 DOM 冲突）
+    }
+    if (!allowed || !allowed.has(name) || seenNames.has(name)) continue;
     seenNames.add(name);
     const value = match[2] ?? match[3] ?? match[4] ?? null;
     if (value != null) {
@@ -393,6 +400,8 @@ function sanitizedAttributes(source, tag, baseURL, eagerImage = false) {
       attributes.push(` ${name}`);
     }
   }
+  if (!allowed) return anchorAttr; // 无白名单标签：全属性剥除，锚点转存是唯一幸存者
+  if (anchorAttr) attributes.unshift(anchorAttr);
   if (tag === 'img') {
     // 懒加载治理：src 缺失或是占位时，用 data-* 真图地址替换
     const srcAttr = attributes.find((a) => a.startsWith(' src="'));

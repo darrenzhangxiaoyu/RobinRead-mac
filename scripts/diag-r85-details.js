@@ -28,8 +28,8 @@ app.whenReady().then(async () => {
     const css = read('src/renderer/styles/robin.css');
     const readerSrc = read('src/renderer/views/reader.js');
     ok(/R85-① 结构谱几何化[\s\S]*?const ratioOf = \(el\) => clamp01\(/.test(readerSrc), '1 几何落位函数在册（clamp01 防溢界）');
-    ok(readerSrc.includes("dot.className = 'toc-dot';") && readerSrc.includes("bar.className = 'toc-bar';"),
-      '1 密度 glyph 渲染接线（图点/码条）');
+    ok(readerSrc.includes("glyphOf(pos, 'toc-dot')") && readerSrc.includes("glyphOf(pos, 'toc-bar')"),
+      '1 密度 glyph 渲染接线（图点/码条——记入 _tocGlyphs 随折叠刷新）');
     ok(/\.toc-dot \{[^}]*?width: 2\.5px;[^}]*?border-radius: 50%;/s.test(css) && /\.toc-bar \{[^}]*?height: 7px;/s.test(css),
       '1 glyph 形态在册（点 2.5px / 条 2×7px）');
     ok(/\.toc-tick\.active \{ left: -6px; width: 16px; \}/.test(css), '2 活跃刻度生长在册');

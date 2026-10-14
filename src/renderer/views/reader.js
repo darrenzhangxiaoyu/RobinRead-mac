@@ -213,6 +213,11 @@ export class ReaderView {
     window.robin?.onTranslateProgress?.((payload) => this._onTranslateProgress(payload));
     this._buildScrollbarGestures();
     this._buildTOCGestures();
+    // 自检R4-P2：打印前把懒图转 eager——未滚入视口的图停在 opacity 0，不打补丁 PDF 中部整片空白
+    // （主窗与弹窗各自实例化 ReaderView，两入口各自生效）
+    window.addEventListener('beforeprint', () => {
+      this.body?.querySelectorAll('img[loading="lazy"]').forEach((img) => { img.loading = 'eager'; });
+    });
     this.clear();
   }
 
@@ -596,6 +601,7 @@ export class ReaderView {
       this._rememberScrollPosition(this.entryID, this.scrollEl.scrollTop);
     }
     this._imgObserver?.disconnect();
+    this._driftObserver?.disconnect(); // 自检R4-P3：视差观察者随清空退场（IO 强引用防 img 集滞留）
     this.entryID = null;
     this.entry = null;
     this.feed = null;
@@ -1566,9 +1572,13 @@ export class ReaderView {
         .filter(Boolean);
       if (chunks.length < 2) continue;
       const frag = document.createDocumentFragment();
+      let firstChunk = true;
       for (const chunk of chunks) {
         const np = document.createElement('p');
         np.innerHTML = chunk;
+        // 自检R4-P3：<br><br> 拆段时锚点随迁首块（脚注目标在拆分段内不丢锚）
+        if (firstChunk && p.dataset.njAnchor) np.dataset.njAnchor = p.dataset.njAnchor;
+        firstChunk = false;
         frag.appendChild(np);
       }
       p.replaceWith(frag);
@@ -1923,6 +1933,9 @@ export class ReaderView {
     // R87-③ 折叠计数提示：译好的整句写进 data 属性（CSS attr() 呈现——不污染标题文本，TOC 文案不受扰）
     if (folding && count > 0) h.dataset.foldHint = tf('已折叠 %lld 段', count);
     else delete h.dataset.foldHint;
+    // 自检R4-P3：折叠改高度的 3s 冷却——期间 _trackResume 不记账（否则 scrollTop 钳制
+    // 使 ratio0 跳 ≈1，半篇被判完读：续读卡删除 + WebDAV 错误进度脉冲）
+    this._foldScrollGuard = Date.now() + 3000;
     // 自检R2-P3：折叠改变文档高度——结构谱刻度/记号针/拇指重算（否则轨道与内容错位）
     if (count > 0) this._refreshTOCGeometry();
   }
@@ -1933,9 +1946,17 @@ export class ReaderView {
     const bodyRect = this.body.getBoundingClientRect();
     const bodyH = Math.max(1, bodyRect.height);
     const positions = this.tocEntries.map((entry) => clamp01((entry.element.getBoundingClientRect().top - bodyRect.top) / bodyH));
+    // 自检R4-P3：glyph（图点/码条）的宿主元素同步按新几何重定位（_buildTOC 同序：figures 后 pres）
+    const figureEls = [...this.body.querySelectorAll('figure')];
+    const preEls = [...this.body.querySelectorAll('pre')];
+    const glyphRatios = figureEls.map((el) => clamp01((el.getBoundingClientRect().top - bodyRect.top) / bodyH))
+      .concat(preEls.map((el) => clamp01((el.getBoundingClientRect().top - bodyRect.top) / bodyH)));
     this.tocEntries.forEach((entry, i) => {
       entry.position = positions[i];
       entry.tick.style.top = `${(positions[i] * 100).toFixed(2)}%`;
+    });
+    (this._tocGlyphs || []).forEach((g, i) => {
+      if (glyphRatios[i] !== undefined) g.el.style.top = `${(glyphRatios[i] * 100).toFixed(2)}%`;
     });
     this._renderProgressNotches(); // 记号针同步重算（同尺口径）
   }
@@ -2170,7 +2191,14 @@ export class ReaderView {
     let target = null;
     try {
       const frag = decodeURIComponent(fragment);
-      target = this.scrollEl.querySelector(`[data-nj-anchor="${CSS.escape(frag)}"], [id="${CSS.escape(frag)}"]`);
+      const sel = `[data-nj-anchor="${CSS.escape(frag)}"], [id="${CSS.escape(frag)}"]`;
+      // 自检R4-P2：可见候选优先——译文视图下原文容器 display:none 仍占树序，
+      // querySelector 首命中落在隐藏原文上（scrollIntoView 无操作、闪高亮不可见）
+      const matches = this.scrollEl.querySelectorAll(sel);
+      for (const m of matches) {
+        if (m.offsetParent !== null) { target = m; break; }
+      }
+      if (!target) target = matches[0] || null; // 全隐（罕见）：退回首候选维持静默合同
     } catch (_) { /* 非法选择符：静默 */ }
     if (!target) return; // 死锚（目标被剥/不在本篇）：保持静默，不打扰阅读
     this._expandSectionOf(target); // R87-②：脚注/锚点落在折叠章内先展开
@@ -4613,18 +4641,17 @@ export class ReaderView {
       this.tocEntries.push({ element: heading, position, tick });
     });
     // R85-① 密度 glyph：小点=插图、细条=代码块——文章结构在轨道上一眼可读
-    for (const pos of figurePos) {
-      const dot = document.createElement('div');
-      dot.className = 'toc-dot';
-      dot.style.top = `${(pos * 100).toFixed(2)}%`;
-      this.tocTrack.appendChild(dot);
-    }
-    for (const pos of prePos) {
-      const bar = document.createElement('div');
-      bar.className = 'toc-bar';
-      bar.style.top = `${(pos * 100).toFixed(2)}%`;
-      this.tocTrack.appendChild(bar);
-    }
+    // （自检R4-P3：glyph 记入 _tocGlyphs 供折叠后几何重算同步刷新）
+    this._tocGlyphs = [];
+    const glyphOf = (pos, cls) => {
+      const el = document.createElement('div');
+      el.className = cls;
+      el.style.top = `${(pos * 100).toFixed(2)}%`;
+      this.tocTrack.appendChild(el);
+      return el;
+    };
+    for (const pos of figurePos) this._tocGlyphs.push({ ratio: pos, el: glyphOf(pos, 'toc-dot') });
+    for (const pos of prePos) this._tocGlyphs.push({ ratio: pos, el: glyphOf(pos, 'toc-bar') });
     // R85-③ 进度线章节刻度：h2 位置打记号针（填充越过记号=读过一章）。
     // 自检R2-P3：分母与填充同尺（scrollHeight - clientHeight）——否则填充系统性提前越针
     this._renderProgressNotches();
@@ -4734,7 +4761,8 @@ export class ReaderView {
       }
       // U39 专注进度线：聚焦模式下同比率填充（CSS 门控只在 body.rp-focus 显形）
       if (this.focusProgressFill) this.focusProgressFill.style.width = `${ratio0 * 100}%`;
-      if (this.entryID && max0 > 0) this._trackResume(Math.round(ratio0 * 100));
+      // 自检R4-P3：折叠冷却期内不记账（防 scrollTop 钳制误判完读）
+      if (this.entryID && max0 > 0 && Date.now() >= (this._foldScrollGuard || 0)) this._trackResume(Math.round(ratio0 * 100));
     }
     if (this._scrollTick) return;
     this._scrollTick = true;

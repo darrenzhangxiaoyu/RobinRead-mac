@@ -4456,6 +4456,9 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
   .reader-article figure { margin-inline: 0 !important; }
   .nj-fold-head::before, .nj-fold-head::after { content: none !important; }
   .nj-folded { display: revert !important; }
+  /* 自检R4-P2：懒加载图打印复位——未滚入视口的图停在 nj-img-loading（opacity 0），
+     打印整片空白；beforeprint 会把 lazy 转 eager，此处样式兜底已加载未标记的边角 */
+  .reader-article img.nj-img { opacity: 1 !important; }
   /* 深色纸面打印时强制回墨（黑字白底） */
   body.dark .reader-article,
   body.dark { background: #fff !important; color: #14110c !important; }
