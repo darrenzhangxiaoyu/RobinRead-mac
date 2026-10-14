@@ -44,8 +44,9 @@ app.whenReady().then(async () => {
     console.log('PASS 自动备份首查产出快照：' + backups[0]);
 
     const cfg = await run(`return await window.robin.backupGetConfig();`);
-    assert.ok(cfg && cfg.enabled === true && cfg.keep === 7 && cfg.dir.endsWith('backups'), `配置通道异常: ${JSON.stringify(cfg)}`);
-    console.log('PASS 备份配置通道（enabled/keep/dir）');
+    // R98：默认保留 7→3（1.3GB 库 × 7 份全量快照 = 9.4GB 磁盘黑洞收口；另有 4GB 总量闸）
+    assert.ok(cfg && cfg.enabled === true && cfg.keep === 3 && cfg.dir.endsWith('backups'), `配置通道异常: ${JSON.stringify(cfg)}`);
+    console.log('PASS 备份配置通道（enabled/keep=3(R98)/dir）');
 
     const setRes = await run(`return await window.robin.backupSetConfig({ enabled: false, keep: 3 });`);
     assert.ok(setRes && setRes.enabled === false && setRes.keep === 3, `setConfig 异常: ${JSON.stringify(setRes)}`);

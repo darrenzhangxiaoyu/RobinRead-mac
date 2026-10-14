@@ -29,8 +29,8 @@ app.whenReady().then(async () => {
     const readerSrc = read('src/renderer/views/reader.js');
     const i18nSrc = read('src/main/I18NStrings.js');
     // ── 静态锚点 ──
-    ok(/--article-gutter: 40px;.*R84-①/.test(css) && /padding: 32px var\(--article-gutter\) 0;/.test(css),
-      '1 版心槽令牌在册（base 40px + padding 消费）');
+    ok(/--article-gutter: 40px;.*R84-①/.test(css) && /padding: 22px var\(--article-gutter\) 0;/.test(css),
+      '1 版心槽令牌在册（base 40px + padding 消费；R94-② 顶槽 32→22）');
     ok(/\.reader-article \{ --article-gutter: min\(40px, 5vw\);/.test(css), '1 窄窗档槽令牌改写（min(40px,5vw)）');
     ok(/\.robin-body > figure:first-child:nth-last-child\(n \+ 3\) \{[^}]*?margin-inline: calc\(-1 \* var\(--article-gutter\)\);[^}]*?border-radius: 0;/s.test(css),
       '1 首图出血规则在册（破槽 + 方角，≥3 块门）');

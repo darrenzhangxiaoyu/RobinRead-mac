@@ -842,6 +842,7 @@ export class ReaderView {
     this._setBodyHTML(this.html);
     this._normalizeArticle();
     this._restructureArticle();
+    this._stripBoilerplateEdges(); // R96 正文边缘净化：清头尾广告/头像/关联链接噪音（用户实见「开头特别乱」）
     // 中文微排版（盘古之白）：空 spacer 不改 textContent，段落标注 / 句子包裹 / 高亮锚点全部不受影响
     this._applyMicroTypography();
     // R74-② 中文着重号：中文正文 em 去斜体改着重点（西文文章保留 italic 传统，类开关按文章语言）
@@ -849,6 +850,7 @@ export class ReaderView {
     // 代码高亮与公式渲染必须在段落标注（data-nj-id）/批注锚点之前完成：
     // 两者都只做「节点内部」的文本拆分与包裹，不改块结构，不会使后续锚点失效
     this._highlightCodeBlocks();
+    this._classifyDiffTables(); // R91-②：GitHub diff 表语义化（±行着色/行号列弱化）——量宽与装饰前完成
     this._syncTableScrollHints(); // R78-③：代码块横滚提示（高亮换壳后再量宽）
     this._renderMath();
     this._annotateParagraphs();
@@ -1006,7 +1008,7 @@ export class ReaderView {
       chips.style.display = 'none';
       meta.appendChild(chips);
       window.robin.kbTags?.(this.entryID).then((tags) => {
-        const list = (tags || []).map((tg) => tg.tag).filter(Boolean).slice(0, 6);
+        const list = (tags || []).map((tg) => tg.tag).filter(Boolean).slice(0, 3); // R97-①：标签 chips 上限 6→3（头部胶囊噪音走查实见）
         if (!list.length) return;
         chips.style.display = '';
         for (const tag of list) {
@@ -1034,6 +1036,7 @@ export class ReaderView {
       if (entry.url) {
         const readBtn = document.createElement('button');
         readBtn.className = 'btn-text bordered';
+        readBtn.dataset.role = 'read-original'; // R97-①：头部动作分层的核心键标记
         readBtn.innerHTML = `${icon('globe')}<span style="margin-left:4px">${escapeHTML(t('阅读原文'))}</span>`;
         readBtn.title = t('在阅读器内打开原文：自动抓取 + 版面重排 + 翻译/摘要/划词全功能');
         readBtn.addEventListener('click', () => this.openOriginal());
@@ -1069,6 +1072,44 @@ export class ReaderView {
         printBtn.title = t('打印本文（页眉页脚与页边距由浏览器接管）');
         printBtn.addEventListener('click', () => window.print());
         actions.appendChild(printBtn);
+      }
+      // R97-① 头部动作分层：全量平铺（听/稍后读/对照镜/光谱/辩手/测验/翻译/导出/原文/
+      // 浏览器/打印）是走查实见的第一噪音源——核心（听 + 阅读原文）外的键原样搬进
+      // 「更多」浮层（点击处理器随节点走），≤2 个时不折叠。
+      {
+        const kids = Array.from(actions.childNodes);
+        const core = kids.filter((b) =>
+          b.classList?.contains('nj-tts') || b.dataset?.role === 'read-original');
+        const rest = kids.filter((b) => !core.includes(b));
+        if (core.length > 0 && rest.length >= 2) {
+          const pop = document.createElement('div');
+          pop.className = 'nj-header-more-pop';
+          pop.setAttribute('role', 'menu');
+          for (const b of rest) pop.appendChild(b);
+          const moreBtn = document.createElement('button');
+          moreBtn.className = 'btn-text bordered nj-header-more';
+          moreBtn.type = 'button';
+          moreBtn.setAttribute('aria-haspopup', 'menu');
+          moreBtn.setAttribute('aria-expanded', 'false');
+          moreBtn.innerHTML = `${icon('ellipsis')}<span style="margin-left:4px">${escapeHTML(t('更多'))}</span>`;
+          moreBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const willOpen = !pop.classList.contains('open');
+            pop.classList.toggle('open', willOpen);
+            moreBtn.setAttribute('aria-expanded', String(willOpen));
+          });
+          pop.addEventListener('click', (ev) => ev.stopPropagation());
+          if (!this._morePopBound) {
+            this._morePopBound = true;
+            document.addEventListener('click', () => this._headerMorePop?.classList.remove('open'));
+            document.addEventListener('keydown', (ev) => {
+              if (ev.key === 'Escape') this._headerMorePop?.classList.remove('open');
+            });
+          }
+          this._headerMorePop = pop;
+          actions.replaceChildren(...core, moreBtn);
+          meta.appendChild(pop); // 浮层锚在 meta（relative）右缘
+        }
       }
       if (actions.childNodes.length > 0) meta.appendChild(actions);
     }
@@ -1714,7 +1755,18 @@ export class ReaderView {
           if (!window.hljs.getLanguage(lang)) continue; // 未知语言标注：保守跳过，绝不高亮炸内容
           window.hljs.highlightElement(block);
           block.dataset.njHighlighted = '1';
-        } else if (looksLikeCode(block.textContent)) {
+        } else {
+          // R94-① patch 块优先识别：GitHub/commits 类源的正文常是裸 patch 文本，
+          // auto 检测会漂移（bash/plaintext 都可能抢走）——diff 特征命中则强制 diff 语法
+          const text = block.textContent || '';
+          const looksPatch = /^diff --git /m.test(text.slice(0, 400))
+            || (text.includes('\n@@ ') && /^[+-][^+-]/m.test(text));
+          if (looksPatch && window.hljs.getLanguage('diff')) {
+            block.innerHTML = window.hljs.highlight(text, { language: 'diff' }).value;
+            block.classList.add('hljs');
+            block.dataset.njHighlighted = '1';
+            if (host) host.dataset.njPatch = '1';
+          } else if (looksLikeCode(block.textContent)) {
           // 排除 markdown/plaintext：这两个语言对「任意英文文本」都能吃出非零 relevance，
           // 会把散文误着色；其余语言作为 auto 检测子集（构建缺失时 listLanguages 兜底为空 → 全量）
           const subset = (typeof window.hljs.listLanguages === 'function')
@@ -1727,10 +1779,127 @@ export class ReaderView {
             block.dataset.njHighlighted = '1';
             block.dataset.njAutoHighlighted = '1';
           }
+          }
         }
       } catch (_) { /* 单块失败不影响其余 */ }
     }
+    // R94-①b：无 code 子元素的 pre（GitHub/commits 链路 sanitizer 产出 pre>a+text）
+    // 不在上面 pre>code 循环里——单独走一趟，命中 diff 特征则整块着色
+    for (const pre of this.body.querySelectorAll('pre')) {
+      if (pre.querySelector('code') || pre.dataset.njHighlighted === '1') continue;
+      const text = pre.textContent || '';
+      const looksPatch = /^diff --git /m.test(text.slice(0, 400))
+        || (text.includes('\n@@ ') && /^[+-][^+-]/m.test(text));
+      if (!looksPatch || !window.hljs.getLanguage('diff')) continue;
+      try {
+        pre.innerHTML = window.hljs.highlight(text, { language: 'diff' }).value;
+        pre.dataset.njHighlighted = '1';
+        pre.dataset.njPatch = '1';
+        pre.dataset.lang = 'patch'; // 复用 pre[data-lang] 角标槽（::before 显示 PATCH）
+      } catch (_) { /* 单块失败不影响其余 */ }
+    }
     this._decorateCodeBlocks();
+  }
+
+  /**
+   * R91-② + R94-②：GitHub/commits 类源的两个重灾形态治理。
+   * ① diff 表语义化：正文表格里行数多且等宽/±行主导的是 GitHub diff 表（此前按普通
+   *    数据表渲染——逐格边框的裸网格）。行级判首字符：+ 行加底、- 行删底、@@ 分段带；
+   *    行首纯数字列收窄弱化为行号槽。只动 class，不改文本结构（翻译/锚点不受影响）。
+   * ② commit 元信息卡：「N parents / commit sha / Copy full SHA」的 pre 按代码块
+   *    渲染视觉过重（深底等宽大块），实为元信息——nj-commit-meta 改信息卡形态。
+   */
+  _classifyDiffTables() {
+    if (!this.body) return;
+    for (const table of this.body.querySelectorAll('table')) {
+      if (table.dataset.njDiffDone === '1') continue;
+      table.dataset.njDiffDone = '1';
+      const rows = Array.from(table.querySelectorAll('tr'));
+      const cells = table.querySelectorAll('td');
+      if (rows.length < 8 || !cells.length) continue; // 小表按普通数据表
+      let mono = table.querySelectorAll('td code, td pre').length;
+      let signal = 0, total = 0;
+      for (const tr of rows) {
+        const tds = tr.querySelectorAll('td');
+        const codeCell = tds[tds.length - 1]; // GitHub diff：行号列在前，代码列在后
+        const txt = (codeCell?.textContent || '').trim();
+        if (!txt) continue;
+        total += 1;
+        if (/^[+@-]/.test(txt)) signal += 1;
+      }
+      const monoRatio = mono / cells.length;
+      const signalRatio = total ? signal / total : 0;
+      if (monoRatio < 0.4 && signalRatio < 0.25) continue; // 判定不是 diff 表
+      table.classList.add('nj-diff-table');
+      for (const tr of rows) {
+        const tds = tr.querySelectorAll('td');
+        if (!tds.length) continue;
+        const first = tds[0];
+        const ft = (first?.textContent || '').trim();
+        if (tds.length >= 2 && /^\d{0,6}$/.test(ft)) first.classList.add('nj-ln');
+        const codeCell = tds[tds.length - 1];
+        const txt = (codeCell?.textContent || '').trimStart();
+        if (txt.startsWith('+')) tr.classList.add('nj-d-add');
+        else if (txt.startsWith('-')) tr.classList.add('nj-d-del');
+        else if (txt.startsWith('@@')) tr.classList.add('nj-d-hunk');
+      }
+    }
+    for (const pre of this.body.querySelectorAll('pre')) {
+      if (pre.dataset.njPatch === '1' || pre.dataset.njMetaDone === '1') continue;
+      const t = pre.textContent || '';
+      if (/copy full sha/i.test(t) || /^\d+\s+parents?\b/m.test(t)) {
+        pre.dataset.njMetaDone = '1';
+        pre.classList.add('nj-commit-meta');
+      }
+    }
+  }
+
+  /**
+   * R96 正文边缘净化：抓取源常把站点小部件混进正文——头部头像/「阅读原文」/关注引导/
+   * 关联帖链接农场，尾部「相关阅读」链接堆。全文提取器（站点结构千差万别）只保证主体，
+   * 边缘噪音在此按形态清除（只动头尾浅层，遇实文即停，绝不深清正文）。
+   */
+  _stripBoilerplateEdges() {
+    if (!this.body) return;
+    const JUNK_TEXT_RE = /(广告|推广|赞助|sponsored|advertisement|关注(我们|公众号)|扫码关注|阅读原文|查看全文|点击阅读|read more|related posts|相关(文章|推荐|阅读)|延伸阅读|猜你喜欢|大家都在看|更多(文章|精彩)|往期(文章|推荐)|推荐阅读|subscribe|follow us|分享至|分享到|上一篇|下一篇|posted in|tagged with)/i;
+    const isJunk = (el) => {
+      const text = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      const links = el.querySelectorAll('a');
+      // 头像/小图块：只有小图（≤140px 已知尺寸）且几乎没有文字
+      if (el.querySelector('img') && text.length < 24) {
+        const known = Array.from(el.querySelectorAll('img')).filter((im) => {
+          const w = parseInt(im.getAttribute('width') || '', 10) || im.naturalWidth;
+          return w > 0;
+        });
+        if (known.length > 0 && known.every((im) => (parseInt(im.getAttribute('width') || '', 10) || im.naturalWidth) <= 140)) return true;
+      }
+      if (!text) return links.length === 0 && !el.querySelector('img, video, audio, figure, iframe'); // 纯空块清；无文字的图/视频/内嵌是内容（repro 实证：figure 曾被误清）
+      if (text.length <= 90 && JUNK_TEXT_RE.test(text)) return true;
+      const linkChars = Array.from(links).reduce((s, a) => s + (a.textContent || '').trim().length, 0);
+      if (links.length >= 3 && text.length <= 260 && linkChars / Math.max(text.length, 1) >= 0.7) return true; // 链接农场
+      return false;
+    };
+    // 头部：最多清 6 块；标题或 ≥50 字实文即停（短非垃圾块须后随垃圾才连带——保守）
+    let guard = 6;
+    while (guard-- > 0) {
+      const first = this.body.firstElementChild;
+      if (!first || /^H[1-6]$/.test(first.tagName)) break;
+      if (!isJunk(first)) {
+        const text = (first.textContent || '').trim();
+        if (text.length >= 50) break;
+        const second = first.nextElementSibling;
+        if (!second || !isJunk(second)) break;
+      }
+      this.body.removeChild(first);
+    }
+    // 尾部：最多清 3 块链接农场/引导（尾部比头部更保守：必须命中垃圾判据才清）
+    guard = 3;
+    while (guard-- > 0) {
+      const last = this.body.lastElementChild;
+      if (!last || last.classList.contains('nj-article-end')) break;
+      if (!isJunk(last)) break;
+      this.body.removeChild(last);
+    }
   }
 
   /** 代码块悬浮复制按钮（阅读功能加强）：pre 右上角浮动「复制」，点击写入剪贴板。 */

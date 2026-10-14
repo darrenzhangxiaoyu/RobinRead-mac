@@ -55,8 +55,8 @@ app.whenReady().then(async () => {
     ok(/minWidth: 480,/.test(rwSrc), '1 等价题证据：独立阅读窗下限 480px 在册');
     ok(/\.rw-title \{[^}]*text-overflow: ellipsis;/.test(robin) && /\.rw-reader \{[^}]*min-width: 0;/.test(robin),
       '1 等价题固化：阅读窗标题省略号 + 阅读列 min-width:0（480px 不溢出）');
-    ok(/\.reader-article\s*\{\s*padding: 32px min\(40px, 5vw\) 0;/s.test(robin) || /\.reader-article \{[^}]*padding: 32px min\(40px, 5vw\) 0;/.test(robin),
-      '1 等价题固化：版心内边距随视口收窄（min(40px,5vw)）');
+    ok(/\.reader-article\s*\{[^}]*--article-gutter: min\(40px, 5vw\);[^}]*padding: 22px var\(--article-gutter\) 0;/s.test(robin),
+      '1 等价题固化：版心内边距随视口收窄（槽令牌 min(40px,5vw)；R94-② 顶槽 32→22）');
 
     ok(/const SIDEBAR_DEFAULT_WIDTH = 240;/s.test(appSrc) && /const LIST_DEFAULT_WIDTH = 340;/.test(appSrc),
       '2 出厂宽度常量 240/340 在册');

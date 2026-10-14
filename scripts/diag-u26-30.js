@@ -68,7 +68,7 @@ function phaseSource() {
     'A U26 三栏侧栏列 min-width 视口钳制（min(240px,24vw)）+允许收缩在册');
   ok(/\.column-list\s*\{\s*flex: 0 1 auto; min-width: min\(280px, 26vw\);\s*\}/.test(robin), 'A U26 列表列 min-width min(280px,26vw) 在册');
   ok(/\.column-reader\s*\{\s*min-width: min\(400px, 30vw\);\s*\}/.test(robin), 'A U26 阅读列 min-width min(400px,30vw) 在册');
-  ok(/\.reader-article\s*\{\s*padding: 32px min\(40px, 5vw\) 0;\s*\}/.test(robin), 'A U26 版心内边距随视口收紧（min(40px,5vw)）在册');
+  ok(/\.reader-article\s*\{[^}]*--article-gutter: min\(40px, 5vw\);[^}]*padding: 22px var\(--article-gutter\) 0;/s.test(robin), 'A U26 版心内边距随视口收紧（槽令牌 min(40px,5vw)；R94-② 顶槽 32→22）在册');
 
   // U27：合成音效在册
   ok(/export function sfxPlan/.test(sfxSrc) && /export function initSfx/.test(sfxSrc) && /export function playSfx/.test(sfxSrc) && /export function createSfx/.test(sfxSrc) && /export const SFX_NAMES/.test(sfxSrc),
@@ -533,10 +533,22 @@ async function uiProbe(store, win, seeded) {
     const out = {};
     out.printBtn = !!document.querySelector('[data-role="print-article"]');
     out.printBtnVisible = (() => {
+      // R97-① 打印键收纳进「更多」浮层：可见性 = 浮层打开后按钮有盒（不再常驻行内）
       const b = document.querySelector('[data-role="print-article"]');
       if (!b) return false;
+      let visible = false;
+      const pop = b.closest('.nj-header-more-pop');
+      if (pop) {
+        const more = document.querySelector('.nj-header-more');
+        if (more) more.click();
+      }
       const r = b.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
+      visible = r.width > 0 && r.height > 0;
+      if (pop) {
+        const more = document.querySelector('.nj-header-more');
+        if (more) more.click(); // 关回
+      }
+      return visible;
     })();
     let printCalls = 0;
     const realPrint = window.print;

@@ -1668,8 +1668,10 @@ const AUTO_BACKUP_DIR = () => path.join(app.getPath('userData'), 'backups');
 const AUTO_BACKUP_KEEP_KEY = 'RobinRead.autoBackup.keep';
 
 function autoBackupKeep() {
-  const v = Number(store.preferences.get(AUTO_BACKUP_KEEP_KEY, 7));
-  return [3, 7, 14, 30].includes(v) ? v : 7;
+  // R98：默认 7→3——全量快照按库体积倍增（用户实况 1.3GB 库 × 7 份 = 9.4GB 磁盘黑洞，
+  // 升级首启风暴的帮凶）；显式设置过的用户不受影响
+  const v = Number(store.preferences.get(AUTO_BACKUP_KEEP_KEY, 3));
+  return [3, 7, 14, 30].includes(v) ? v : 3;
 }
 
 function autoBackupEnabled() {
@@ -1726,6 +1728,23 @@ function pruneAutoBackups(dir) {
       .sort()
       .reverse();
     for (const f of files.slice(keep)) fs.rmSync(path.join(dir, f), { force: true });
+    // R98 总量闸：份数之外再守磁盘——按新到旧累计，超过 4GB 即删最老（至少留 1 份）。
+    // 大库全量快照按库体积倍增，仅份数滚动守不住磁盘（用户实况 9.4GB 累积）。
+    const kept = files.slice(0, keep);
+    let total = 0;
+    const sizes = [];
+    for (const f of kept) {
+      try {
+        const s = fs.statSync(path.join(dir, f)).size;
+        sizes.push([f, s]);
+        total += s;
+      } catch (_) { /* 刚被并发删除等 */ }
+    }
+    for (let i = sizes.length - 1; i >= 0 && total > 4 * 1024 * 1024 * 1024 && sizes.length > 1; i -= 1) {
+      total -= sizes[i][1];
+      try { fs.rmSync(path.join(dir, sizes[i][0]), { force: true }); } catch (_) { /* 尽力而为 */ }
+      sizes.pop();
+    }
   } catch (_) { /* 忽略 */ }
 }
 
