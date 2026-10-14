@@ -1459,7 +1459,39 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
   line-height: 1.73; /* 0.52em × 1.73 ≈ 0.9em：菱形几何中心对齐双侧线 */
   color: color-mix(in srgb, var(--accent) 58%, transparent);
 }
+/* ── R80 阅读动效编排 ── */
+/* R80-①② 进文三拍编排：眉题→标题→meta 0/60/120ms 上浮淡入（U39 同款三拍语言），
+   首屏前三块正文 160/220/280ms 随后跟上——视线从标题自然滑入正文。
+   双门：no-preference 档外不发动画（reduced 下一律即时呈现，无延迟填充） */
+@keyframes njRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nj-enter-compose .robin-header-kicker,
+  .nj-enter-compose .robin-header-title,
+  .nj-enter-compose .robin-header-meta { animation: njRise var(--dur-mid) var(--ease-out) both; }
+  .nj-enter-compose .robin-header-kicker { animation-delay: 0ms; }
+  .nj-enter-compose .robin-header-title { animation-delay: 60ms; }
+  .nj-enter-compose .robin-header-meta { animation-delay: 120ms; }
+}
+/* R80-③ 标题下划线生长：hover 时发丝线自左生长（accent 渐变，取代瞬变色变） */
+.robin-header-title a { position: relative; }
+.robin-header-title a::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -3px;
+  height: 1.5px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 45%, transparent));
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--dur-mid) var(--ease-out);
+}
+.robin-header-title a:hover::after { transform: scaleX(1); }
+.robin-header-title a:hover { color: inherit; }
 /* R77-③ 文末终止符：小菱形居中——「读完了」的安静信号（文末继续读卡片前的呼吸位） */
+
 .nj-article-end {
   margin: 2.2em auto 0.6em;
   text-align: center;
@@ -4165,20 +4197,22 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
 }
 .nj-mag-card .mag-cover img.nj-cover-loaded { opacity: 1; }
 
-/* 文章进入动画：正文块轻量上移淡入（前 8 块错峰；尊重 reduced-motion） */
+/* 文章进入动画：正文块轻量上移淡入（前 8 块错峰；尊重 reduced-motion）。
+   R80-② 编舞重排：阶梯自 0.18s 起步——让标题三拍（0/60/120ms + --dur-mid）先行落定，
+   正文自标题之后滑入（原 0.03s 起步会抢在标题前到达，视线引导倒置） */
 @media (prefers-reduced-motion: no-preference) {
   .reader-article .robin-body > * {
     animation: article-rise var(--dur-slow) ease both;
   }
-  .reader-article .robin-body > *:nth-child(1) { animation-delay: 0.03s; }
-  .reader-article .robin-body > *:nth-child(2) { animation-delay: 0.06s; }
-  .reader-article .robin-body > *:nth-child(3) { animation-delay: 0.09s; }
-  .reader-article .robin-body > *:nth-child(4) { animation-delay: 0.12s; }
-  .reader-article .robin-body > *:nth-child(5) { animation-delay: 0.15s; }
-  .reader-article .robin-body > *:nth-child(6) { animation-delay: 0.18s; }
-  .reader-article .robin-body > *:nth-child(7) { animation-delay: 0.21s; }
-  .reader-article .robin-body > *:nth-child(8) { animation-delay: 0.24s; }
-  .reader-article .robin-body > *:nth-child(n + 9) { animation-delay: 0.27s; }
+  .reader-article .robin-body > *:nth-child(1) { animation-delay: 0.18s; }
+  .reader-article .robin-body > *:nth-child(2) { animation-delay: 0.21s; }
+  .reader-article .robin-body > *:nth-child(3) { animation-delay: 0.24s; }
+  .reader-article .robin-body > *:nth-child(4) { animation-delay: 0.27s; }
+  .reader-article .robin-body > *:nth-child(5) { animation-delay: 0.30s; }
+  .reader-article .robin-body > *:nth-child(6) { animation-delay: 0.33s; }
+  .reader-article .robin-body > *:nth-child(7) { animation-delay: 0.36s; }
+  .reader-article .robin-body > *:nth-child(8) { animation-delay: 0.39s; }
+  .reader-article .robin-body > *:nth-child(n + 9) { animation-delay: 0.42s; }
 }
 @keyframes article-rise {
   from { opacity: 0; transform: translateY(10px); }

@@ -100,6 +100,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r77-details.js', runner: 'electron', desc: 'R77 图文节奏三连：图片加载完成淡入(nj-img-loaded+CSSTransition实证)/hr出版化双线菱形/文末终止符(不进朗读翻译单元)（离线）' },
   { file: 'scripts/diag-r78-details.js', runner: 'electron', desc: 'R78 收官三连：译文切换保位(比率恢复)/译文容器微排版+表格同享/F33真bug修复(译文容器display)+pre横滚提示同族（离线）' },
   { file: 'scripts/diag-r79-details.js', runner: 'electron', desc: 'R79 版面艺术品位三连：lead首段1.07em导语(缩进式让位)/h2下划线退役(U5-②短横线唯一章节标记)/42em行长护栏文字通道（离线）' },
+  { file: 'scripts/diag-r80-details.js', runner: 'electron', desc: 'R80 动效编排三连：进文三拍(眉题→标题→meta 0/60/120ms njRise)/article-rise阶梯重排0.18s起(标题先行)/标题下划线scaleX生长（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

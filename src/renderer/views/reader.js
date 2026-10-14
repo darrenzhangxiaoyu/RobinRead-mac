@@ -816,6 +816,8 @@ export class ReaderView {
     } else {
       // R54 文章微入场：淡入 + 微缩放（列表→阅读的视线引导；翻页动效在场时让位，同元素不叠两场）
       article.classList.add('nj-article-enter');
+      // R80-①② 进文三拍编排：眉题→标题→meta→首屏三块 stagger（reduced 下不发类，一律即时呈现）
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) article.classList.add('nj-enter-compose');
       article.addEventListener('animationend', () => article.classList.remove('nj-article-enter'), { once: true });
     }
 
