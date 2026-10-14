@@ -4753,8 +4753,11 @@ export class ReaderView {
         // R88-① 滚动驱动档门：可滚动时进度线交给 CSS scroll() 时间线（合成器线程直驱，
         // JS 滚动路径零写入；不可滚（短文）不上时间线——JS 兜底写宽仍是 fallback）
         this.progressEl.classList.toggle('is-scrollable', max0 > 40);
-        // 自检R3-P3：时间线在场时动画层叠压过内联样式——width 写是纯死功（最热路径上剔除）
-        if (this.progressFill && !this.progressEl.classList.contains('is-scrollable')) {
+        // 自检R3-P3：时间线在场时动画层叠压过内联样式——width 写是纯死功（最热路径上剔除）。
+        // 自检R5：reduce 下 CSS 时间线被 no-preference 档关闭——JS 兜底须接管（防进度线冻结）
+        const cssTimelineActive = this.progressEl.classList.contains('is-scrollable')
+          && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (this.progressFill && !cssTimelineActive) {
           this.progressFill.style.width = `${ratio0 * 100}%`;
         }
         this.progressEl.dataset.pct = `${Math.round(ratio0 * 100)}%`; // 端点气泡显示阅读百分比
@@ -6399,6 +6402,7 @@ export class ReaderView {
     if (!block) return;
     block.classList.add('nj-tts-active');
     if (this._tts) this._tts.activeEl = block;
+    this._expandSectionOf(block); // 自检R5：朗读进折叠章先开门（高亮与跟随滚动否则不可见）
     block.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 

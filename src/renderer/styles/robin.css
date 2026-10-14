@@ -1753,10 +1753,14 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
 .robin-surface.column-reader { timeline-scope: --nj-reader-scroll; } /* 进度线在滚动容器外：作用域提升可达 */
 @keyframes njProgressGrow { from { width: 0%; } to { width: 100%; } }
 @supports (animation-timeline: scroll()) {
-  .reading-progress.is-scrollable .reading-progress-fill {
-    animation: njProgressGrow linear both;
-    animation-timeline: --nj-reader-scroll;
-    transition: none; /* 时间线直驱下过渡让位（合成器已逐帧） */
+  /* 自检R5：scroll() 时间线无视 animation-duration——全局收敛块压不住，须显式 no-preference
+     档（reduce 下退回 JS 兜底写宽路径，与本特性之前的行为一致） */
+  @media (prefers-reduced-motion: no-preference) {
+    .reading-progress.is-scrollable .reading-progress-fill {
+      animation: njProgressGrow linear both;
+      animation-timeline: --nj-reader-scroll;
+      transition: none; /* 时间线直驱下过渡让位（合成器已逐帧） */
+    }
   }
 }
 /* R85-③ 章节记号针：h2 位置在轨道上打 2px 记号——填充越过记号即「读过一章」 */
