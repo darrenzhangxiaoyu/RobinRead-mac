@@ -9,7 +9,7 @@
  * - 图片灯箱、TOC 轨道（悬停波峰/视线重心）、浮动滚动条（透明度 0/.18/.28/.36）
  * - 空格：滚动 38.2% 视口；到底后翻下一篇（由 app 层做双击确认）
  */
-import { t, tf } from '../i18n.js';
+import { t, tf, currentLanguage } from '../i18n.js';
 import { icon } from '../icons.js';
 import { feedFontStack } from '../data/font-family-presets.js'; /* U21 字体族套装（每源排版同源） */
 import { playTitleTransition } from './shared-transition.js'; /* U22 共享元素转场 */
@@ -968,6 +968,14 @@ export class ReaderView {
     // 来源已在眉题行展示，meta 保留作者/日期/时长
     if (entry.author) parts.push(escapeHTML(entry.author));
     if (entry.publishedAt) parts.push(escapeHTML(formatFullDate(entry.publishedAt)));
+    // R84-③ 农历 folio：中文界面下公历旁附小字农历（Intl 中华历法 hanidec 数字；能力缺失静默）
+    if (currentLanguage() === 'zh' && entry.publishedAt) {
+      try {
+        const lunar = new Intl.DateTimeFormat('zh-CN-u-ca-chinese-nu-hanidec', { month: 'long', day: 'numeric' })
+          .format(new Date(entry.publishedAt * 1000));
+        parts.push(`<span class="robin-lunar">${escapeHTML(tf('农历%@', lunar))}</span>`);
+      } catch (_) { /* Intl 历法不支持：静默跳过 */ }
+    }
     // 预计阅读时长（中文 400 字/分钟、英文 220 词/分钟混合估算）
     const minutes = this._estimateReadingMinutes();
     if (minutes > 0) parts.push(`<span class="robin-read-time">${escapeHTML(tf('约 %lld 分钟', minutes))}</span>`);

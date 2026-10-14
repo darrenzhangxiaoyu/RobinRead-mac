@@ -804,9 +804,10 @@ body.zen .list-top-inset { display: none; }
 
 /* 正文容器（对应 webview body） */
 .reader-article {
+  --article-gutter: 40px; /* R84-① 版心槽令牌：首图出血/边注等以它对齐（窄窗媒体档改写） */
   max-width: var(--reader-page-width, 820px);
   margin: 0 auto 42px;
-  padding: 32px 40px 0;
+  padding: 32px var(--article-gutter) 0;
   font-size: var(--article-font-size, 17px);
   /* U21 字体族链：每源排版（--reader-font）> 全局字体族套装（--reader-font-family）> 内置衬线 */
   font-family: var(--reader-font, var(--reader-font-family, var(--font-serif)));
@@ -3687,6 +3688,38 @@ body.dark .nj-note-marker { color: #d3a952; }
   max-width: 42em;
   margin-left: auto;
   margin-right: auto;
+}
+/* ── R84 沉浸刊头三连 ── */
+/* R84-① 首图全幅出血 hero：图先行的文章，首 figure 破版心槽到页缘——杂志开卷大图；
+   仅当正文 ≥3 块时启用（短文全幅喧宾夺主）；caption 随出血回内容区对齐 */
+.robin-body > figure:first-child:nth-last-child(n + 3) {
+  margin-inline: calc(-1 * var(--article-gutter));
+  max-width: none; /* 破 .reader-article * 的 100% 上限（出血的语义就是出框） */
+  border-radius: 0;
+}
+.robin-body > figure:first-child:nth-last-child(n + 3) figcaption {
+  max-width: 42em;
+  margin-inline: auto;
+  text-align: center;
+}
+/* R84-② 灯晕 vignette：阅读面四缘极淡压暗（纸在灯下的氛围）——
+   中心透明向外 3.5% 墨（暗档 6% 夜读包裹感）；pointer-events none 绝不挡阅读 */
+.robin-surface.column-reader { position: relative; }
+.robin-surface.column-reader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(ellipse 118% 88% at 50% 42%, transparent 58%, rgba(24, 20, 14, 0.035) 100%);
+}
+body.dark .robin-surface.column-reader::after {
+  background: radial-gradient(ellipse 118% 88% at 50% 42%, transparent 58%, rgba(8, 6, 4, 0.06) 100%);
+}
+/* R84-③ 农历 folio：中文界面下公历日期旁的小字农历（Intl 中华历法，hanidec 数字） */
+.robin-lunar {
+  color: var(--text-tertiary);
+  font-size: 0.92em;
 }
 
 /* ==========================================================================
@@ -8728,7 +8761,7 @@ html.theme-transition * {
   .column-list { flex: 0 1 auto; min-width: min(280px, 26vw); }
   .column-reader { min-width: min(400px, 30vw); }
   /* 版心内边距随视口收紧（1280@175% 时固定 40px 内边距吃掉近四成版心） */
-  .reader-article { padding: 32px min(40px, 5vw) 0; }
+  .reader-article { --article-gutter: min(40px, 5vw); padding: 32px var(--article-gutter) 0; }
   /* 头部操作区（听/稍后读/导出/打印…）随版心换行，不再横向挤出滚动区 */
   .robin-header-original-actions { flex-wrap: wrap; }
 }
