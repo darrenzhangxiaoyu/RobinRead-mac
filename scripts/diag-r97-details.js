@@ -35,9 +35,15 @@ app.whenReady().then(async () => {
     ok(/\.nj-header-more-pop \{[\s\S]*?position: absolute;[\s\S]*?display: none;[\s\S]*?\.nj-header-more-pop\.open \{ display: flex; \}/s.test(css),
       '1 浮层 CSS（绝对定位 + open 开合）在册');
     ok(readerSrc.includes('.slice(0, 3); // R97-①'), '1 标签 chips 上限 3 在册');
-    ok(/\.robin-header-divider \{[\s\S]*?margin: 12px auto 16px;/s.test(css)
-      && /\.reader-article \.robin-header-divider,[\s\S]*?margin: 12px auto 16px;[\s\S]*?--article-font-size, 17px\) \* 48/.test(css),
-      '2 divider 收紧 12/16 + R104 与正文通道同缘（auto + 48 链帽）在册');
+    ok(/\.robin-header-divider \{[\s\S]*?margin: 12px auto 16px;[\s\S]*?max-width: min\(100%, var\(--nj-measure\)\);/s.test(css)
+      && /\.reader-article \.robin-header-divider,[\s\S]*?max-width: min\(100%, var\(--nj-measure\)\);/.test(css),
+      '2 divider 收紧 12/16 + R104/R107 与正文通道同缘且随 --nj-measure 自适应');
+    ok(/R110 头区动作减重/.test(css)
+      && /\.robin-header-original-actions \.btn-text \{[\s\S]*?border: none;[\s\S]*?color: var\(--text-tertiary\);/.test(css)
+      && /\.robin-header-original-actions \.btn-text:hover[\s\S]*?color: var\(--accent\);/.test(css),
+      '2 R110 头区动作 ghost 形态在册（无框三阶色，悬停浮出——用户实见「这块设计丑」）');
+    ok(/\.robin-header-meta \{[\s\S]*?position: relative;[\s\S]*?z-index: 40;/s.test(css) && /R111 浮层防盖/.test(css),
+      '2 R111 更多浮层防盖在册（meta 锚 z-40——三拍动画 fill:both 永久层叠上下文致正文 transform 图盖浮层，用户实见「有的会覆盖有的不会」）');
     ok(/\.reader-article \{[\s\S]*?padding: 22px var\(--article-gutter\) 0;/s.test(css), '2 版心顶槽 22px 在册');
     ok(/\.reader-article p \{ margin: 0 0 1\.35em;/.test(css)
       && /\.reader-article h1, \.reader-article h2, \.reader-article h3,[\s\S]*?margin: 1\.4em 0 0\.45em;/.test(css),

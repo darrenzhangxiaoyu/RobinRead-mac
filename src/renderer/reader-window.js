@@ -40,7 +40,7 @@ function applyReaderLayoutCSS(layout) {
   const root = document.documentElement;
   // U21 字体族套装：与主窗同源（font-family-presets.js 单一数据源，四档皮肤+自定义）
   const fontStack = resolveReaderFontStack(layout);
-  const widthMap = { narrow: '680px', standard: '820px', wide: '960px' };
+  const widthMap = { narrow: '680px', standard: '1160px', wide: '1320px' }; /* R107 页宽放流：块级 max-width 小窗吃满/大窗收帽——用户实见「大屏段落显窄」 */
   const heightMap = { compact: '1.55', standard: '1.72', loose: '1.95' };
   const letterMap = { normal: '0.006em', wide: '0.028em', loose: '0.05em' };
   const titleMap = { inherit: 'var(--font-serif)', smiley: '"Smiley Sans", var(--font-serif)' };

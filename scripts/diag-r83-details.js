@@ -62,9 +62,10 @@ app.whenReady().then(async () => {
     // ── 3. JS 动效 reduced 门全量 ──
     const jsGates = (readerSrc.match(/matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches/g) || []).length;
     ok(jsGates >= 2, `3 JS 动效 reduced 门 ≥2 处（实测 ${jsGates}：进文编排 + 完读绽放）`);
-    ok(/\.reader-article img\.nj-img \{ transition: opacity var\(--dur-mid\) var\(--ease-out\); \}/.test(cssClean)
-      && !/\.reader-article img\.nj-img \{[^}]*animation:/.test(cssClean),
-      '3 图片淡入基座纯 transition（loading 态 shimmer 是另一规则的合法 keyframe）');
+    ok(/\.reader-article img\.nj-img \{[^}]*?transition: background var\(--dur-mid\) var\(--ease-out\), filter var\(--dur-mid\) var\(--ease-out\);/s.test(cssClean)
+      && !/\.reader-article img\.nj-img \{[^}]*?opacity\s*:/s.test(cssClean)
+      && !/\.reader-article img\.nj-img \{[^}]*animation:/s.test(cssClean),
+      '3 图片基座 transition 无 opacity 声明（R109 即时渲染——淡入退役；loading 态 shimmer 是另一规则的合法 keyframe）');
 
     // ── 4. 暗色 parity 与令牌派生 ──
     ok(/body\.dark \.column-reader \{[^}]*?1\.6%/.test(css), '4 纸面网点暗档 1.6% 在册');

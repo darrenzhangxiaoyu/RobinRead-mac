@@ -820,7 +820,7 @@ export class ReaderView {
       const fontStack = feedFontStack(typo.fontFamily); // U21：四档皮肤单一数据源（未指定 → null 跟随全局）
       if (fontStack) article.style.setProperty('--reader-font', fontStack);
       if (Number(typo.fontSize) > 0) article.style.setProperty('--article-font-size', `${typo.fontSize}px`);
-      const widthMap = { narrow: '680px', standard: '820px', wide: '960px' };
+      const widthMap = { narrow: '680px', standard: '1160px', wide: '1320px' }; /* R107 页宽放流：块级 max-width 小窗吃满/大窗收帽——用户实见「大屏段落显窄」 */
       if (widthMap[typo.pageWidth]) article.style.setProperty('--reader-page-width', widthMap[typo.pageWidth]);
     }
     // 拟真翻页：方向性纸页翻转（杂志⇄文章、上一篇/下一篇共用），动画结束自清理
@@ -2606,7 +2606,8 @@ export class ReaderView {
       }
     }
     // 加载状态：加载中 shimmer 占位 / 失败优雅兜底（不再显示浏览器破图图标）
-    // R77-① 加载完成淡入：opacity 0→1 过渡替代「啪」地出现（cached 直达、失败态恒可见）
+    // R109：加载完成淡入退役——opacity 门丢掉了渐进渲染（边下边显），用户实报「图片刷出来的
+    // 速度比之前慢」；类标记保留（重试/失败态依赖），仅不再做 0→1 过渡
     const markState = () => {
       if (img.complete) {
         if (img.naturalWidth > 0) {

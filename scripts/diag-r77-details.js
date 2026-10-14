@@ -29,12 +29,11 @@ app.whenReady().then(async () => {
     // ── Phase A：静态锚点 ──
     const css = read('src/renderer/styles/robin.css');
     const readerSrc = read('src/renderer/views/reader.js');
-    ok(css.includes('.reader-article img.nj-img:not(.nj-img-loaded):not(.nj-img-failed) { opacity: 0; }'),
-      '1 未加载图隐藏（loaded/failed 双豁免）');
-    ok(css.includes('.reader-article img.nj-img { transition: opacity var(--dur-mid) var(--ease-out); }'),
-      '1 淡入走 --dur-mid/--ease-out 令牌（reduced-motion 全局块自动即时）');
+    ok(!css.includes('img.nj-img:not(.nj-img-loaded):not(.nj-img-failed) { opacity: 0; }')
+      && /R109 图片即时渲染/.test(css),
+      '1 R109 opacity 门退役在册（渐进渲染回归——用户实报「图片刷出来的速度比之前慢」）');
     ok(readerSrc.includes("img.classList.add('nj-img-loaded'); // R77-①：一次性淡入（常驻类，重复 load 幂等）"),
-      '1 load 通道挂 nj-img-loaded');
+      '1 load 通道挂 nj-img-loaded（类标记保留：重试/失败态依赖）');
     ok(/if \(img\.naturalWidth > 0\) \{\s*\n\s*img\.classList\.remove\('nj-img-loading', 'nj-img-failed'\);\s*\n\s*img\.classList\.add\('nj-img-loaded'\);/.test(readerSrc),
       '1 markState cached 通道直达 loaded（缓存图不闪隐）');
     ok(/\.reader-article hr::after \{[^}]*?content: '◆';/.test(css) && /\.reader-article hr \{[^}]*?height: 0\.9em;[^}]*?width: 62%;/s.test(css),
@@ -84,6 +83,8 @@ app.whenReady().then(async () => {
         // 1 离线未加载图：无 loaded/failed → opacity 0（隐身不闪现）
         out.pendingHidden = !img.classList.contains('nj-img-loaded') && !img.classList.contains('nj-img-failed');
         out.pendingOpacity = getComputedStyle(img).opacity;
+        out.pendingCls = img.className;
+        out.pendingAnims = (img.getAnimations ? img.getAnimations() : []).map((a) => (a.transitionProperty || a.animationName || '?')).slice(0, 4);
         // 运行时补真图触发 load 通道（R75 同款；防重试竞态）
         img.dataset.noRetry = '1';
         await new Promise((res) => {
@@ -127,9 +128,10 @@ app.whenReady().then(async () => {
     if (b.__err) ok(false, 'UI 实证探针异常 — ' + b.__err);
     else if (!b.found) ok(false, '阅读区未渲染（环境性）');
     else {
-      ok(b.pendingHidden && b.pendingOpacity === '0', `1 未加载图隐身（opacity=${b.pendingOpacity}）`);
-      ok(b.loadedClass && b.loadedOpacity === '1' && b.fadeAnim && b.fadeKfs,
-        `1 加载完成淡入通道（loaded 类${b.loadedClass ? '✓' : '✗'} CSSTransition${b.fadeAnim ? '✓' : '✗'} 键帧0→1${b.fadeKfs ? '✓' : '✗'} finish 后 opacity=${b.loadedOpacity}）`);
+      ok(b.pendingOpacity === '1' || String(b.pendingCls || '').includes('nj-img-retrying'),
+        `1 R109 未加载图首次加载直出（opacity=${b.pendingOpacity}；retry 态 0.45+blur 为合法重试提示——渐进渲染只关乎首次加载）`);
+      ok(b.loadedClass && b.loadedOpacity === '1' && !b.fadeAnim,
+        `1 加载完成即时呈现（loaded 类${b.loadedClass ? '✓' : '✗'} 无 CSSTransition${b.fadeAnim ? '✗意外在场' : '✓'} opacity=${b.loadedOpacity}）`);
       ok(/◆/.test(String(b.hrGlyph)) && b.hrHeight !== '0px', `2 hr 菱形实渲染（glyph=${b.hrGlyph} 高=${b.hrHeight}）`);
       ok(b.endPresent && b.endIsLast, `3 终止符在正文尾部（present${b.endPresent ? '✓' : '✗'} last${b.endIsLast ? '✓' : '✗'}）`);
       ok(b.endAria === 'true' && b.endNoNjId, `3 修饰性标记口径（aria-hidden=${b.endAria} 无 data-nj-id=${b.endNoNjId}）`);

@@ -95,7 +95,11 @@ class NeuralTTSService {
     } catch (_) { /* 忽略 */ }
   }
 
-  /** Edge 神经语音：msedge-tts WebSocket 通道。偶发握手/流失败（冷启动、网络抖动）自动重试，共 3 次。 */
+  /**
+   * Edge 神经语音：原生 WSS 通道（src/main/EdgeTTS.js——微软 2025 起 WSS 端点要求
+   * Sec-MS-GEC v2 令牌，旧 msedge-tts 库不带令牌恒 403，用户实报「神经语音无法使用」根治）。
+   * 偶发握手/流失败（冷启动、网络抖动）自动重试，共 3 次。
+   */
   async _synthEdge(text, voice, rate) {
     let lastError = null;
     const backoff = [500, 1200];
@@ -111,31 +115,8 @@ class NeuralTTSService {
   }
 
   async _synthEdgeOnce(text, voice, rate) {
-    let mod;
-    try {
-      mod = require('msedge-tts');
-    } catch (_) {
-      throw new Error('neural tts module missing');
-    }
-    const { MsEdgeTTS, OUTPUT_FORMAT } = mod;
-    const tts = new MsEdgeTTS();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), SYNTH_TIMEOUT_MS);
-    try {
-      await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-      const { audioStream } = await tts.toStream(text, { rate: rateToPercent(rate) });
-      const chunks = [];
-      await new Promise((resolve, reject) => {
-        audioStream.on('data', (chunk) => chunks.push(chunk));
-        audioStream.on('end', resolve);
-        audioStream.on('error', reject);
-        controller.signal.addEventListener('abort', () => reject(new Error('tts: timeout')));
-      });
-      return Buffer.concat(chunks);
-    } finally {
-      clearTimeout(timer);
-      try { tts.close(); } catch (_) { /* 忽略 */ }
-    }
+    const { synthesizeEdge } = require('./EdgeTTS');
+    return synthesizeEdge({ text, voice, rate, timeoutMs: SYNTH_TIMEOUT_MS });
   }
 
   /** 自定义 TTS：OpenAI 兼容 POST {model,voice,input} → audio bytes；响应兼容 mp3/wav。 */

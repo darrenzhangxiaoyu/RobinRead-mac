@@ -29,17 +29,19 @@ app.whenReady().then(async () => {
     const css = read('src/renderer/styles/robin.css');
     // ── 静态锚点 ──
     ok(/\.robin-body :where\(p, ul, ol, dl, blockquote\):not\(:is\(table, pre, \.table-scroll\) \*\) \{/.test(css)
-      && /\.robin-body :where[\s\S]*?max-width: 48em;[\s\S]*?margin-left: auto;[\s\S]*?margin-right: auto;/.test(css),
-      '1 R89 任意深度度量选择器在册（子树豁免 + auto 居中）');
+      && /\.robin-body :where[\s\S]*?max-width: min\(100%, var\(--nj-measure\)\);[\s\S]*?margin-left: auto;[\s\S]*?margin-right: auto;/.test(css),
+      '1 R89 任意深度度量选择器在册（子树豁免 + auto 居中；R107 改用 --nj-measure）');
     ok(!/\.robin-body > p, \.robin-body > ul, \.robin-body > ol,/.test(css), '1 R79 直接子级旧护栏已退役');
     ok(/--reader-page-width, 820px/.test(css), '3 页宽预设槽位保持（出血件专用）');
     ok(/\.reader-article table \{[\s\S]*?border-collapse: separate; border-spacing: 0;[\s\S]*?font-size: max\(0\.92em, 13px\);/s.test(css), '2 table 地板 13px + R91 卡片基座在册');
-    ok(/\.reader-article\.cjk-em \.robin-body :where\(p, ul, ol, dl, blockquote\):not\(:is\(table, pre, \.table-scroll\) \*\) \{[\s\S]*?max-width: 54em;/.test(css),
-      '1 R95 中文通道 54em（用户实见「段落太窄→空白大」吃满版心）');
-    ok(/cjk-em \.robin-body figure,[\s\S]*?\* 54\)\);/.test(css)
-      && /\.robin-body img:not\(:is\(\.robin-body > figure:first-child:nth-last-child\(n \+ 3\) \*\)\)/.test(css)
-      && /cjk-em \.robin-body img:not\([\s\S]*?\* 54\)\);/.test(css),
-      '1 R95b 图文同轴补全：figure/pre/裸 img 全部与文字通道等宽 48-54 字号单位（hero 豁免）');
+    ok(/container-type: inline-size/.test(css)
+      && /--nj-measure: clamp\(calc\(var\(--article-font-size, 17px\) \* 48\), 90cqi, calc\(var\(--article-font-size, 17px\) \* 62\)\);/.test(css)
+      && /\.reader-article\.cjk-em \{[\s\S]*?--nj-measure: clamp\(calc\(var\(--article-font-size, 17px\) \* 54\), 92cqi, calc\(var\(--article-font-size, 17px\) \* 76\)\);/.test(css),
+      '1 R107 自适应度量在册（地板 48/54 字 · 90/92cqi 流动 · 封顶 62/76 字——用户实见「大屏段落显窄」）');
+    ok(/\.robin-body figure,\s*\.robin-body pre,\s*\.robin-body table,/.test(css)
+      && /\.robin-body img \{[\s\S]{0,200}max-width: min\(100%, var\(--nj-measure\)\);/.test(css)
+      && /\.robin-body h1, \.robin-body h2, \.robin-body h3,[\s\S]*?max-width: min\(100%, var\(--nj-measure\)\);[\s\S]*?margin-right: auto;/.test(css),
+      '1 R95b/R101/R108 同轴消费族在册（figure/pre/table/标题/全部图同吃 --nj-measure，无豁免）');
     ok(/\.reader-article pre \{[\s\S]*?font-size: max\(0\.85em, 12px\);/s.test(css), '2 pre 地板 12px 在册');
     ok(/\.reader-article code \{[\s\S]*?font-size: max\(0\.86em, 12px\);/s.test(css), '2 code 地板 12px 在册');
 
@@ -55,7 +57,7 @@ app.whenReady().then(async () => {
     const [entryID] = await store._applyParsedEntries(feed, [{
       id: 'r89-a1', title: '嵌套度量与地板', url: 'https://r89.test/x/1', publishedAt: Math.floor(Date.now() / 1000) - 3600,
       summary: 'R89 素材。',
-      contentHTML: `<p>${para}</p><ul><li><p>${para}</p></li></ul>`
+      contentHTML: `<p>${para}</p><p id="rr-channel">${para}</p><ul><li><p>${para}</p></li></ul>`
         + `<table><tbody><tr><td>1</td><td><code><p>${para}</p></code></td></tr></tbody></table>`
         + `<blockquote><p>${para}</p></blockquote>`,
     }]);
@@ -94,25 +96,33 @@ app.whenReady().then(async () => {
       out.tableFont = fsOf(table);
       out.tablePFont = inTable ? fsOf(inTable) : null;
       out.directW = w(direct); out.tableW = w(table);
-      // em 联动：放大一档后 resolved max-width 应等比跟随（54em × 字号）
-      const before = mw(nested);
-      document.documentElement.style.setProperty('--article-font-size', (out.font + 4) + 'px');
-      await sleep(120);
-      out.scaledMW = mw(nested);
-      out.scaledRatio = out.scaledMW / before;
+      // R107：computed max-width 是 min()/clamp() 字面串（parseFloat 会 NaN）——一律量 used 宽度。
+      // 13px 基准地板绑定（54em×13=702 < 版心）：四类块全等 702
+      out.nestedW = w(nested); out.quoteW = w(quote); out.font = fsOf(nested);
+      const ch = (document.querySelectorAll('.robin-body > p') || [])[1]; // 消毒层会收走 id——按位取非 lead 顶层段
+      out.channelW = ch ? w(ch) : 0; // 基准通道（列表/引用的容器缩进不计入同轴口径）
       return out;
     })()`, 'r89-live');
     if (b.__err) ok(false, '行为探针异常 — ' + b.__err);
     else if (!b.found) ok(false, '阅读区未渲染（环境性）');
     else {
-      const emN = b.emFactor * b.font;
-      ok(Math.abs(b.directMW - emN) <= 2 && Math.abs(b.nestedMW - emN) <= 2 && Math.abs(b.quoteMW - emN) <= 2,
-        `1 任意深度 ${b.emFactor}em 通道（cjk=${b.cjk} 直${b.directMW}/嵌${b.nestedMW}/引${b.quoteMW} vs ${emN.toFixed(1)}@${b.font}px）`);
-      ok(Math.abs(b.tableW - b.directW) <= 3, `1 表格同轴进通道（R101 合同反转：tableW${b.tableW} ≈ 通道${b.directW}——用户实见「一会宽一会窄」定案全要素同轴）`);
+      ok(b.channelW > 200 && Math.abs(b.channelW - b.directW * 1.07) <= 4,
+        `1 任意深度通道自洽（cjk=${b.cjk} lead${b.directW}×1.07=${Math.round(b.directW * 1.07)} ≈ 通道基准${b.channelW}——嵌${b.nestedW}/引${b.quoteW} 为容器合法缩进）`);
+      ok(Math.abs(b.tableW - b.directW * 1.07) <= 4, `1 表格同轴进通道（R101：tableW${b.tableW} ≈ 通道${b.directW}×1.07=${Math.round(b.directW * 1.07)}——direct 取首段 lead 有 ÷1.07 度量）`);
       ok(b.tableFont >= 13, `2 表格地板 13px（实测 ${b.tableFont}）`);
       ok(b.tablePFont >= 12, `2 表内段落地板 12px（实测 ${b.tablePFont}）`);
-      // 缩放联动也在 13px 基准上做（帽已绑定，等比可观测）
-      ok(b.scaledRatio > 1.15 && b.scaledRatio < 1.4, `3 字号联动等比伸缩（×${b.scaledRatio.toFixed(3)}）`);
+      // R107 自适应：拉宽窗口 → 通道随 cqi 增长并在天花板（76em×13=988）收口
+      uiWin.setBounds({ width: 2400, height: 950 });
+      await sleep(500);
+      const c = await execJS(uiWin, `(() => {
+        const table = document.querySelector('.robin-body table');
+        return { wideW: Math.round(table.getBoundingClientRect().width) };
+      })()`, 'r89-wide');
+      if (!c.__err && c.wideW) {
+        ok(c.wideW > b.tableW + 30, `3 R107 阅读栏变宽通道增长（table ${b.tableW} → ${c.wideW}——用户实见「大屏段落显窄」根治）`);
+        const capPx = Math.round(76 * b.font);
+        ok(c.wideW <= capPx + 4 && c.wideW >= capPx - 60, `3 R107 天花板收口（${c.wideW} ∈ [${capPx - 60}, ${capPx}]——76em 行长护栏不越顶）`);
+      } else ok(false, '3 宽窗相位测量失败（环境性）');
     }
 
     uiWin.destroy();

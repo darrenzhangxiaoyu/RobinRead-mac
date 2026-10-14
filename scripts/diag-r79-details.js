@@ -26,20 +26,23 @@ app.whenReady().then(async () => {
   try {
     const css = read('src/renderer/styles/robin.css');
     // ── 静态锚点 ──
-    ok(/R79-① lead 首段[\s\S]*?\.robin-body > p:first-of-type \{ font-size: 1\.07em; max-width: calc\(48em \/ 1\.07\); \}/.test(css),
-      '1 lead 首段规则在册（通道除回 1.07 与后续段落同轴——R1 审查修正）');
+    ok(/R79-① lead 首段[\s\S]*?\.robin-body > p:first-of-type \{ font-size: 1\.07em; max-width: calc\(min\(100%, var\(--nj-measure\)\) \/ 1\.07\); \}/.test(css),
+      '1 lead 首段规则在册（R107 度量带除回 1.07 与后续段落同轴——R1 审查修正延续）');
     ok(/body\[data-reader-para="indent"\] \.robin-body > p:first-of-type \{ font-size: inherit; \}/.test(css), '1 缩进式让位规则在册');
     const h2Block = (/\.reader-article h2:not\(:first-child\) \{([^}]*)\}/.exec(css) || [])[1] || '';
     ok(h2Block.includes('border-bottom: none') && !h2Block.includes('border-left'),
       '2 h2 下划线退役（U5-② accent 短横线成为唯一章节标记）');
-    ok(/\.robin-body :where\(p, ul, ol, dl, blockquote\):not\(:is\(table, pre, \.table-scroll\) \*\) \{[\s\S]*?max-width: 48em;[\s\S]*?margin-right: auto;/.test(css)
-      && /\.reader-article\.cjk-em \.robin-body :where[\s\S]*?max-width: 54em;/.test(css),
-      '3 行长护栏规则在册（R89 任意深度五类文本块 + auto 居中；R95 定案 48em/中文 54em）');
+    ok(/\.robin-body :where\(p, ul, ol, dl, blockquote\):not\(:is\(table, pre, \.table-scroll\) \*\) \{[\s\S]*?max-width: min\(100%, var\(--nj-measure\)\);[\s\S]*?margin-right: auto;/.test(css),
+      '3 行长护栏规则在册（R89 任意深度五类文本块 + auto 居中；R107 改用 --nj-measure）');
+    ok(/container-type: inline-size/.test(css)
+      && /--nj-measure: clamp\(calc\(var\(--article-font-size, 17px\) \* 48\), 90cqi, calc\(var\(--article-font-size, 17px\) \* 62\)\);/.test(css)
+      && /\.reader-article\.cjk-em \{[\s\S]*?--nj-measure: clamp\(calc\(var\(--article-font-size, 17px\) \* 54\), 92cqi, calc\(var\(--article-font-size, 17px\) \* 76\)\);/.test(css),
+      '3 R107 自适应度量在册（地板 48/54 字 · 90/92cqi 流动 · 封顶 62/76 字——用户实见「大屏段落显窄」）');
     ok(/R101 全要素同轴/.test(css)
-      && /\.robin-body figure,\s*\.robin-body pre \{[\s\S]*?--article-font-size, 17px\) \* 48/.test(css)
-      && /\.robin-body table,\s*\.robin-body \.table-scroll \{[\s\S]*?--article-font-size, 17px\) \* 48/.test(css)
-      && /\.robin-body h1, \.robin-body h2, \.robin-body h3,[\s\S]*?--article-font-size, 17px\) \* 48/.test(css),
-      '3 R101 全要素同轴规则在册（pre 含 patch/表格/标题同进文字通道——用户实见「一会宽一会窄」）');
+      && /\.robin-body figure,\s*\.robin-body pre,\s*\.robin-body table,/.test(css)
+      && /\.robin-body table,\s*\.robin-body \.table-scroll,/.test(css)
+      && /\.robin-body h1, \.robin-body h2, \.robin-body h3,[\s\S]*?max-width: min\(100%, var\(--nj-measure\)\);/.test(css),
+      '3 R101 全要素同轴在册（figure/pre/table/标题同消费 --nj-measure——用户实见「一会宽一会窄」）');
     ok(/R100[\s\S]{0,400}margin: 1\.4em 0 0\.45em;/.test(css), '3 R100 标题纵向间距收紧在册（1.4em/0.45em）');
 
     // ── UI 实证（直接挂载，r74 同款轻量法）──
@@ -78,7 +81,7 @@ app.whenReady().then(async () => {
       // 行长护栏（R89/R95）：文本块 ≤48em 居中；figure 与文字同轴等宽
       const em = parseFloat(cs(bodyP).fontSize);
       const pw = bodyP.getBoundingClientRect().width;
-      out.pCapped = pw <= 48 * em + 2;
+      out.pInMeasure = pw >= 48 * em - 2 && pw <= 62 * em + 2; /* R107 度量带（地板-天花板之间） */
       const cw = art.getBoundingClientRect().width;
       out.pCentered = Math.abs((art.getBoundingClientRect().left + (cw - pw) / 2) - bodyP.getBoundingClientRect().left) < 2;
       const fig = art.querySelector('figure');
@@ -105,7 +108,7 @@ app.whenReady().then(async () => {
       ok(b.leadIndentYield, '1 缩进式段落传统下让位');
       ok(b.h2Bar, '2 h2 下划线退役实渲染（U5-② 短横线仍在场）');
       ok(b.h3Underline, '2 h3 保留发丝下划线（子级区分）');
-      ok(b.pCapped && b.pCentered, `3 文本块 ≤48em 居中通道（width=${b.pCapped ? '≤48em' : '超限'} 居中${b.pCentered ? '✓' : '✗'}）`);
+      ok(b.pInMeasure && b.pCentered, `3 文本块落入自适应度量带 48-62em 且居中（带内${b.pInMeasure ? '✓' : '✗'} 居中${b.pCentered ? '✓' : '✗'}）`);
       ok(b.figCoAxis, '3 图文同轴等宽（R95 用户定案：图与文字通道一致）');
       ok(b.h2CoAxis && b.h3CoAxis && b.preCoAxis && b.tblCoAxis,
         `4 R101 全要素同轴（h2${b.h2CoAxis ? '✓' : '✗'} h3${b.h3CoAxis ? '✓' : '✗'} pre${b.preCoAxis ? '✓' : '✗'} table${b.tblCoAxis ? '✓' : '✗'} 与正文同宽）`);

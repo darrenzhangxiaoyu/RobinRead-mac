@@ -375,7 +375,7 @@ function applyReaderLayout(layout) {
   const fontStack = resolveReaderFontStack(layout);
   root.style.setProperty('--reader-font', fontStack);
   root.style.setProperty('--reader-font-family', fontStack);
-  const widthMap = { narrow: '680px', standard: '820px', wide: '960px' };
+  const widthMap = { narrow: '680px', standard: '1160px', wide: '1320px' }; /* R107 页宽放流：块级 max-width 小窗吃满/大窗收帽——用户实见「大屏段落显窄」 */
   const heightMap = { compact: '1.55', standard: '1.72', loose: '1.95' };
   root.style.setProperty('--reader-page-width', widthMap[layout?.pageWidth] || widthMap.standard);
   root.style.setProperty('--reader-line-height', heightMap[layout?.lineHeight] || heightMap.standard);

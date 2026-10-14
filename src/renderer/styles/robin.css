@@ -589,6 +589,19 @@ body.dark .column-reader {
 .robin-header-original-actions { display: inline-flex; gap: 5px; margin-left: 10px; vertical-align: middle; }
 .robin-header-original-actions .btn-text { padding: 1px 8px; font-size: var(--fs-sm); gap: 0; }
 .robin-header-original-actions .btn-text svg { width: 11px; height: 11px; }
+/* R110 头区动作减重（用户实见「这块设计有点丑」）：ghost 形态——无框无底、三阶文字色，
+   悬停才浮出——元信息行的信息层级让位给作者/日期，动作退为可用而不喧哗 */
+.robin-header-original-actions .btn-text {
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  padding: 2px 7px;
+}
+.robin-header-original-actions .btn-text:hover,
+.robin-header-original-actions .btn-text:focus-visible {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
 .sidebar-footer {
   flex: 0 0 auto;
   border-top: 1px solid var(--separator);
@@ -802,10 +815,11 @@ body.zen .list-top-inset { display: none; }
   font-display: swap;
 }
 
-/* 正文容器（对应 webview body） */
+/* 正文容器（对应 webview body）——R107 页宽放流：820 → 1160（用户实见「大屏段落显窄」：
+   页宽帽是主锁，度量帽是二锁；小窗 min(100%) 照旧收缩，--reader-page-width 用户设置仍优先） */
 .reader-article {
   --article-gutter: 40px; /* R84-① 版心槽令牌：首图出血/边注等以它对齐（窄窗媒体档改写） */
-  max-width: var(--reader-page-width, 820px);
+  max-width: var(--reader-page-width, 1160px);
   margin: 0 auto 42px;
   padding: 22px var(--article-gutter) 0; /* R94-② 刊头之后正文起步收紧（原 32px 与 divider 双重拉开空洞） */
   font-size: var(--article-font-size, 17px);
@@ -1160,6 +1174,9 @@ body.rp-focus .reader-article .robin-summary-card { opacity: 0.55; transition: o
   color: var(--reader-muted, var(--text-secondary));
   margin: 0 0 18px;
   position: relative; /* R97-①：更多浮层的锚 */
+  z-index: 40; /* R111 浮层防盖：三拍入场动画 fill:both 让 meta 永久成层叠上下文（z 陷 0），
+     正文里带 transform 的图（R88 drift）与入场块 DOM 靠后即盖住浮层——「有的会覆盖有的不会」根治；
+     40 仍远低于全局浮层（900+）与灯箱（999+），不越级 */
 }
 /* ── R97-① 头部动作「更多」浮层：核心键外的动作收纳（按钮原样搬移） ── */
 .nj-header-more-pop {
@@ -1173,8 +1190,8 @@ body.rp-focus .reader-article .robin-summary-card { opacity: 0.55; transition: o
 .robin-header-divider {
   border: none; height: 1px;
   background: linear-gradient(to right, rgba(72, 65, 52, 0.05), var(--note-border), rgba(72, 65, 52, 0.05));
-  margin: 12px auto 16px; /* R94-② 标题→正文收紧 + R104 auto：分隔线与正文通道同缘居中（头区向正文通道的视觉穿线） */
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
+  margin: 12px auto 16px; /* R94-② 标题→正文收紧 + R104 auto + R107 随 --nj-measure 自适应（正文通道同缘） */
+  max-width: min(100%, var(--nj-measure));
 }
 
 /* 摘要卡片（summaryCardHTML 1:1） */
@@ -1283,7 +1300,7 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
 /* R79-① lead 首段：首段微放大（1.07em）作导语——杂志开篇的呼吸感；
    缩进式段落传统下让位（纯缩进排版首段放大破坏缩进节奏，只留字号统一）。
    R1 审查修正：护栏 max-width 按自身字号解析——首段 1.07em 须除回去，通道与后续段落同轴 */
-.robin-body > p:first-of-type { font-size: 1.07em; max-width: calc(48em / 1.07); }
+.robin-body > p:first-of-type { font-size: 1.07em; max-width: calc(min(100%, var(--nj-measure)) / 1.07); }
 body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inherit; }
 .reader-article strong, .reader-article b { font-weight: 680; }
 .reader-article img, .reader-article video {
@@ -1482,12 +1499,10 @@ body.dark .reader-article pre[data-nj-patch] .hljs-deletion { background: rgba(2
 .reader-article ul ul ul, .reader-article ul ul ul ul { list-style-type: square; }
 .reader-article ol ol { list-style-type: lower-alpha; }
 .reader-article ol ol ol { list-style-type: lower-roman; }
-/* ── R77 图文节奏三连 ── */
-/* R77-① 图片加载完成淡入：opacity 过渡替代「啪」地闪现（cached 直达/失败态恒可见；
-   reduced-motion 全局收敛块把 transition 压到 0.01ms 自动即时） */
-.reader-article img.nj-img { transition: opacity var(--dur-mid) var(--ease-out); }
-.reader-article img.nj-img:not(.nj-img-loaded):not(.nj-img-failed) { opacity: 0; }
-.reader-article img.nj-img-loaded, .reader-article img.nj-img-failed { opacity: 1; }
+/* ── R77 图文节奏三连（R109：①淡入退役）── */
+/* R109 图片即时渲染：R77-① opacity 门丢掉渐进渲染（边下边显的 progressive 流），用户实报
+   「图片刷出来的速度比之前慢」——门与过渡退役，图片随浏览器 paints 直出；
+   nj-img-* 类标记保留（重试/失败态与 shimmer 占位仍依赖） */
 /* R77-② hr 出版化：62% 细线 → 双侧发丝线 + 中央小菱形（场景分隔的仪式感，accent 派生） */
 .reader-article hr {
   border: none;
@@ -3825,84 +3840,46 @@ body.dark .nj-note-marker { color: #d3a952; }
   padding: 12px 12px 12px 44px;
   border-left-width: 3px;
 }
-/* R79-③ → R89/R95 栏目级度量（置于 U5 后置精修段之后防 margin 简写覆盖）：行长是阅读疲劳的
-   第一因素。R79 版只命中 .robin-body 直接子级——嵌套正文（消毒层包裹、GitHub/
-   commits 类源 td>code>p 等）880px 全宽裸奔，实测该源 92.6% 段落 63 字/行。R89 改为
-   任意深度文本块统一文字通道；表格/代码块/.table-scroll 子树豁免（版面单元）。
-   R95 定案（用户三轮实见「段落太窄→图太宽→两端空白大」）：通道吃满版心——中文 54 字/行
-   （汉字方形等宽，报纸正文 50-60 字惯例；14px 时 756px，版心空气 146→62px），
-   拉丁 48em；图/代码块/裸图同轴等宽（见下），首图 hero 全幅。 */
+/* R79-③ → R89/R95 → R101 → R107 自适应度量（置于 U5 后置精修段之后防 margin 简写覆盖）：
+   行长是阅读疲劳的第一因素，但固定字宽（中文 54 字·14px 时 756px）在
+   大显示器上两侧空气爆炸（用户实见「换大屏段落宽度显得小」）。
+   R107：阅读栏自身为容器（container-type: inline-size），全部素消费同一 --nj-measure——
+   clamp(地板, 90/92cqi, 天花板)：窄窗回到 48/54 字地板（与 R95 行为一致），
+   阅读栏变宽通道随之流动，封顶中文 76 字/拉丁 62 字（行长可读性护栏）。
+   同轴在任何宽度自动保持（所有规则引用同一变量；cqi 在消费元素处解析、
+   后代同容器 → 值恒等）。 */
+.reader-article {
+  container-type: inline-size; /* R107：阅读栏即度量容器（cqi 的锚） */
+  --nj-measure: clamp(calc(var(--article-font-size, 17px) * 48), 90cqi, calc(var(--article-font-size, 17px) * 62));
+}
+.reader-article.cjk-em {
+  --nj-measure: clamp(calc(var(--article-font-size, 17px) * 54), 92cqi, calc(var(--article-font-size, 17px) * 76));
+}
 .robin-body :where(p, ul, ol, dl, blockquote):not(:is(table, pre, .table-scroll) *) {
-  max-width: 48em;
+  max-width: min(100%, var(--nj-measure));
   margin-left: auto;
   margin-right: auto;
 }
-.reader-article.cjk-em .robin-body :where(p, ul, ol, dl, blockquote):not(:is(table, pre, .table-scroll) *) {
-  max-width: 54em; /* 中文 54 字/行 */
-}
-/* R95 补：lead 首段字号 1.07em，其字符度量须除回——
-   上行 0,3,0 会盖掉 lead 基座的折算，这里以同阶+元素位赢回 */
-.robin-body > p:first-of-type { font-size: 1.07em; max-width: calc(48em / 1.07); }
-.reader-article.cjk-em .robin-body > p:first-of-type { max-width: calc(54em / 1.07); font-size: 1.07em; }
-/* R95 图文同轴 → R101 全要素同轴（用户实见「标题/代码块/表格比正文宽，文章一会宽一会窄特别难受」）：
-   正文图/代码块（含 patch/meta）/表格/标题与文字通道完全等宽（48/54em），杂志级同轴秩序——
-   信息图需要看细节点击进灯箱（全幅+缩放）；唯一例外是首图 hero（R84 开卷仪式位）全幅
-   出血。宽表在 .table-scroll 内横滚、patch 块 R94 软换行——收进通道不截断内容。
-   尺寸链用 --article-font-size 而非局部 em（pre/figcaption 局部字号更小，em 会缩水）。 */
+/* lead 首段字号 1.07em，其度量须除回（地板/天花板同为字号倍数，除回后仍同轴） */
+.robin-body > p:first-of-type { font-size: 1.07em; max-width: calc(min(100%, var(--nj-measure)) / 1.07); }
+/* R101 全要素同轴 → R107 共用 --nj-measure：图/代码块（含 patch/meta）/表格/标题与文字通道
+   完全等宽且随阅读栏自适应；宽表 .table-scroll 内横滚、patch 软换行兜底；
+   首图 hero（R84 开卷仪式位）全幅出血例外（见下节） */
 .robin-body figure,
-.robin-body pre {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
-  margin-left: auto;
-  margin-right: auto;
-}
-.reader-article.cjk-em .robin-body figure,
-.reader-article.cjk-em .robin-body pre {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
-}
-/* R101 表格同轴：表格/diff 表与文字通道等宽（此前全幅——行号列与长行由内滚/软换行兜底） */
+.robin-body pre,
 .robin-body table,
-.robin-body .table-scroll {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
-  margin-left: auto;
-  margin-right: auto;
-}
-.reader-article.cjk-em .robin-body table,
-.reader-article.cjk-em .robin-body .table-scroll {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
-}
-/* R101 标题同轴：小节标题不再比正文宽（横向与所属段落同缘——用户实见「小标题横向太大」）。
-   em 会随标题自身字号放大，必须走 --article-font-size 像素尺寸链与正文 48em 精确同宽 */
+.robin-body .table-scroll,
 .robin-body h1, .robin-body h2, .robin-body h3,
-.robin-body h4, .robin-body h5, .robin-body h6 {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
+.robin-body h4, .robin-body h5, .robin-body h6,
+.robin-body img { /* R108：首图 hero 豁免退役——全部图与正文同轴（用户定案） */
+  max-width: min(100%, var(--nj-measure));
   margin-left: auto;
   margin-right: auto;
 }
-.reader-article.cjk-em .robin-body h1, .reader-article.cjk-em .robin-body h2,
-.reader-article.cjk-em .robin-body h3, .reader-article.cjk-em .robin-body h4,
-.reader-article.cjk-em .robin-body h5, .reader-article.cjk-em .robin-body h6 {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
-}
-/* R95b 裸图同轴：中文源大量 <p><img> 或裸 <img>（无 figure 包裹），基础 img 规则的
-   max-width:100% 直取版心全宽——用户实见「图太宽」的主通道。纳入文字同轴通道；
-   首图 hero（figure:first-child 子树）全幅出血豁免。 */
-.robin-body img:not(:is(.robin-body > figure:first-child:nth-last-child(n + 3) *)) {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
-  margin-left: auto;
-  margin-right: auto;
-}
-.reader-article.cjk-em .robin-body img:not(:is(.robin-body > figure:first-child:nth-last-child(n + 3) *)) {
-  max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
-}
-/* ── R84 沉浸刊头三连 ── */
-/* R84-① 首图全幅出血 hero：图先行的文章，首 figure 破版心槽到页缘——杂志开卷大图；
-   仅当正文 ≥3 块时启用（短文全幅喧宾夺主）；caption 随出血回内容区对齐 */
-.robin-body > figure:first-child:nth-last-child(n + 3) {
-  margin-inline: calc(-1 * var(--article-gutter));
-  max-width: none; /* 破 .reader-article * 的 100% 上限（出血的语义就是出框） */
-  border-radius: 0;
-}
-.robin-body > figure:first-child:nth-last-child(n + 3) figcaption {
+/* ── R84 沉浸刊头（②③ 保留；① 首图出血已退役）── */
+/* R108 首图同轴（用户实见「首图比正文宽没必要」）：R84-① 首图 hero 全幅出血退役——
+   首图与正文同宽（全要素同轴不设例外）；灯晕/三拍等其余刊头件保留 */
+.robin-body > figure:first-child figcaption {
   max-width: 42em;
   margin-inline: auto;
   text-align: center;
@@ -3993,7 +3970,8 @@ body.dark .robin-surface.column-reader::after {
 .reader-article img.nj-img {
   background: var(--note-background);
   min-height: 56px;
-  transition: background var(--dur-mid) var(--ease-out), opacity var(--dur-mid) var(--ease-out), filter var(--dur-mid) var(--ease-out);
+  /* R109：opacity 不再进 transition 列表（淡入退役后 opacity 恒 1，过渡只会制造幽灵读数） */
+  transition: background var(--dur-mid) var(--ease-out), filter var(--dur-mid) var(--ease-out);
 }
 .reader-article img.nj-img-loading {
   background: linear-gradient(100deg, var(--note-background) 30%, var(--row-hover) 50%, var(--note-background) 70%);
@@ -4615,9 +4593,7 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
   .reader-article figure { margin-inline: 0 !important; }
   .nj-fold-head::before, .nj-fold-head::after { content: none !important; }
   .nj-folded { display: revert !important; }
-  /* 自检R4-P2：懒加载图打印复位——未滚入视口的图停在 nj-img-loading（opacity 0），
-     打印整片空白；beforeprint 会把 lazy 转 eager，此处样式兜底已加载未标记的边角 */
-  .reader-article img.nj-img { opacity: 1 !important; }
+  /* 自检R4-P2 的懒图打印复位 opacity 兜底已随 R109 淡入退役而无对象（图恒直出） */
   /* 深色纸面打印时强制回墨（黑字白底） */
   body.dark .reader-article,
   body.dark { background: #fff !important; color: #14110c !important; }
@@ -5147,7 +5123,7 @@ body.dark .favicon-badge { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
   padding: 2px 9px; border: 1px solid var(--note-border);
   border-radius: var(--radius-full); font-size: 0.92em; color: var(--text-secondary);
 }
-.reader-article .robin-header-divider, .reader-article hr.robin-header-divider { height: 0; border: none; border-top: 3px double var(--note-border); background: none; width: auto; margin: 12px auto 16px; max-width: min(100%, calc(var(--article-font-size, 17px) * 48)); /* R94-②/R97 收进 + R104 与正文通道同缘（width:auto 顶开基础 hr 的 62% 帽——divider 审计实测 546px 成因） */ }
+.reader-article .robin-header-divider, .reader-article hr.robin-header-divider { height: 0; border: none; border-top: 3px double var(--note-border); background: none; width: auto; margin: 12px auto 16px; max-width: min(100%, var(--nj-measure)); /* R94-②/R97 收进 + R104 同缘 + R107 随 --nj-measure 自适应 */ }
 
 /* ── R16 知识中心卡片统一 + 连击徽章 ── */
 .kb-card { padding: 14px 16px; margin-bottom: 10px; }

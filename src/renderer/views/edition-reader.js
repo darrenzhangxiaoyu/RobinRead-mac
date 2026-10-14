@@ -2039,8 +2039,10 @@ export class EditionReader {
       await window.robin.copyImage(base64);
       this._fx('done');
       this._notice(t('当前页图片已复制到剪贴板'));
-    } catch {
-      this._notice(t('导出失败：请重试'));
+    } catch (e) {
+      // R111：真实错误浮出（此前静吞「请重试」，用户实报「一直导出失败」无从定位）
+      console.error('[edition] export failed:', e);
+      this._notice(t('导出失败：') + (e?.message || t('请重试')));
     }
   }
 
