@@ -816,6 +816,12 @@ body.zen .list-top-inset { display: none; }
 .reader-article .table-scroll { overflow-x: auto; margin: 1.3em 0; border-radius: var(--radius-md); }
 .reader-article .table-scroll table { margin: 0; min-width: 480px; }
 .reader-article ::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); } /* R73-② 选区色跟随 accent（原 rgba 硬编码缺省值退役） */
+/* R75-① 文内锚点落点闪高亮：脚注跳转/回跳落定后的短促 accent 脉冲（reduced-motion 全局块自动压制） */
+@keyframes nj-anchor-flash {
+  0% { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+  100% { background: transparent; }
+}
+.nj-anchor-flash { animation: nj-anchor-flash 1.2s var(--ease-out) 1; border-radius: var(--radius-xs); }
 
 /* ── 排版引擎 v2：段落风格 / 对齐 / 字距 / 中文微排版 / 首字下沉（调研报告 2026-09-26 方向 1/4/7）── */
 .reader-article pre, .reader-article code, .reader-article kbd, .reader-article samp { letter-spacing: 0; }

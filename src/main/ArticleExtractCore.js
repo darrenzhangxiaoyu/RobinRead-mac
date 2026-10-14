@@ -335,9 +335,18 @@ function sanitizeSrcset(value, baseURL) {
 
 function sanitizedAttributes(source, tag, baseURL, eagerImage = false) {
   const allowed = ATTRIBUTES_FOR_TAG[tag];
-  if (!allowed) return '';
+  // R75-① 文内锚点转存：id 不在白名单（防与 app 层 DOM 冲突），但合法 slug 转存
+  // data-nj-anchor 保真——渲染端 #fragment 链接据此导航（脚注/回跳）。
+  // 注意：须在「无白名单标签全剥属性」的通用路径上先行提取（p/li/h* 等不在
+  // ATTRIBUTES_FOR_TAG 里，走不到白名单循环），死锚/非法 slug 静默丢弃。
+  const anchorSlugMatch = /(?:^|\s)id\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(source);
+  const anchorPrefix = (() => {
+    const slug = (anchorSlugMatch && (anchorSlugMatch[1] ?? anchorSlugMatch[2] ?? anchorSlugMatch[3]) || '').trim();
+    return /^[A-Za-z][A-Za-z0-9_:.-]{0,99}$/.test(slug) ? ` data-nj-anchor="${escapeAttribute(slug)}"` : '';
+  })();
+  if (!allowed) return anchorPrefix;
   const pattern = /([a-z][a-z0-9:-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/gis;
-  const attributes = [];
+  const attributes = anchorPrefix ? [anchorPrefix] : [];
   const seenNames = new Set();
   let match;
   while ((match = pattern.exec(source)) !== null) {
@@ -347,6 +356,12 @@ function sanitizedAttributes(source, tag, baseURL, eagerImage = false) {
     const value = match[2] ?? match[3] ?? match[4] ?? null;
     if (value != null) {
       let cleaned = value.trim();
+      if (name === 'href' && /^#[A-Za-z0-9_:.-]{0,100}$/.test(cleaned)) {
+        // R75-① 文内锚点：fragment-only 链接原样保真（不解析为绝对地址——
+        // 渲染端按 #fragment 寻址 data-nj-anchor 目标，跨页改写会断链）
+        attributes.push(` href="${escapeAttribute(cleaned)}"`);
+        continue;
+      }
       if (name === 'href' || name === 'src' || name === 'poster') {
         const resolved = safeRemoteURL(cleaned, baseURL);
         if (!resolved) continue;

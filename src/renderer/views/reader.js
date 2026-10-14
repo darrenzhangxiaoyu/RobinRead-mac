@@ -1443,6 +1443,8 @@ export class ReaderView {
         next.append(...h.childNodes);
         // 保留 h 上已有的划词注释图标等锚点
         h.replaceWith(next);
+        // R75-①：文内锚点目标随标题换壳迁移（消毒层 data-nj-anchor 不随 childNodes 走）
+        if (h.dataset.njAnchor) next.dataset.njAnchor = h.dataset.njAnchor;
       }
     }
   }
@@ -1473,6 +1475,8 @@ export class ReaderView {
       if (!text) { div.remove(); continue; }
       const p = document.createElement('p');
       p.append(...div.childNodes);
+      // R75-①：div 裸文本转 p 时锚点目标随迁（脚注目标常见 <div id=…> 形态）
+      if (div.dataset.njAnchor) p.dataset.njAnchor = div.dataset.njAnchor;
       div.replaceWith(p);
     }
   }
@@ -1886,14 +1890,41 @@ export class ReaderView {
 
   _interceptLinks() {
     this.body.querySelectorAll('a[href]').forEach((anchor) => {
-      // R42：外链悬停提示（正文内链接点击即在浏览器打开）
-      if (/^https?:/i.test(anchor.getAttribute('href') || '')) anchor.title = t('在浏览器打开外部链接');
+      const href = anchor.getAttribute('href') || '';
+      // R75-② 外链悬停带域名：泛化提示升级为「example.com · 在浏览器打开」——
+      // 悬停即可辨别短链/仿冒域（钓鱼链接无处藏身）
+      if (/^https?:/i.test(href)) {
+        try { anchor.title = tf('%@ · 在浏览器打开', new URL(href).hostname); }
+        catch (_) { anchor.title = t('在浏览器打开外部链接'); }
+      }
       anchor.addEventListener('click', (event) => {
         event.preventDefault();
-        const href = anchor.getAttribute('href');
+        // R75-③ 图链让位灯箱：链接内图片点击时灯箱已由图片自身监听先行打开，
+        // 此处只拦默认导航不再拉浏览器（修双触发：此前灯箱+浏览器同时弹）
+        if (event.target instanceof Element && event.target.closest('img')) return;
         if (href && /^https?:/i.test(href)) window.robin.openLink(href);
+        // R75-① 文内锚点导航：#fragment（脚注/回跳）此前被静默吞掉——
+        // 消毒层已把目标 id 转存 data-nj-anchor，据此平滑滚动 + 闪高亮
+        else if (href.startsWith('#')) this._navigateToAnchor(href.slice(1));
       });
     });
+  }
+
+  /** R75-①：文内锚点寻址（data-nj-anchor / 原生 id 双通道）+ 落点闪高亮。 */
+  _navigateToAnchor(fragment) {
+    if (!fragment || !this.scrollEl) return;
+    let target = null;
+    try {
+      const frag = decodeURIComponent(fragment);
+      target = this.scrollEl.querySelector(`[data-nj-anchor="${CSS.escape(frag)}"], [id="${CSS.escape(frag)}"]`);
+    } catch (_) { /* 非法选择符：静默 */ }
+    if (!target) return; // 死锚（目标被剥/不在本篇）：保持静默，不打扰阅读
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const flash = target.closest('p, li, h1, h2, h3, h4, h5, h6, figure, blockquote, pre, table, div') || target;
+    flash.classList.remove('nj-anchor-flash'); // 重入先清（连点同锚重放动画）
+    void flash.offsetWidth; // 强制回流重启动画
+    flash.classList.add('nj-anchor-flash');
+    flash.addEventListener('animationend', () => flash.classList.remove('nj-anchor-flash'), { once: true });
   }
 
   /**
