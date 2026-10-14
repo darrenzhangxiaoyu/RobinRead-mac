@@ -1745,6 +1745,19 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
   background: color-mix(in srgb, var(--accent) 35%, transparent);
   transition: width var(--dur-mid) var(--ease-out);
 }
+/* ── R88 滚动驱动（Chromium 138：scroll() 时间线 + timeline-scope 提升）── */
+/* R88-① 进度线纯 CSS 直驱：可滚动档（.is-scrollable 由 JS 按溢出切换）交给滚动时间线——
+   合成器线程随滚动逐帧填充，主线程滚动路径零写入；短文不上时间线防「零时长→满格」假进度 */
+.reader-scroll { scroll-timeline-name: --nj-reader-scroll; }
+.robin-surface.column-reader { timeline-scope: --nj-reader-scroll; } /* 进度线在滚动容器外：作用域提升可达 */
+@keyframes njProgressGrow { from { width: 0%; } to { width: 100%; } }
+@supports (animation-timeline: scroll()) {
+  .reading-progress.is-scrollable .reading-progress-fill {
+    animation: njProgressGrow linear both;
+    animation-timeline: --nj-reader-scroll;
+    transition: none; /* 时间线直驱下过渡让位（合成器已逐帧） */
+  }
+}
 /* R85-③ 章节记号针：h2 位置在轨道上打 2px 记号——填充越过记号即「读过一章」 */
 .reading-progress .nj-progress-notch {
   position: absolute;
@@ -3786,6 +3799,21 @@ body.dark .robin-surface.column-reader::after {
   border-radius: var(--radius-full);
 }
 .nj-folded { display: none; }
+/* R88-② 插图视差微浮现：figure 内图片随滚动 ±6px 缓漂（view() 元素时间线逐帧驱动，
+   合成器执行零主线程成本；双门——@supports + reduced-motion 档外不发） */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reader-article figure img.nj-img {
+      animation: njFigureDrift linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 62%;
+    }
+  }
+}
+@keyframes njFigureDrift {
+  from { transform: translateY(6px); }
+  to { transform: translateY(-4px); }
+}
 
 /* ==========================================================================
    图片加载占位 + 失败兜底（不再显示破图图标/突兀空白）

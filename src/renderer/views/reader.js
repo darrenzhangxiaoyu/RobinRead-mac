@@ -4654,6 +4654,9 @@ export class ReaderView {
       const max0 = this.scrollEl.scrollHeight - this.scrollEl.clientHeight;
       const ratio0 = max0 > 0 ? this.scrollEl.scrollTop / max0 : 0;
       if (this.progressEl) {
+        // R88-① 滚动驱动档门：可滚动时进度线交给 CSS scroll() 时间线（合成器线程直驱，
+        // JS 滚动路径零写入；不可滚（短文）不上时间线——JS 兜底写宽仍是 fallback）
+        this.progressEl.classList.toggle('is-scrollable', max0 > 40);
         if (this.progressFill) this.progressFill.style.width = `${ratio0 * 100}%`;
         this.progressEl.dataset.pct = `${Math.round(ratio0 * 100)}%`; // 端点气泡显示阅读百分比
       }

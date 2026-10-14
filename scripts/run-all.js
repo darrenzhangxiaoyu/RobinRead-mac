@@ -108,6 +108,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r85-details.js', runner: 'electron', desc: 'R85 结构谱三连：tocRail几何化落位+图点码条glyph/活跃章刻度生长+章节名1.4s闪光/进度线h2记号针（离线）' },
   { file: 'scripts/diag-r86-details.js', runner: 'electron', desc: 'R86 视点引导三连：Intl.Segmenter分词首重(中文1字/西文≤3字)/Aa面板开关+guideFocus持久化+布局事件即时重排/祖先链排除区(代码高亮span层不可绕)（离线）' },
   { file: 'scripts/diag-r87-details.js', runner: 'electron', desc: 'R87 长文折叠三连：h2章节折叠(真长文门/键盘可达/拖选链接不触发)/TOC与锚点跳转自动展开/折叠计数胶囊(attr呈现零文本污染)（离线）' },
+  { file: 'scripts/diag-r88-details.js', runner: 'electron', desc: 'R88 滚动驱动收官：进度线scroll()时间线直驱(timeline-scope提升+档门)/插图view()视差微浮现/艺术批次闭包谱系审计（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },
