@@ -1252,6 +1252,17 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
   border-bottom: 1px solid var(--separator);
   padding-bottom: 0.35em;
 }
+/* ── R79 版面艺术品位 ── */
+/* R79-② h2 章节标记净化：下划线退役——U5-② accent 短横线（既有）成为 h2 唯一章节标记，
+   层级语言更净：h2 = 短横线（章），h3 = 短横线 + 发丝下划线（节） */
+.reader-article h2:not(:first-child) {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* R79-① lead 首段：首段微放大（1.07em）作导语——杂志开篇的呼吸感；
+   缩进式段落传统下让位（纯缩进排版首段放大破坏缩进节奏，只留字号统一） */
+.robin-body > p:first-of-type { font-size: 1.07em; }
+body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inherit; }
 .reader-article strong, .reader-article b { font-weight: 680; }
 .reader-article img, .reader-article video {
   display: block; box-sizing: border-box;
@@ -3584,6 +3595,15 @@ body.dark .nj-note-marker { color: #d3a952; }
   margin: 1.6em 0;
   padding: 10px 8px 10px 40px;
   border-left-width: 3px;
+}
+/* R79-③ 行长护栏（置于 U5 后置精修段之后防 margin 简写覆盖）：宽版心下限制文本块
+   每行 ≤42 字——行长是阅读疲劳的第一因素，宽档位（960px ≈ 56 字/行）收进书页级度量；
+   图/表/代码块保持全幅（视觉锚点全宽）；auto 居中形成与版心同轴的稳定「文字通道」 */
+.robin-body > p, .robin-body > ul, .robin-body > ol,
+.robin-body > blockquote, .robin-body > dl {
+  max-width: 42em;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* ==========================================================================
