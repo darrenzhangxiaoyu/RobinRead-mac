@@ -849,6 +849,7 @@ export class ReaderView {
     this._bindImages();
     this._renderUserScriptActions(); // F32：脚本声明的按钮渲染为正文底部（点击→同一沙箱执行）
     this._applyGuideFocus(); // R86：视点引导（分词首重）——置于全部正文变换之后，只动文本节点不碰结构
+    this._bindSectionFolding(); // R87：长文折叠（≥3 章 ≥10 块才启用，短文折叠是噪音）
     // R77-③ 文末终止符：读完的明确信号（无 data-nj-id——朗读/翻译/批注单元全部不收录）
     const endMark = document.createElement('div');
     endMark.className = 'nj-article-end';
@@ -1881,6 +1882,67 @@ export class ReaderView {
     } catch (_) { /* 微排版失败不影响正文阅读 */ }
   }
 
+  /** R87-①：折叠目标所在章节若处于折叠态则展开（TOC/锚点跳转先行调用——跳进折叠章自动开门）。 */
+  _expandSectionOf(el) {
+    let node = el;
+    while (node && node !== this.body) {
+      if (node.classList?.contains('nj-folded')) {
+        let prev = node.previousElementSibling;
+        while (prev) {
+          if (prev.tagName === 'H2' && prev.getAttribute('aria-expanded') === 'false') {
+            this._toggleSection(prev);
+            return true;
+          }
+          prev = prev.previousElementSibling;
+        }
+        return false;
+      }
+      node = node.parentElement;
+    }
+    return false;
+  }
+
+  _toggleSection(h) {
+    const folding = h.getAttribute('aria-expanded') !== 'false';
+    h.setAttribute('aria-expanded', folding ? 'false' : 'true');
+    let el = h.nextElementSibling;
+    let count = 0;
+    while (el) {
+      if (el.tagName === 'H1' || el.tagName === 'H2' || el.classList.contains('nj-article-end')) break;
+      el.classList.toggle('nj-folded', folding);
+      count += 1;
+      el = el.nextElementSibling;
+    }
+    // R87-③ 折叠计数提示：译好的整句写进 data 属性（CSS attr() 呈现——不污染标题文本，TOC 文案不受扰）
+    if (folding && count > 0) h.dataset.foldHint = tf('已折叠 %lld 段', count);
+    else delete h.dataset.foldHint;
+  }
+
+  /** R87：长文章 h2 章节折叠（点击/Enter/空格切换；拖选文本与标题内链接不触发）。 */
+  _bindSectionFolding() {
+    if (!this.body) return;
+    const blocks = [...this.body.children];
+    const h2s = blocks.filter((b) => b.tagName === 'H2');
+    if (h2s.length < 3 || blocks.length < 10) return; // 真长文门
+    for (const h of h2s) {
+      h.classList.add('nj-fold-head');
+      h.setAttribute('role', 'button');
+      h.setAttribute('tabindex', '0');
+      h.setAttribute('aria-expanded', 'true');
+      h.addEventListener('click', (event) => {
+        if (!window.getSelection()?.isCollapsed) return; // 拖选标题文本不折叠
+        if (event.target instanceof Element && event.target.closest('a, button')) return; // 标题内链接各走各路
+        this._toggleSection(h);
+      });
+      h.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          this._toggleSection(h);
+        }
+      });
+    }
+  }
+
   /**
    * R86 视点引导（bionic 式分词首重）：词首字符加重牵引视线——阅读加速的经典手法。
    * - 中文：Intl.Segmenter 分词，≥2 字词首字加重（单字虚词不扰）
@@ -2079,6 +2141,7 @@ export class ReaderView {
       target = this.scrollEl.querySelector(`[data-nj-anchor="${CSS.escape(frag)}"], [id="${CSS.escape(frag)}"]`);
     } catch (_) { /* 非法选择符：静默 */ }
     if (!target) return; // 死锚（目标被剥/不在本篇）：保持静默，不打扰阅读
+    this._expandSectionOf(target); // R87-②：脚注/锚点落在折叠章内先展开
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     const flash = target.closest('p, li, h1, h2, h3, h4, h5, h6, figure, blockquote, pre, table, div') || target;
     flash.classList.remove('nj-anchor-flash'); // 重入先清（连点同锚重放动画）
@@ -4485,7 +4548,10 @@ export class ReaderView {
       tick.dataset.level = heading.tagName.toLowerCase();
       tick.style.top = `${position * 100}%`;
       tick.title = heading.textContent?.slice(0, 60) || '';
-      tick.addEventListener('click', () => heading.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      tick.addEventListener('click', () => {
+        this._expandSectionOf(heading); // R87-②：跳进折叠章先开门
+        heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
       tick.addEventListener('mouseenter', () => {
         this.tocPeak.textContent = heading.textContent || ' ';
         this.tocPeak.style.top = tick.style.top;

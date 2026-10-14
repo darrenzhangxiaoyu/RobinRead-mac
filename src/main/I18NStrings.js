@@ -1573,6 +1573,7 @@ const STRINGS = {
   "%@ · 在浏览器打开": { zh: "%@ · 在浏览器打开", en: "%@ · open in browser" },
   "农历%@": { zh: "农历%@", en: "Lunar %@" },
   "视点引导": { zh: "视点引导", en: "Guide focus" },
+  "已折叠 %lld 段": { zh: "已折叠 %lld 段", en: "%lld sections folded" },
   "清除搜索内容": { zh: "清除搜索内容", en: "Clear search" },
   "更换头像失败": { zh: "更换头像失败", en: "Failed to update avatar" },
   "场景预设": { zh: "场景预设", en: "Scene presets" },

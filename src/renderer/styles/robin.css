@@ -3755,6 +3755,37 @@ body.dark .robin-surface.column-reader::after {
 /* R86 视点引导：分词首重（bionic）——词首字加重牵引视线（600 权重，衬线栈合成粗），
    与正文 strong(680) 保持级差；排除区由渲染层 TreeWalker 保证 */
 .reader-article b.nj-bio { font-weight: 600; }
+/* ── R87 长文折叠 ── */
+/* R87-① 折叠头：可点 h2 带 chevron 视觉（▾ 开/▸ 折）；折叠态显示「已折叠 N 段」
+   （整句由 JS 写入 data-fold-hint——CSS attr() 呈现，不污染标题文本与 TOC 文案） */
+.nj-fold-head { cursor: pointer; }
+.nj-fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-xs); }
+.nj-fold-head::after {
+  content: '▾';
+  display: inline-block;
+  margin-left: 0.4em;
+  font-size: 0.6em;
+  vertical-align: 0.14em;
+  color: var(--text-tertiary);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.nj-fold-head[aria-expanded="false"]::after {
+  content: '▸';
+  color: var(--accent);
+}
+.nj-fold-head[aria-expanded="false"][data-fold-hint]::before {
+  content: attr(data-fold-hint);
+  float: right;
+  margin-top: 0.32em;
+  font-size: 0.62em;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+}
+.nj-folded { display: none; }
 
 /* ==========================================================================
    图片加载占位 + 失败兜底（不再显示破图图标/突兀空白）
