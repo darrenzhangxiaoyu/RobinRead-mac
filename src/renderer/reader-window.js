@@ -87,6 +87,9 @@ async function bootstrap() {
   window.__robinFeedTypography = snapshot?.preferences?.feedTypography || {};
   window.__robinFulltextModes = snapshot?.preferences?.fulltextFeedModes || {};
   window.__robinListTitleZh = snapshot?.preferences?.titleZh === true;
+  // 自检R2-P2：弹窗快照补齐阅读排版偏好——此前视点引导恒关、微排版「关」档在弹窗失效
+  // （主窗 applyReaderLayout 的全局在弹窗文档不可达，layout-changed 事件也不跨窗）
+  window.__robinReaderLayout = snapshot.preferences?.readerLayout || {};
 
   // 迷你工具栏
   const setBtn = (id, svg, title) => {

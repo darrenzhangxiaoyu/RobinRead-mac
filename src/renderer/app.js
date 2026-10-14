@@ -1970,6 +1970,8 @@ function bindKeyboard() {
 
     // 空格（列表栏 → 聚焦阅读器并滚动；阅读器栏 → 滚动/翻页）
     if (event.code === 'Space' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      // 自检R2-P1 双保险：已被组件吞掉的空格（如折叠头 preventDefault）不再触发跳滚/翻篇
+      if (event.defaultPrevented) return;
       if (state.activeColumn === 1 && state.selectedEntryID) {
         event.preventDefault();
         setActiveColumn(2, { autoSelect: false });

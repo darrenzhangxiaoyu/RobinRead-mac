@@ -173,7 +173,8 @@ function sanitizedHTML(html, baseURL = null) {
     // 开闭标签同发，无悬挂结构；渲染端 .nj-task 呈现 ☑/☐，li.task-list-item 去 marker）
     if (name === 'input' && /type\s*=\s*["']?checkbox["']?/i.test(rawAttributes)) {
       const checked = /(?:^|\s)checked(?:\s|$|\/)/i.test(` ${rawAttributes} `) ? '1' : '0';
-      result += `<span class="nj-task" data-task="${checked}"></span>`;
+      // 自检R2-P3：只读勾选语义（role/aria-checked——屏幕阅读器可通告勾选态，非仅颜色传达）
+      result += `<span class="nj-task" data-task="${checked}" role="checkbox" aria-checked="${checked === '1'}" aria-readonly="true"></span>`;
       continue;
     }
     if (!ALLOWED_TAGS.has(name)) continue;

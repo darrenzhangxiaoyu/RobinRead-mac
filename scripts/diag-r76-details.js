@@ -36,8 +36,8 @@ app.whenReady().then(async () => {
       '</ul>',
       'https://r76.test/x',
     );
-    ok(taskHTML.includes('<span class="nj-task" data-task="1"></span>'), '1 勾选态 input → .nj-task[data-task=1]');
-    ok(taskHTML.includes('<span class="nj-task" data-task="0"></span>'), '1 未勾选 input → .nj-task[data-task=0]');
+    ok(taskHTML.includes('<span class="nj-task" data-task="1" role="checkbox" aria-checked="true" aria-readonly="true"></span>'), '1 勾选态 input → .nj-task[data-task=1]（含只读勾选语义）');
+    ok(taskHTML.includes('<span class="nj-task" data-task="0" role="checkbox" aria-checked="false" aria-readonly="true"></span>'), '1 未勾选 input → .nj-task[data-task=0]');
     ok(!taskHTML.includes('<input'), '1 input 标签零残留（含 type=text 非勾选框整颗剥除）');
 
     // ── Phase B：静态锚点 ──

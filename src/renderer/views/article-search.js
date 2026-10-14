@@ -149,6 +149,8 @@ export class ArticleSearch {
     if (!this.hits.length || this.current < 0) return;
     CSS.highlights.set('nj-find-current', new Highlight(this.hits[this.current]));
     const el = this.hits[this.current].startContainer.parentElement;
+    // 自检R2-P3：命中在折叠章内先开门（display:none 的目标 scrollIntoView 无布局盒静默失效）
+    this.reader?._expandSectionOf?.(el);
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 

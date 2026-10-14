@@ -590,6 +590,8 @@ export class ReaderView {
     this._clockPause(); // F36 生物钟：清空阅读器时把最后一段阅读时长落账
     this._ttsStop(); // 清空阅读器：停朗读、清队、移除播放器
     document.getElementById('nj-translate-progress')?.remove(); // P2-3：翻译进度浮标随阅读区清空
+    this._endObserver?.disconnect(); // R82：完读观察者随清空退场
+    this._clearProgressMarks(); // 自检R2-P2：空态不留上一篇文章的记号针/百分比/档门
     if (this.entryID && this.scrollEl) {
       this._rememberScrollPosition(this.entryID, this.scrollEl.scrollTop);
     }
@@ -1916,6 +1918,20 @@ export class ReaderView {
     // R87-③ 折叠计数提示：译好的整句写进 data 属性（CSS attr() 呈现——不污染标题文本，TOC 文案不受扰）
     if (folding && count > 0) h.dataset.foldHint = tf('已折叠 %lld 段', count);
     else delete h.dataset.foldHint;
+    // 自检R2-P3：折叠改变文档高度——结构谱刻度/记号针/拇指重算（否则轨道与内容错位）
+    if (count > 0) this._refreshTOCGeometry();
+  }
+
+  /** 自检R2-P3：结构谱几何重算（折叠/展开后复用 _buildTOC 的度量口径）。 */
+  _refreshTOCGeometry() {
+    if (!this.body || !this.tocEntries?.length || !this.tocTrack) return;
+    const bodyRect = this.body.getBoundingClientRect();
+    const bodyH = Math.max(1, bodyRect.height);
+    for (const entry of this.tocEntries) {
+      entry.position = clamp01((entry.element.getBoundingClientRect().top - bodyRect.top) / bodyH);
+      entry.tick.style.top = `${(entry.position * 100).toFixed(2)}%`;
+    }
+    this._renderProgressNotches(); // 记号针同步重算（同尺口径）
   }
 
   /** R87：长文章 h2 章节折叠（点击/Enter/空格切换；拖选文本与标题内链接不触发）。 */
@@ -1926,7 +1942,8 @@ export class ReaderView {
     if (h2s.length < 3 || blocks.length < 10) return; // 真长文门
     for (const h of h2s) {
       h.classList.add('nj-fold-head');
-      h.setAttribute('role', 'button');
+      // 自检R2-P3：保持 heading 语义（role=button 会把标题内链接吞成按钮名——嵌套交互不可达），
+      // aria-expanded 直接挂在标题上（ARIA 合法），键盘焦点位保留
       h.setAttribute('tabindex', '0');
       h.setAttribute('aria-expanded', 'true');
       h.addEventListener('click', (event) => {
@@ -1935,10 +1952,13 @@ export class ReaderView {
         this._toggleSection(h);
       });
       h.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          this._toggleSection(h);
-        }
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        // 自检R2-P2：链接/按钮内的按键让位（与 click 同守卫——否则 Enter 打不开标题内链接）
+        if (event.target instanceof Element && event.target.closest('a, button')) return;
+        // 自检R2-P1：空格双触发根治——折叠吞键后阻断冒泡（否则文档级空格跳滚/翻篇同时发生）
+        event.preventDefault();
+        event.stopPropagation();
+        this._toggleSection(h);
       });
     }
   }
@@ -4521,6 +4541,8 @@ export class ReaderView {
 
   _buildTOC() {
     this.tocEntries = [];
+    // 自检R2-P2：记号针/进度残留在一切早退路径之前清理（短文/清空不留上一篇文章的刻度）
+    this._clearProgressMarks();
     if (!this.body) return;
     const headings = [...this.body.querySelectorAll('h1,h2,h3,h4')];
     if (headings.length < 2) {
@@ -4574,21 +4596,35 @@ export class ReaderView {
       bar.style.top = `${(ratioOf(pre) * 100).toFixed(2)}%`;
       this.tocTrack.appendChild(bar);
     }
-    // R85-③ 进度线章节刻度：h2 位置打记号针（填充越过记号=读过一章）
-    this.progressEl?.querySelectorAll('.nj-progress-notch').forEach((n) => n.remove());
-    if (this.progressEl && this.scrollEl) {
-      const scrollRect = this.scrollEl.getBoundingClientRect();
-      const total = Math.max(1, this.scrollEl.scrollHeight);
-      for (const h of this.body.querySelectorAll('h2')) {
-        const frac = clamp01((h.getBoundingClientRect().top - scrollRect.top) / total);
-        const notch = document.createElement('i');
-        notch.className = 'nj-progress-notch';
-        notch.style.left = `${(frac * 100).toFixed(2)}%`;
-        this.progressEl.appendChild(notch);
-      }
-    }
+    // R85-③ 进度线章节刻度：h2 位置打记号针（填充越过记号=读过一章）。
+    // 自检R2-P3：分母与填充同尺（scrollHeight - clientHeight）——否则填充系统性提前越针
+    this._renderProgressNotches();
     this.tocRail.classList.remove('hidden-rail');
     this.tocRail.classList.add('visible');
+  }
+
+  /** 自检R2-P2/P3：进度线记号针渲染与全量清理（分母=可滚动总高，与填充同尺）。 */
+  _renderProgressNotches() {
+    this.progressEl?.querySelectorAll('.nj-progress-notch').forEach((n) => n.remove());
+    if (!this.progressEl || !this.scrollEl || !this.body) return;
+    const scrollRect = this.scrollEl.getBoundingClientRect();
+    const total = Math.max(1, this.scrollEl.scrollHeight - this.scrollEl.clientHeight);
+    for (const h of this.body.querySelectorAll('h2')) {
+      const frac = clamp01((h.getBoundingClientRect().top - scrollRect.top + this.scrollEl.scrollTop) / total);
+      const notch = document.createElement('i');
+      notch.className = 'nj-progress-notch';
+      notch.style.left = `${(frac * 100).toFixed(2)}%`;
+      this.progressEl.appendChild(notch);
+    }
+  }
+
+  _clearProgressMarks() {
+    this.progressEl?.querySelectorAll('.nj-progress-notch').forEach((n) => n.remove());
+    if (this.progressEl) {
+      this.progressEl.classList.remove('is-scrollable'); // R88 档门复位（空态不上时间线）
+      this.progressEl.dataset.pct = '0%';
+    }
+    if (this.progressFill) this.progressFill.style.width = '0%';
   }
 
   _buildTOCGestures() {

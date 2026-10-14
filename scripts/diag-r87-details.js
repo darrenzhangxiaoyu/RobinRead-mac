@@ -32,8 +32,8 @@ app.whenReady().then(async () => {
       '1 真长文门在册（≥3 章 ≥10 块）');
     ok(readerSrc.includes("if (!window.getSelection()?.isCollapsed) return; // 拖选标题文本不折叠"),
       '1 拖选标题文本不触发折叠');
-    ok(readerSrc.includes("event.target.closest('a, button')") && /event\.key === 'Enter' \|\| event\.key === ' '/.test(readerSrc),
-      '1 标题内链接让位 + 键盘 Enter/空格可达');
+    ok(readerSrc.includes("event.target.closest('a, button')") && /event\.key !== 'Enter' && event\.key !== ' '/.test(readerSrc),
+      '1 标题内链接让位（click+keydown 双守卫）+ 键盘 Enter/空格可达');
     ok(readerSrc.includes('this._expandSectionOf(heading); // R87-②') && readerSrc.includes('this._expandSectionOf(target); // R87-②'),
       '2 TOC 刻度与锚点寻址双通道先开门再滚');
     ok(/nj-fold-head\[aria-expanded="false"\]\[data-fold-hint\]::before \{[^}]*?content: attr\(data-fold-hint\);/s.test(css),
@@ -77,7 +77,7 @@ app.whenReady().then(async () => {
       }
       await sleep(400);
       const out = { found: true };
-      out.foldable = h2a.classList.contains('nj-fold-head') && h2a.getAttribute('role') === 'button';
+      out.foldable = h2a.classList.contains('nj-fold-head') && h2a.getAttribute('tabindex') === '0' && h2a.getAttribute('aria-expanded') === 'true';
       const h2aText = h2a.textContent;
       // 1 点击折叠：后续块隐藏 + aria 收起 + 计数
       h2a.click();
