@@ -3193,6 +3193,9 @@ body.zen .list-top-inset { display: none; }
 .study-panel-body.streaming::after {
   content: '▍'; color: var(--accent); animation: digest-caret 1s steps(2) infinite;
 }
+/* R83 收官逮到的陈年悬空：digest-caret 自 v2.2.0 基线起引用了不存在的关键帧
+   （动画名无效 → 光标常亮不闪）。补齐定义恢复设计意图的 1s 呼吸闪烁 */
+@keyframes digest-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .study-panel-loading { color: var(--text-tertiary); font-size: 12.5px; }
 .study-panel-error { color: var(--danger); font-size: 12.5px; }
 /* R70-③ 研读面板失败态 inline 重试（正文按钮家族同语言：文字钮 + focus 环走全局铺底） */
@@ -4249,20 +4252,18 @@ body.dark .reader-article .hljs-punctuation { color: var(--text-secondary); }
 
 /* 文章进入动画：正文块轻量上移淡入（前 8 块错峰；尊重 reduced-motion）。
    R80-② 编舞重排：阶梯自 0.18s 起步——让标题三拍（0/60/120ms + --dur-mid）先行落定，
-   正文自标题之后滑入（原 0.03s 起步会抢在标题前到达，视线引导倒置） */
+   正文自标题之后滑入（原 0.03s 起步会抢在标题前到达，视线引导倒置）。
+   R83 谱系归簇：步长 60ms 家族（0.18/0.24/0.30/0.36/0.42/0.48，尾部收敛同拍） */
 @media (prefers-reduced-motion: no-preference) {
   .reader-article .robin-body > * {
     animation: article-rise var(--dur-slow) ease both;
   }
   .reader-article .robin-body > *:nth-child(1) { animation-delay: 0.18s; }
-  .reader-article .robin-body > *:nth-child(2) { animation-delay: 0.21s; }
-  .reader-article .robin-body > *:nth-child(3) { animation-delay: 0.24s; }
-  .reader-article .robin-body > *:nth-child(4) { animation-delay: 0.27s; }
-  .reader-article .robin-body > *:nth-child(5) { animation-delay: 0.30s; }
-  .reader-article .robin-body > *:nth-child(6) { animation-delay: 0.33s; }
-  .reader-article .robin-body > *:nth-child(7) { animation-delay: 0.36s; }
-  .reader-article .robin-body > *:nth-child(8) { animation-delay: 0.39s; }
-  .reader-article .robin-body > *:nth-child(n + 9) { animation-delay: 0.42s; }
+  .reader-article .robin-body > *:nth-child(2) { animation-delay: 0.24s; }
+  .reader-article .robin-body > *:nth-child(3) { animation-delay: 0.30s; }
+  .reader-article .robin-body > *:nth-child(4) { animation-delay: 0.36s; }
+  .reader-article .robin-body > *:nth-child(5) { animation-delay: 0.42s; }
+  .reader-article .robin-body > *:nth-child(n + 6) { animation-delay: 0.48s; }
 }
 @keyframes article-rise {
   from { opacity: 0; transform: translateY(10px); }
