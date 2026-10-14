@@ -26,7 +26,8 @@ app.whenReady().then(async () => {
   try {
     const css = read('src/renderer/styles/robin.css');
     // ── 静态锚点 ──
-    ok(/R79-① lead 首段[\s\S]*?\.robin-body > p:first-of-type \{ font-size: 1\.07em; \}/.test(css), '1 lead 首段规则在册');
+    ok(/R79-① lead 首段[\s\S]*?\.robin-body > p:first-of-type \{ font-size: 1\.07em; max-width: calc\(42em \/ 1\.07\); \}/.test(css),
+      '1 lead 首段规则在册（通道除回 1.07 与后续段落同轴——R1 审查修正）');
     ok(/body\[data-reader-para="indent"\] \.robin-body > p:first-of-type \{ font-size: inherit; \}/.test(css), '1 缩进式让位规则在册');
     const h2Block = (/\.reader-article h2:not\(:first-child\) \{([^}]*)\}/.exec(css) || [])[1] || '';
     ok(h2Block.includes('border-bottom: none') && !h2Block.includes('border-left'),

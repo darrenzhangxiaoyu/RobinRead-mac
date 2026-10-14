@@ -32,19 +32,21 @@ app.whenReady().then(async () => {
       '1 编排在 no-preference 档内（reduced 一律即时呈现）');
     const delayOf = (frag) => {
       const esc = frag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      let m = new RegExp(esc + '[^}]*?animation-delay: (\\d+(?:\\.\\d+)?)ms').exec(css);
-      if (m) return Number(m[1]);
-      m = new RegExp(esc + '[^}]*?animation-delay: (\\d+(?:\\.\\d+)?)s').exec(css);
-      return m ? Math.round(Number(m[1]) * 1000) : null;
+      // 令牌化后延迟值以 var()/calc 表达——断言消费令牌而非裸值（R1 审查 P3 归簇）
+      const m = new RegExp(esc + '[^}]*?animation-delay: ([^;]+);').exec(css);
+      return m ? m[1].trim() : null;
     };
     const k = delayOf('.nj-enter-compose .robin-header-kicker {');
     const t = delayOf('.nj-enter-compose .robin-header-title {');
     const m = delayOf('.nj-enter-compose .robin-header-meta {');
-    ok(k === 0 && t === 60 && m === 120, `1 三拍阶梯（kicker=${k}/title=${t}/meta=${m}ms）`);
+    ok(k === 'var(--nj-stagger-1)' && t === 'var(--nj-stagger-2)' && m === 'var(--nj-stagger-3)',
+      `1 三拍阶梯令牌消费（kicker=${k}/title=${t}/meta=${m}）`);
     const b1 = delayOf('.reader-article .robin-body > *:nth-child(1)');
     const b2 = delayOf('.reader-article .robin-body > *:nth-child(2)');
     const b3 = delayOf('.reader-article .robin-body > *:nth-child(3)');
-    ok(b1 === 180 && b2 === 210 && b3 === 240, `2 既有 article-rise 阶梯重排（${b1}/${b2}/${b3}ms，标题三拍先行正文随后滑入）`);
+    ok(/calc\(var\(--nj-stagger-3\) \+ var\(--nj-stagger-2\)\)/.test(String(b1))
+      && /2 \* var\(--nj-stagger-2\)/.test(String(b2)) && /3 \* var\(--nj-stagger-2\)/.test(String(b3)),
+      `2 既有 article-rise 阶梯重排且令牌化（${String(b1).slice(0, 34)}…步进 60ms 家族）`);
     ok(!css.includes('.nj-enter-compose .robin-body'), '2 编排不与既有正文入场动画叠写（单一动效源）');
     ok(readerSrc.includes("if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) article.classList.add('nj-enter-compose');"),
       '1 渲染端 reduced 双门（不发类即无延迟填充）');
@@ -91,7 +93,7 @@ app.whenReady().then(async () => {
     else {
       ok(b.k.name === 'njRise' && b.t.name === 'njRise' && b.m.name === 'njRise', `1 三元素 njRise 编排（k=${b.k.name}/${b.t.name}/${b.m.name}）`);
       ok(b.k.delay === '0s' && b.t.delay === '0.06s' && b.m.delay === '0.12s', `1 计算延迟阶梯（${b.k.delay}/${b.t.delay}/${b.m.delay}）`);
-      ok(b.b1.name === 'article-rise' && b.b1.delay === '0.18s' && b.b2.delay === '0.21s', `2 正文阶梯实渲染（${b.b1.name}@${b.b1.delay}/${b.b2.delay}，标题先行）`);
+      ok(b.b1.name === 'article-rise' && b.b1.delay === '0.18s' && b.b2.delay === '0.24s', `2 正文阶梯实渲染（${b.b1.name}@${b.b1.delay}/${b.b2.delay}，标题先行）`);
       ok(b.underline.content === '""' && /matrix\(0[, ]/.test(String(b.underline.transform)) && parseFloat(b.underline.h) > 0 && b.underline.pos === 'absolute',
         `3 下划线 scaleX(0) 起态实渲染（transform=${String(b.underline.transform).slice(0, 24)} h=${b.underline.h}）`);
     }

@@ -35,9 +35,11 @@ app.whenReady().then(async () => {
       '1 渲染端 IO 一次性绽放接线');
     ok(/if \('IntersectionObserver' in window && !window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches\) \{\s*\n\s*endMark\.classList\.add\('bloom-pending'\);/.test(readerSrc),
       '1 reduced/无 IO 恒可见（pending 只在动画可用时挂）');
-    ok(/\.nj-continue-reading \.nj-cr-row \{ animation: njRise/.test(css) && /\.nj-cr-row:nth-of-type\(2\) \{ animation-delay: 60ms; \}/.test(css),
-      '2 继续读行卡错峰上浮在册（0/60/120ms）');
-    ok(/\.nj-lightbox-caption \{[^}]*?animation: njCaptionIn var\(--dur-mid\) var\(--ease-out\) 0\.15s both;/s.test(css), '3 图注条延迟入场在册');
+    ok(/\.nj-continue-reading \.nj-cr-row \{ animation: njRise/.test(css)
+      && /\.nj-cr-row:nth-of-type\(2\) \{ animation-delay: var\(--nj-stagger-2\); \}/.test(css)
+      && /\.nj-cr-row:nth-of-type\(3\) \{ animation-delay: var\(--nj-stagger-3\); \}/.test(css),
+      '2 继续读行卡错峰上浮在册（三拍令牌消费）');
+    ok(/\.nj-lightbox-caption \{[^}]*?animation: njCaptionIn var\(--dur-mid\) var\(--ease-out\) var\(--nj-stagger-3\) both;/s.test(css), '3 图注条延迟入场在册（令牌消费）');
     ok(readerSrc.includes('${alt ? `<div class="nj-lightbox-caption">${attr(alt)}</div>` : \'\'}'), '3 灯箱模板按 alt 条件渲染图注');
 
     // ── UI 实证 ──
@@ -92,7 +94,7 @@ app.whenReady().then(async () => {
       ok(b.pendingHidden && b.bloomAnim === 'njEndBloom', `1 绽放实渲染（pending 隐${b.pendingHidden ? '✓' : '✗'} → bloomed 动画=${b.bloomAnim}）`);
       ok(b.reducedVisible, '1 无 pending 时恒可见（reduced 直达终态）');
       ok(b.rows.r1.startsWith('njRise@') && b.rows.r2 === '0.06s' && b.rows.r3 === '0.12s', `2 行卡错峰（${b.rows.r1}/${b.rows.r2}/${b.rows.r3}）`);
-      ok(b.caption.anim === 'njCaptionIn' && b.caption.delay === '0.15s' && b.caption.pointer === 'none',
+      ok(b.caption.anim === 'njCaptionIn' && b.caption.delay === '0.12s' && b.caption.pointer === 'none',
         `3 图注条实体（${b.caption.anim}@${b.caption.delay} 不抢焦点）`);
     }
 
