@@ -113,7 +113,10 @@ export class ReaderView {
     // 深色⇄浅色切换：清掉/重算插图反相（切换到浅色必须移除 filter）
     document.addEventListener('robinread:theme-applied', () => this._applyDarkPaperInversion(true));
     // 排版设置变更：微排版是 DOM 结构性的（spacer 增删），需在打开的文章上重建
-    document.addEventListener('robinread:reader-layout-changed', () => this._applyMicroTypography());
+    document.addEventListener('robinread:reader-layout-changed', () => {
+      this._applyMicroTypography();
+      this._applyGuideFocus(); // R86：视点引导开关切换即时生效（幂等重排）
+    });
     // U34 边注模式开关变化：已打开的文章就地重排边注列（不整篇重建）
     document.addEventListener('robinread:margin-notes-changed', () => this._renderMarginNotes());
     // U34 窄屏回退：跨越 1200px 断点时在页边/内联两形态间重排（节流防抖）
@@ -845,6 +848,7 @@ export class ReaderView {
     this._interceptLinks();
     this._bindImages();
     this._renderUserScriptActions(); // F32：脚本声明的按钮渲染为正文底部（点击→同一沙箱执行）
+    this._applyGuideFocus(); // R86：视点引导（分词首重）——置于全部正文变换之后，只动文本节点不碰结构
     // R77-③ 文末终止符：读完的明确信号（无 data-nj-id——朗读/翻译/批注单元全部不收录）
     const endMark = document.createElement('div');
     endMark.className = 'nj-article-end';
@@ -1875,6 +1879,69 @@ export class ReaderView {
       if (layout.microTypography === 'off') return;
       CJKMicro.insertGaps(this.body);
     } catch (_) { /* 微排版失败不影响正文阅读 */ }
+  }
+
+  /**
+   * R86 视点引导（bionic 式分词首重）：词首字符加重牵引视线——阅读加速的经典手法。
+   * - 中文：Intl.Segmenter 分词，≥2 字词首字加重（单字虚词不扰）
+   * - 西文：单词前 ~40% 字母加重（1-3 字封顶）
+   * - 只拆文本节点重组（句子包裹/高亮/批注锚点/链接等结构零损伤），幂等可逆
+   * - 排除区：pre/code/kbd/samp 与标题（代码与标题自有重量语言）
+   */
+  _applyGuideFocus() {
+    if (!this.body) return;
+    for (const b of [...this.body.querySelectorAll('b.nj-bio')]) {
+      const parent = b.parentNode;
+      if (!parent) continue;
+      parent.replaceChild(document.createTextNode(b.textContent || ''), b);
+      parent.normalize();
+    }
+    if ((window.__robinReaderLayout || {}).guideFocus !== 'on') return;
+    let segmenter = this._bioSegmenter;
+    if (!segmenter) {
+      if (typeof Intl === 'undefined' || !Intl.Segmenter) return; // 能力缺失：静默不开
+      segmenter = this._bioSegmenter = new Intl.Segmenter('zh', { granularity: 'word' });
+    }
+    const walker = document.createTreeWalker(this.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        // 祖先链检查（直接父标签不够：代码高亮会把文本包进 code 内的 span 层）
+        let el = node.parentElement;
+        while (el && el !== this.body) {
+          const tag = el.tagName;
+          if (tag === 'PRE' || tag === 'CODE' || tag === 'KBD' || tag === 'SAMP' || /^H[1-6]$/.test(tag)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          el = el.parentElement;
+        }
+        if (/[\u4e00-\u9fffA-Za-z]/.test(node.nodeValue || '')) return NodeFilter.FILTER_ACCEPT;
+        return NodeFilter.FILTER_REJECT;
+      },
+    });
+    const targets = [];
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) targets.push(node);
+    for (const node of targets) {
+      const text = node.nodeValue || '';
+      if (!text.trim()) continue;
+      const frag = document.createDocumentFragment();
+      for (const { segment, isWordLike } of segmenter.segment(text)) {
+        if (!isWordLike || segment.length < 2) {
+          frag.appendChild(document.createTextNode(segment));
+          continue;
+        }
+        const cjk = /^[\u4e00-\u9fff]+$/.test(segment);
+        const take = cjk ? 1 : Math.min(3, Math.max(1, Math.ceil(segment.length * 0.4)));
+        if (!cjk && !/^[A-Za-z]/.test(segment)) {
+          frag.appendChild(document.createTextNode(segment)); // 数字等非字母词不加重
+          continue;
+        }
+        const b = document.createElement('b');
+        b.className = 'nj-bio';
+        b.textContent = segment.slice(0, take);
+        frag.appendChild(b);
+        frag.appendChild(document.createTextNode(segment.slice(take)));
+      }
+      node.parentNode.replaceChild(frag, node);
+    }
   }
 
   /**

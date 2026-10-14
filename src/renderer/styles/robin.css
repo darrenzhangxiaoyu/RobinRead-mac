@@ -3752,6 +3752,9 @@ body.dark .robin-surface.column-reader::after {
   color: var(--text-tertiary);
   font-size: 0.92em;
 }
+/* R86 视点引导：分词首重（bionic）——词首字加重牵引视线（600 权重，衬线栈合成粗），
+   与正文 strong(680) 保持级差；排除区由渲染层 TreeWalker 保证 */
+.reader-article b.nj-bio { font-weight: 600; }
 
 /* ==========================================================================
    图片加载占位 + 失败兜底（不再显示破图图标/突兀空白）

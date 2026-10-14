@@ -3684,6 +3684,7 @@ class AppStore extends EventEmitter {
       textAlign: this.preferences.get('RobinRead.textAlign', 'left'),
       letterSpacing: this.preferences.get('RobinRead.letterSpacing', 'normal'),
       microTypography: this.preferences.get('RobinRead.microTypography', 'on'),
+      guideFocus: this.preferences.get('RobinRead.guideFocus', 'off'), // R86 视点引导（默认关）
       dropCap: this.preferences.get('RobinRead.dropCap', 'off'),
       titleFont: this.preferences.get('RobinRead.titleFont', 'inherit'),
       // 双语对照版式（方向 13）：inline 逐句紧跟 / card 对照分行（原译交替，双语刊物式）
@@ -3783,6 +3784,7 @@ class AppStore extends EventEmitter {
       textAlign: ['left', 'justify'],
       letterSpacing: ['normal', 'wide', 'loose'],
       microTypography: ['on', 'off'],
+      guideFocus: ['on', 'off'], // R86 视点引导：分词首重（bionic 式阅读加速，默认关）
       dropCap: ['on', 'off'],
       titleFont: ['inherit', 'smiley'],
       bilingualStyle: ['inline', 'card'],

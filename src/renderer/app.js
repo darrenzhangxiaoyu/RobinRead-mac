@@ -406,12 +406,15 @@ function applyReaderLayout(layout) {
     applyReaderLayout._lastMarginNotes = mn;
   }
   // 微排版是 DOM 结构性的（spacer 增删）：设置变化时通知阅读器在已打开的文章上重建。
-  // 必须在 __robinReaderLayout 更新之后再派发——阅读器按新值重建
+  // 必须在 __robinReaderLayout 更新之后再派发——阅读器按新值重建。
+  // R86 视点引导同为 DOM 结构性（词首加重包裹）：并列检测同事件
   const micro = layout?.microTypography === 'off' ? 'off' : 'on';
-  if (micro !== applyReaderLayout._lastMicro) {
-    const microChanged = applyReaderLayout._lastMicro !== undefined;
+  const guide = layout?.guideFocus === 'on' ? 'on' : 'off';
+  if (micro !== applyReaderLayout._lastMicro || guide !== applyReaderLayout._lastGuide) {
+    const changed = applyReaderLayout._lastMicro !== undefined || applyReaderLayout._lastGuide !== undefined;
     applyReaderLayout._lastMicro = micro;
-    if (microChanged) document.dispatchEvent(new CustomEvent('robinread:reader-layout-changed'));
+    applyReaderLayout._lastGuide = guide;
+    if (changed) document.dispatchEvent(new CustomEvent('robinread:reader-layout-changed'));
   }
   document.body.dataset.listDensity = layout?.listDensity || 'comfortable';
   // 列表排序：状态变化时更新按钮并重拉列表（排序影响行序）。

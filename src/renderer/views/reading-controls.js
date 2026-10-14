@@ -87,6 +87,14 @@ export class ReadingControls {
       (v) => window.robin.setReaderLayout({ paraStyle: v }));
     addSeg(secMode, [['left', t('左对齐')], ['justify', t('两端')]], layout.textAlign || 'left',
       (v) => window.robin.setReaderLayout({ textAlign: v }));
+    // R86 视点引导：分词首重（bionic 式阅读加速），默认关（off/on 无自述性，补子标签）
+    const guideLabel = document.createElement('div');
+    guideLabel.className = 'rc-section-label';
+    guideLabel.style.marginTop = '6px';
+    guideLabel.textContent = t('视点引导');
+    secMode.appendChild(guideLabel);
+    addSeg(secMode, [['off', t('关闭')], ['on', t('开启')]], layout.guideFocus === 'on' ? 'on' : 'off',
+      (v) => window.robin.setReaderLayout({ guideFocus: v }));
 
     // ── 状态（聚焦/禅/自动滚动：瞬时切换 + 反映真实态）──
     const secState = addSection(t('状态'));
