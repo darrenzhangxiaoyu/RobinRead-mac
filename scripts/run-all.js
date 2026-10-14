@@ -105,6 +105,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r82-details.js', runner: 'electron', desc: 'R82 阅读仪式三连：完读终止符IO绽放(reduced恒可见)/继续读行卡错峰/灯箱图注条延迟入场（离线）' },
   { file: 'scripts/diag-r83-details.js', runner: 'electron', desc: 'R83 艺术批次收官：新动效闭包+no-preference档位/60ms阶梯谱系归簇/JS reduced门全量/陈年digest-caret悬空补齐（离线）' },
   { file: 'scripts/diag-r84-details.js', runner: 'electron', desc: 'R84 沉浸刊头三连：首图全幅出血hero(槽令牌+max-width破框)/灯晕vignette(暗档加深)/农历folio(Intl中华历法hanidec)（离线）' },
+  { file: 'scripts/diag-r85-details.js', runner: 'electron', desc: 'R85 结构谱三连：tocRail几何化落位+图点码条glyph/活跃章刻度生长+章节名1.4s闪光/进度线h2记号针（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

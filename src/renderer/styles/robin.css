@@ -1745,6 +1745,15 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
   background: color-mix(in srgb, var(--accent) 35%, transparent);
   transition: width var(--dur-mid) var(--ease-out);
 }
+/* R85-③ 章节记号针：h2 位置在轨道上打 2px 记号——填充越过记号即「读过一章」 */
+.reading-progress .nj-progress-notch {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--text-primary) 32%, transparent);
+}
 .reading-progress::after {
   content: attr(data-pct);
   position: absolute;
@@ -2001,6 +2010,28 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
 .toc-tick[data-level="h2"] { width: 11px; }
 .toc-tick[data-level="h3"] { width: 8px; }
 .toc-tick:hover, .toc-tick.active { opacity: 1; background: var(--accent); }
+/* ── R85 结构谱三连 ── */
+/* R85-① 密度 glyph：小点=插图、细条=代码块（轨道右侧，不与标题刻度抢占左缘） */
+.toc-dot {
+  position: absolute; left: 4px;
+  width: 2.5px; height: 2.5px;
+  margin-top: -1px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  opacity: 0.32;
+  pointer-events: none;
+}
+.toc-bar {
+  position: absolute; left: 4.5px;
+  width: 2px; height: 7px;
+  margin-top: -3px;
+  border-radius: 1px;
+  background: var(--text-tertiary);
+  opacity: 0.32;
+  pointer-events: none;
+}
+/* R85-② 活跃章节刻度生长：当前章刻度左伸加长（跨层级同语言） */
+.toc-tick.active { left: -6px; width: 16px; }
 .toc-thumb {
   position: absolute; left: -2.5px;
   width: 8px; height: 8px;

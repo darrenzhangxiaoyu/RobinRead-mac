@@ -4403,10 +4403,16 @@ export class ReaderView {
     this.tocTrack.appendChild(thumb);
     this.tocThumb = thumb;
 
+    // R85-① 结构谱几何化：刻度按块在正文中的真实比例落位（与拖拽滚动的几何语义一致，
+    // 此前序数等距排布与拖拽定位天然错位）；渲染期 scrollTop=0，rect 差即内容偏移
+    const bodyRect = this.body.getBoundingClientRect();
+    const bodyH = Math.max(1, bodyRect.height);
+    const ratioOf = (el) => clamp01((el.getBoundingClientRect().top - bodyRect.top) / bodyH);
+
     headings.forEach((heading, index) => {
       const anchorID = `toc-${index}`;
       heading.id = anchorID;
-      const position = (index + 0.5) / headings.length;
+      const position = ratioOf(heading);
       const tick = document.createElement('div');
       tick.className = 'toc-tick';
       tick.dataset.level = heading.tagName.toLowerCase();
@@ -4422,6 +4428,32 @@ export class ReaderView {
       this.tocTrack.appendChild(tick);
       this.tocEntries.push({ element: heading, position, tick });
     });
+    // R85-① 密度 glyph：小点=插图、细条=代码块——文章结构在轨道上一眼可读
+    for (const fig of this.body.querySelectorAll('figure')) {
+      const dot = document.createElement('div');
+      dot.className = 'toc-dot';
+      dot.style.top = `${(ratioOf(fig) * 100).toFixed(2)}%`;
+      this.tocTrack.appendChild(dot);
+    }
+    for (const pre of this.body.querySelectorAll('pre')) {
+      const bar = document.createElement('div');
+      bar.className = 'toc-bar';
+      bar.style.top = `${(ratioOf(pre) * 100).toFixed(2)}%`;
+      this.tocTrack.appendChild(bar);
+    }
+    // R85-③ 进度线章节刻度：h2 位置打记号针（填充越过记号=读过一章）
+    this.progressEl?.querySelectorAll('.nj-progress-notch').forEach((n) => n.remove());
+    if (this.progressEl && this.scrollEl) {
+      const scrollRect = this.scrollEl.getBoundingClientRect();
+      const total = Math.max(1, this.scrollEl.scrollHeight);
+      for (const h of this.body.querySelectorAll('h2')) {
+        const frac = clamp01((h.getBoundingClientRect().top - scrollRect.top) / total);
+        const notch = document.createElement('i');
+        notch.className = 'nj-progress-notch';
+        notch.style.left = `${(frac * 100).toFixed(2)}%`;
+        this.progressEl.appendChild(notch);
+      }
+    }
     this.tocRail.classList.remove('hidden-rail');
     this.tocRail.classList.add('visible');
   }
@@ -4532,8 +4564,19 @@ export class ReaderView {
           const rect = entry.element.getBoundingClientRect();
           if (rect.top - containerTop < el.clientHeight * 0.4) active = index;
         });
-        this.tocThumb.style.top = `${((active + 0.5) / this.tocEntries.length) * 100}%`;
+        // R85-①：thumb 落到活跃章节的几何位置（与刻度同语义）
+        this.tocThumb.style.top = `${(this.tocEntries[active].position * 100).toFixed(2)}%`;
         this.tocEntries.forEach((entry, index) => entry.tick.classList.toggle('active', index === active));
+        // R85-② 章节切换闪光：进入新章节时轨道旁短暂浮现章节名（1.4s 自隐；开场即「你在这里」）
+        if (this._tocActive !== active) {
+          this._tocActive = active;
+          const entry = this.tocEntries[active];
+          this.tocPeak.textContent = entry.element.textContent || ' ';
+          this.tocPeak.style.top = `${(entry.position * 100).toFixed(2)}%`;
+          this.tocPeak.classList.add('visible');
+          clearTimeout(this._tocPeakTimer);
+          this._tocPeakTimer = setTimeout(() => this.tocPeak.classList.remove('visible'), 1400);
+        }
       }
 
       this._publishVisible();
