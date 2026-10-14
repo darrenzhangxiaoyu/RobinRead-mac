@@ -606,6 +606,11 @@ export class ReaderView {
     this._translateMode = 'off';
     this.highlights = [];
     this.notes = [];
+    // 自检R3-P3：卸载正文 DOM 置空强引用（含 bio 包裹的 20k 长文整棵树 3-8MB——
+    // 此前滞留到下一篇打开才释放，空态常驻）
+    this.body = null;
+    this.translatedBody = null;
+    this._articleEl = null;
     this._dismissSelection();
     this._dismissPopover();
     this._dismissHighlightMenu();
@@ -1922,15 +1927,16 @@ export class ReaderView {
     if (count > 0) this._refreshTOCGeometry();
   }
 
-  /** 自检R2-P3：结构谱几何重算（折叠/展开后复用 _buildTOC 的度量口径）。 */
+  /** 自检R2-P3：结构谱几何重算（折叠/展开后复用 _buildTOC 的度量口径；两段式度量）。 */
   _refreshTOCGeometry() {
     if (!this.body || !this.tocEntries?.length || !this.tocTrack) return;
     const bodyRect = this.body.getBoundingClientRect();
     const bodyH = Math.max(1, bodyRect.height);
-    for (const entry of this.tocEntries) {
-      entry.position = clamp01((entry.element.getBoundingClientRect().top - bodyRect.top) / bodyH);
-      entry.tick.style.top = `${(entry.position * 100).toFixed(2)}%`;
-    }
+    const positions = this.tocEntries.map((entry) => clamp01((entry.element.getBoundingClientRect().top - bodyRect.top) / bodyH));
+    this.tocEntries.forEach((entry, i) => {
+      entry.position = positions[i];
+      entry.tick.style.top = `${(positions[i] * 100).toFixed(2)}%`;
+    });
     this._renderProgressNotches(); // 记号针同步重算（同尺口径）
   }
 
@@ -1972,13 +1978,19 @@ export class ReaderView {
    */
   _applyGuideFocus() {
     if (!this.body) return;
+    // 自检R3-P3：unwrap 的 normalize 收敛到每父一次（逐节点 normalize 是 O(k²)——病理长段 20-100ms）
+    const unwrapParents = new Set();
     for (const b of [...this.body.querySelectorAll('b.nj-bio')]) {
       const parent = b.parentNode;
       if (!parent) continue;
       parent.replaceChild(document.createTextNode(b.textContent || ''), b);
-      parent.normalize();
+      unwrapParents.add(parent);
     }
+    unwrapParents.forEach((p) => p.normalize());
     if ((window.__robinReaderLayout || {}).guideFocus !== 'on') return;
+    // 自检R3-P2：超长文守卫——3 万字以上跳过（分词包裹使 DOM 膨胀 5-10×，开文 +40-120ms
+    // 且存续期拖慢一切重排；超长文的视点引导收益不抵此代价，静默不开）
+    if ((this.body.textContent || '').length > 30000) return;
     let segmenter = this._bioSegmenter;
     if (!segmenter) {
       if (typeof Intl === 'undefined' || !Intl.Segmenter) return; // 能力缺失：静默不开
@@ -2268,6 +2280,18 @@ export class ReaderView {
       if (idx < 4) img.loading = 'eager';
       else { img.loading = 'lazy'; this._imgObserver.observe(img); }
     });
+    // 自检R3-P2：视差按需挂载——figure 图接近视口（±一屏）才挂 .nj-drift 承载 view() 动画，
+    // 离屏即摘（常驻动画层 = 每图独立合成纹理，30+ 图 ≈ 百 MB 级 GPU）
+    this._driftObserver?.disconnect();
+    if ('IntersectionObserver' in window
+      && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this._driftObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          entry.target.classList.toggle('nj-drift', entry.isIntersecting);
+        }
+      }, { root: this.scrollEl, rootMargin: '100% 0px' });
+      this.body.querySelectorAll('figure img').forEach((img) => this._driftObserver.observe(img));
+    }
   }
 
   _decorateImage(img) {
@@ -4556,15 +4580,20 @@ export class ReaderView {
     this.tocThumb = thumb;
 
     // R85-① 结构谱几何化：刻度按块在正文中的真实比例落位（与拖拽滚动的几何语义一致，
-    // 此前序数等距排布与拖拽定位天然错位）；渲染期 scrollTop=0，rect 差即内容偏移
+    // 此前序数等距排布与拖拽定位天然错位）；渲染期 scrollTop=0，rect 差即内容偏移。
+    // 自检R3-P2：两段式度量——先纯读收集全部比例（一次 flush），再统一写入（读写交错会
+    // 逐次强制 partial layout，70 刻度文章开文多付 3-15ms）
     const bodyRect = this.body.getBoundingClientRect();
     const bodyH = Math.max(1, bodyRect.height);
     const ratioOf = (el) => clamp01((el.getBoundingClientRect().top - bodyRect.top) / bodyH);
+    const headingPos = headings.map(ratioOf);
+    const figurePos = [...this.body.querySelectorAll('figure')].map(ratioOf);
+    const prePos = [...this.body.querySelectorAll('pre')].map(ratioOf);
 
     headings.forEach((heading, index) => {
       const anchorID = `toc-${index}`;
       heading.id = anchorID;
-      const position = ratioOf(heading);
+      const position = headingPos[index];
       const tick = document.createElement('div');
       tick.className = 'toc-tick';
       tick.dataset.level = heading.tagName.toLowerCase();
@@ -4584,16 +4613,16 @@ export class ReaderView {
       this.tocEntries.push({ element: heading, position, tick });
     });
     // R85-① 密度 glyph：小点=插图、细条=代码块——文章结构在轨道上一眼可读
-    for (const fig of this.body.querySelectorAll('figure')) {
+    for (const pos of figurePos) {
       const dot = document.createElement('div');
       dot.className = 'toc-dot';
-      dot.style.top = `${(ratioOf(fig) * 100).toFixed(2)}%`;
+      dot.style.top = `${(pos * 100).toFixed(2)}%`;
       this.tocTrack.appendChild(dot);
     }
-    for (const pre of this.body.querySelectorAll('pre')) {
+    for (const pos of prePos) {
       const bar = document.createElement('div');
       bar.className = 'toc-bar';
-      bar.style.top = `${(ratioOf(pre) * 100).toFixed(2)}%`;
+      bar.style.top = `${(pos * 100).toFixed(2)}%`;
       this.tocTrack.appendChild(bar);
     }
     // R85-③ 进度线章节刻度：h2 位置打记号针（填充越过记号=读过一章）。
@@ -4603,19 +4632,23 @@ export class ReaderView {
     this.tocRail.classList.add('visible');
   }
 
-  /** 自检R2-P2/P3：进度线记号针渲染与全量清理（分母=可滚动总高，与填充同尺）。 */
+  /** 自检R2-P2/P3：进度线记号针渲染与全量清理（分母=可滚动总高，与填充同尺；两段式度量）。 */
   _renderProgressNotches() {
     this.progressEl?.querySelectorAll('.nj-progress-notch').forEach((n) => n.remove());
     if (!this.progressEl || !this.scrollEl || !this.body) return;
     const scrollRect = this.scrollEl.getBoundingClientRect();
     const total = Math.max(1, this.scrollEl.scrollHeight - this.scrollEl.clientHeight);
-    for (const h of this.body.querySelectorAll('h2')) {
-      const frac = clamp01((h.getBoundingClientRect().top - scrollRect.top + this.scrollEl.scrollTop) / total);
+    // 自检R3-P2：先纯读收集（一次 flush），后统一写入
+    const fracs = [...this.body.querySelectorAll('h2')]
+      .map((h) => clamp01((h.getBoundingClientRect().top - scrollRect.top + this.scrollEl.scrollTop) / total));
+    const frag = document.createDocumentFragment();
+    for (const frac of fracs) {
       const notch = document.createElement('i');
       notch.className = 'nj-progress-notch';
       notch.style.left = `${(frac * 100).toFixed(2)}%`;
-      this.progressEl.appendChild(notch);
+      frag.appendChild(notch);
     }
+    this.progressEl.appendChild(frag);
   }
 
   _clearProgressMarks() {
@@ -4693,7 +4726,10 @@ export class ReaderView {
         // R88-① 滚动驱动档门：可滚动时进度线交给 CSS scroll() 时间线（合成器线程直驱，
         // JS 滚动路径零写入；不可滚（短文）不上时间线——JS 兜底写宽仍是 fallback）
         this.progressEl.classList.toggle('is-scrollable', max0 > 40);
-        if (this.progressFill) this.progressFill.style.width = `${ratio0 * 100}%`;
+        // 自检R3-P3：时间线在场时动画层叠压过内联样式——width 写是纯死功（最热路径上剔除）
+        if (this.progressFill && !this.progressEl.classList.contains('is-scrollable')) {
+          this.progressFill.style.width = `${ratio0 * 100}%`;
+        }
         this.progressEl.dataset.pct = `${Math.round(ratio0 * 100)}%`; // 端点气泡显示阅读百分比
       }
       // U39 专注进度线：聚焦模式下同比率填充（CSS 门控只在 body.rp-focus 显形）

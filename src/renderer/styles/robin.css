@@ -3811,10 +3811,12 @@ body.dark .robin-surface.column-reader::after {
 }
 .nj-folded { display: none; }
 /* R88-② 插图视差微浮现：figure 内图片随滚动 ±6px 缓漂（view() 元素时间线逐帧驱动，
-   合成器执行零主线程成本；双门——@supports + reduced-motion 档外不发） */
+   合成器执行零主线程成本；三门——@supports + reduced-motion 档外不发 + 自检R3-P2
+   .nj-drift 由 IO 按需挂载（离屏摘除——fill both 时间线永不出射会把每张图
+   锁成常驻合成层，30+ 图文章 ≈ 百 MB 级 GPU 纹理） */
 @supports (animation-timeline: view()) {
   @media (prefers-reduced-motion: no-preference) {
-    .reader-article figure img.nj-img {
+    .reader-article figure img.nj-img.nj-drift {
       animation: njFigureDrift linear both;
       animation-timeline: view();
       animation-range: entry 0% cover 62%;

@@ -37,8 +37,10 @@ app.whenReady().then(async () => {
       '1 可滚动档时间线直驱 + 过渡让位在册');
     ok(readerSrc.includes("this.progressEl.classList.toggle('is-scrollable', max0 > 40);"),
       '1 JS 档门在册（不可滚不上时间线防满格假进度）');
-    ok(/@supports \(animation-timeline: view\(\)\) \{\s*@media \(prefers-reduced-motion: no-preference\) \{\s*\.reader-article figure img\.nj-img \{[\s\S]*?animation-timeline: view\(\);[\s\S]*?animation-range: entry 0% cover 62%;/s.test(css),
-      '2 插图视差双门 + 元素时间线在册（entry→cover 62%）');
+    ok(/@supports \(animation-timeline: view\(\)\) \{\s*@media \(prefers-reduced-motion: no-preference\) \{\s*\.reader-article figure img\.nj-img\.nj-drift \{[\s\S]*?animation-timeline: view\(\);[\s\S]*?animation-range: entry 0% cover 62%;/s.test(css),
+      '2 插图视差三门 + 元素时间线在册（IO 按需挂 .nj-drift——离屏摘层防百 MB GPU）');
+    ok(readerSrc.includes("entry.target.classList.toggle('nj-drift', entry.isIntersecting);"),
+      '2 视差 IO 门控接线在册（±一屏挂载/离屏摘除）');
     ok(/@keyframes njFigureDrift \{[\s\S]*?translateY\(6px\);[\s\S]*?translateY\(-4px\);/.test(css), '2 漂移幅度 ±6→-4px 在册');
     const cssClean = css.replace(/\/\*[\s\S]*?\*\//g, '');
     const defined = new Set([...cssClean.matchAll(/@keyframes ([a-zA-Z0-9_-]+)/g)].map((m) => m[1]));
@@ -88,6 +90,8 @@ app.whenReady().then(async () => {
       out.fillTimeline = fcs.animationTimeline;
       out.fillName = fcs.animationName;
       const fig = document.querySelector('.robin-body figure img');
+      // 隐藏窗 IO 不定帧——直挂 .nj-drift 验 CSS 接线（JS 门控已静态断言）
+      if (fig) fig.classList.add('nj-drift');
       out.figTimeline = fig ? getComputedStyle(fig).animationTimeline : null;
       out.figRange = fig ? getComputedStyle(fig).animationRange : null;
       return out;
