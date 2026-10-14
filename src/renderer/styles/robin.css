@@ -5573,11 +5573,11 @@ body.dark .list-scroll.nj-mag-kraft .nj-mag-card { background: rgba(255, 255, 25
 }
 @keyframes erOverlayIn { from { opacity: 0; } to { opacity: 1; } }
 .er-overlay.er-dark { --erp-paper: #211F1A; --erp-ink: #E6E0D2; --erp-muted: #98917F; --erp-stage: #232120; --erp-stage-hi: #2B2927; }
-.er-overlay[data-paper="white"] { --erp-paper: #FFFFFF; --erp-grain: none; }
-.er-overlay[data-paper="book"] { --erp-paper: #EFE2C8; --erp-muted: #6A5F47; } /* P1-4：原 #74684E 于 book 纸 4.27:1 → 4.90:1 */
+.er-overlay[data-paper="white"] { --erp-paper: #FFFFFF; --erp-grain: none; --erp-stage: #E9E8E4; --erp-stage-hi: #F2F1ED; } /* R115：背景随纸同步（此前只有书页变色，台面留旧色） */
+.er-overlay[data-paper="book"] { --erp-paper: #EFE2C8; --erp-muted: #6A5F47; --erp-stage: #E6DCC4; --erp-stage-hi: #F0E8D4; } /* P1-4：原 #74684E 于 book 纸 4.27:1 → 4.90:1 */
 .er-overlay[data-paper="kraft"] { --erp-paper: #E9DCC0; --erp-ink: #2E281C; --erp-muted: #695C42; --erp-stage: #E0D0AE; --erp-stage-hi: #EFE4CC; } /* P1-4：#6E6047 仅 4.51:1 贴线 → 4.82:1 */
-.er-overlay.er-dark[data-paper="white"] { --erp-paper: #1C1C1C; --erp-grain: none; }
-.er-overlay.er-dark[data-paper="book"] { --erp-paper: #2D281F; --erp-muted: #ADA288; }
+.er-overlay.er-dark[data-paper="white"] { --erp-paper: #1C1C1C; --erp-grain: none; --erp-stage: #1E1E1E; --erp-stage-hi: #262626; }
+.er-overlay.er-dark[data-paper="book"] { --erp-paper: #2D281F; --erp-muted: #ADA288; --erp-stage: #262218; --erp-stage-hi: #2F2A20; }
 .er-overlay.er-dark[data-paper="kraft"] { --erp-paper: #2E2820; --erp-ink: #F0E9D9; --erp-muted: #C9BFA9; --erp-stage: #2C2316; --erp-stage-hi: #3A2F1E; }
 /* 强调色随纸态微调（R17）：同一绿系家族按纸底明度/色温收敛 */
 .er-overlay[data-paper="white"] { --accent: #50604A; }
@@ -6027,15 +6027,18 @@ body.dark .list-scroll.nj-mag-kraft .nj-mag-card { background: rgba(255, 255, 25
   font-size: 15px; cursor: pointer; border-radius: var(--radius-sm);
 }
 .er-close:hover { opacity: 0.85; background: rgba(43, 39, 33, 0.07); }
-.er-paper, .er-sound, .er-full {
+.er-paper, .er-sound, .er-full, .er-speak {
   height: 32px; padding: 0 12px;
   appearance: none; border: none; background: transparent; color: var(--erp-ink); opacity: 0.55;
   font-family: var(--font-serif); font-size: 12.5px; letter-spacing: 0.1em; cursor: pointer; border-radius: var(--radius-sm);
   display: inline-flex; align-items: center; justify-content: center;
 }
-.er-paper:hover, .er-sound:hover, .er-full:hover { opacity: 0.9; background: rgba(43, 39, 33, 0.07); }
+.er-paper:hover, .er-sound:hover, .er-full:hover, .er-speak:hover { opacity: 0.9; background: rgba(43, 39, 33, 0.07); }
 .er-full { padding: 0 10px; }
 .er-full svg { width: 13px; height: 13px; }
+/* R116 朗读钮随家族（用户实见「和周边按钮不是一个风格」——此前漏入家族选择器，
+   落到浏览器默认 sans；现同 serif/墨色/0.55 透明度，图标同 13px 规格） */
+.er-speak svg { width: 13px; height: 13px; margin-right: 5px; }
 .er-notice {
   position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 85;
   background: rgba(30, 28, 24, 0.78); color: #F3EEE2; font-size: 13px; padding: 10px 18px;

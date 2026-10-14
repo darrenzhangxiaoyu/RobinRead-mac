@@ -1417,13 +1417,16 @@ function registerIPCHandlers(store, window) {
 
   // 期刊当前页导出（R13）：主进程按 DIP 矩形截取窗口区域，返回 PNG base64
   // P1-1：原先误用未定义的 win（本作用域参数名是 window）→ 通道 100% ReferenceError。
+  // R114：渲染层传的是 CSS 像素矩形，应用级 zoom ≠ 1 时与 DIP 矩形错位——
+  // 用户实见「导出的不是当前界面」（边缘带入邻页内容）。按 zoomFactor 换算后再截。
   handle('app:captureRect', async (rect) => {
     if (!window || window.isDestroyed()) throw new Error('主窗口不可用，无法截图');
+    const z = window.webContents.getZoomFactor() || 1;
     const image = await window.capturePage({
-      x: Math.max(0, Math.round(Number(rect?.x) || 0)),
-      y: Math.max(0, Math.round(Number(rect?.y) || 0)),
-      width: Math.max(1, Math.round(Number(rect?.width) || 1)),
-      height: Math.max(1, Math.round(Number(rect?.height) || 1)),
+      x: Math.max(0, Math.round((Number(rect?.x) || 0) * z)),
+      y: Math.max(0, Math.round((Number(rect?.y) || 0) * z)),
+      width: Math.max(1, Math.round((Number(rect?.width) || 1) * z)),
+      height: Math.max(1, Math.round((Number(rect?.height) || 1) * z)),
     });
     return image.toPNG().toString('base64');
   });

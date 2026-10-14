@@ -20,14 +20,15 @@ app.whenReady().then(async () => {
       show: false, width: 1600, height: 1000,
       webPreferences: { contextIsolation: true, backgroundThrottling: false, preload: path.join(__dirname, '..', 'src', 'main', 'preload.js') },
     });
-    // 与主应用同语义的通道（真实 app 由 registerIPCHandlers 注册）
+    // 与主应用同语义的通道（真实 app 由 registerIPCHandlers 注册）——R114：CSS 像素矩形 × zoomFactor → DIP
     ipcMain.handle('app:captureRect', async (e, rect) => {
       const w = BrowserWindow.fromWebContents(e.sender);
+      const z = w.webContents.getZoomFactor() || 1; // 与产品实现同款换算（R114「导出的不是当前界面」）
       const image = await w.capturePage({
-        x: Math.max(0, Math.round(Number(rect?.x) || 0)),
-        y: Math.max(0, Math.round(Number(rect?.y) || 0)),
-        width: Math.max(1, Math.round(Number(rect?.width) || 1)),
-        height: Math.max(1, Math.round(Number(rect?.height) || 1)),
+        x: Math.max(0, Math.round((Number(rect?.x) || 0) * z)),
+        y: Math.max(0, Math.round((Number(rect?.y) || 0) * z)),
+        width: Math.max(1, Math.round((Number(rect?.width) || 1) * z)),
+        height: Math.max(1, Math.round((Number(rect?.height) || 1) * z)),
       });
       return image.toPNG().toString('base64');
     });
@@ -68,6 +69,23 @@ app.whenReady().then(async () => {
     const ratio = size.width / Math.max(1, a.book.w);
     ok(ratio > 0.99 && ratio < 2.1, `截图尺寸=书页矩形（含 dpr 高清 ${size.width}x${size.height} vs ${a.book.w}x${a.book.h}，ratio ${ratio.toFixed(2)}）`);
     ok(size.width > 400, '导出图有效宽度');
+    // R114 zoom≠1 相位：窗口缩到 85% 再导——换算正确时 截图宽/书页CSS宽 仍 ≈ dpr（与 zoom 无关）
+    await win.webContents.setZoomFactor(0.85);
+    await new Promise((r) => setTimeout(r, 400));
+    const z1 = await run('export-zoom', `
+      document.querySelector('.er-export').click();
+      await new Promise((r) => setTimeout(r, 500));
+      const book = document.querySelector('.er-book').getBoundingClientRect();
+      const notice = document.querySelector('.er-notice');
+      return { w: Math.round(book.width), notice: notice && !notice.hidden ? notice.textContent : '' };
+    `);
+    if (z1.__err) throw new Error('zoom: ' + z1.__err);
+    const img2 = clipboard.readImage();
+    const size2 = img2.getSize();
+    const ratio2 = size2.width / Math.max(1, z1.w);
+    ok(!img2.isEmpty() && Math.abs(ratio2 - ratio * 0.85) <= 0.07 * ratio,
+      `R114 zoom=0.85 导出对位（ratio ${ratio2.toFixed(2)} ≈ ${ratio.toFixed(2)}×0.85=${(ratio * 0.85).toFixed(2)}——CSS 矩形×zoomFactor 后截图=物理书页；未乘 zoom 会得 ${ratio.toFixed(2)} 带入邻页）`);
+    await win.webContents.setZoomFactor(1);
     if (failed) { console.error(failed + ' 项失败'); app.exit(1); }
     else { console.log('ALL PASSED'); app.exit(0); }
   } catch (e) {

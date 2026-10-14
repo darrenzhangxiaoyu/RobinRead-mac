@@ -681,7 +681,7 @@ app.whenReady().then(async () => {
     ok(ui.u28.dropKinds[0] === 'starred' && ui.u28.dropKinds[1] === 'later', label(ui.u28.dropKinds, 'C U28 收藏/稍后读行带 dropKind 放置目标'));
     ok(ui.u28.highlight && ui.u28.highlightCleared, label({ on: ui.u28.highlight, off: ui.u28.highlightCleared }, 'C U28 拖入高亮挂/摘（entry-drop）'));
     const starredCount = store.database.prepare('SELECT COUNT(*) AS n FROM article_states WHERE is_starred = 1').get().n;
-    ok(starredCount >= 3, label(starredCount, 'C U28 拖入收藏=批量加入（可见行全部落库 starMany）'));
+    ok(starredCount >= 3, label({ starredCount, rowCount: ui.u28.rowCount, dragged: (ui.u28.dragData || []).length }, 'C U28 拖入收藏=批量加入（可见行全部落库 starMany）'));
     ok(ui.u28.feedRowCount >= 5, label(ui.u28.feedRowCount, 'C U28 订阅行渲染（≥5 源：3 夹内+2 根+UI 素材源）'));
     ok(ui.u28.insertAfter && ui.u28.indicatorCleared, label({ insertAfter: ui.u28.insertAfter, cleared: ui.u28.indicatorCleared }, 'C U28 插入位指示（下半行=after）随 drop/dragend 清除'));
     // 拖 feedRows[0] 到 feedRows[1] 下半=插到其后；期望序=前两元素对调、其余保持

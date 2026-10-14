@@ -33,7 +33,8 @@ app.whenReady().then(async () => {
     };
     const a = await run('article-selection', `
       const mod = await import('./views/edition-reader.js');
-      const ARTICLE = Array.from({ length: 6 }, (_, i) => '<h2>第' + (i + 1) + '节</h2><p>这是第' + (i + 1) + '节的一段用于划词测试的正文段落，长度足够覆盖一到两行文字，供鼠标划选与胶囊定位验证。纸感阅读把散落的订阅还原成一个安静的阅读空间。</p>').join('');
+      const ARTICLE = Array.from({ length: 6 }, (_, i) => '<h2>第' + (i + 1) + '节</h2><p>这是第' + (i + 1) + '节的一段用于划词测试的正文段落，长度足够覆盖一到两行文字，供鼠标划选与胶囊定位验证。纸感阅读把散落的订阅还原成一个安静的阅读空间。</p>').join('')
+        + '<p><img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" width="320" height="200" alt="点图不翻页验证"></p>';
       const mk = (i) => ({ id: 'fx-' + i, title: '条目 ' + i, summaryPreview: '摘要文本用于卡片划词验证，长度足以占据两行版面空间。' + i, sourceTitle: '潮流周刊', publishedAt: 1758902400 - i * 86400, contentHead: '' });
       const er = new mod.EditionReader({ items: Array.from({ length: 12 }, (_, i) => mk(i)), fetchArticle: async () => ARTICLE });
       window.__er = er;
@@ -104,8 +105,31 @@ app.whenReady().then(async () => {
     ok(d.popBody.includes('error'), '无 AI 配置时错误兜底（class=' + d.popBody + '）');
     ok(d.popText.length > 0, '错误文案非空（' + d.popText.slice(0, 24) + '…）');
     ok(d.popClosedByEsc, 'Esc 关闭弹层');
+    // 点图×翻页冲突（用户实报：点图放大同时翻页了）——pointer 序列直点正文图：只灯箱、页码不动
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'views', 'edition-reader.js'), 'utf8');
+    ok(src.includes("ev.target.closest('.er-article img')) return; // 点图=灯箱"), '点图 guard 静态在册（_click 豁免正文图）');
+    const e2 = await run('img-click-no-flip', `
+      const er = window.__er;
+      const img = document.querySelector('.er-article img');
+      if (!img) return { noImg: true };
+      const r = img.getBoundingClientRect();
+      const idxBefore = er._pageIndex();
+      const opts = { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + Math.min(r.height / 2, 20), button: 0, pointerId: 9, isPrimary: true };
+      img.dispatchEvent(new PointerEvent('pointerdown', opts));
+      window.dispatchEvent(new PointerEvent('pointerup', opts));
+      img.dispatchEvent(new MouseEvent('click', opts));
+      await new Promise((r2) => setTimeout(r2, 600));
+      return { idxBefore, idxAfter: er._pageIndex(), lightbox: !!document.querySelector('.er-lightbox') };
+    `);
+    if (e2.__err) throw new Error('img-click: ' + e2.__err);
+    ok(!e2.noImg, '正文图在场');
+    ok(e2.idxAfter === e2.idxBefore, '点图不翻页（页码 ' + e2.idxBefore + '→' + e2.idxAfter + '——用户实报「放大同时翻页」根治）');
+    ok(e2.lightbox, '点图灯箱打开（只放大，不翻页）');
     const b = await run('card-selection', `
       const er = window.__er;
+      // R112 相位遗留的灯箱先收掉（否则吞掉下面本应退出正文态的 Esc）
+      const lbOpen = document.querySelector('.er-lightbox.on');
+      if (lbOpen) { lbOpen.classList.remove('on'); er._lightboxOn = false; }
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       await new Promise(r => setTimeout(r, 500));
       // 回版面，划选卡片摘要

@@ -2917,6 +2917,16 @@ const STRINGS = {
   "非当前段落渐暗，指针所在段保持清晰。": { zh: "非当前段落渐暗，指针所在段保持清晰。", en: "Dim every paragraph except the one under your pointer." },
   "连续多次刷新失败，已暂停自动刷新（手动刷新成功后自动恢复）": { zh: "连续多次刷新失败，已暂停自动刷新（手动刷新成功后自动恢复）", en: "Auto-refresh paused after repeated failures (resumes after a successful manual refresh)" },
   "连续 %lld 次刷新失败": { zh: "连续 %lld 次刷新失败", en: "%lld consecutive refresh failures" },  /* 批4审查P2-1：模板串 t() 转正 */
+  /* R116 期刊神经语音（edition-reader）：键齐 zh/en */
+  "朗读本文（神经语音；Esc 停止）": { zh: "朗读本文（神经语音；Esc 停止）", en: "Read aloud (neural voice; Esc to stop)" },
+  "朗读中": { zh: "朗读中", en: "Reading" },
+  "朗读完毕": { zh: "朗读完毕", en: "Finished reading" },
+  "朗读失败：": { zh: "朗读失败：", en: "Read aloud failed: " },
+  "先点开一篇文章再朗读": { zh: "先点开一篇文章再朗读", en: "Open an article first" },
+  "本文没有可朗读的文字": { zh: "本文没有可朗读的文字", en: "No readable text in this article" },
+  "请检查网络": { zh: "请检查网络", en: "check your network" },
+  "导出失败：": { zh: "导出失败：", en: "Export failed: " },
+  "请重试": { zh: "请重试", en: "please retry" },
 };
 
 module.exports = { STRINGS };

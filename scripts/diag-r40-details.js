@@ -91,7 +91,7 @@ app.whenReady().then(async () => {
       er._doOpen();
       await new Promise(r => setTimeout(r, 800));
       const toolBtns = [...document.querySelectorAll('.er-tools button')];
-      const ariaOk = toolBtns.length === 8 && toolBtns.every((b) => (b.getAttribute('aria-label') || '').length > 0);
+      const ariaOk = toolBtns.length === 9 && toolBtns.every((b) => (b.getAttribute('aria-label') || '').length > 0);
       const sample = toolBtns.slice(0, 2).map((b) => b.getAttribute('aria-label'));
       return { chipsOverflow, twoRows, itemsN: items.length, hlAfter2, hlAfterUp, enterPicked, ariaOk, sample, toolN: toolBtns.length };
     `);
@@ -101,7 +101,7 @@ app.whenReady().then(async () => {
     ok(a.hlAfter2 === 1, '↓↓ 高亮第 2 项（' + a.hlAfter2 + '）');
     ok(a.hlAfterUp === 0, '↑ 回退第 1 项（' + a.hlAfterUp + '）');
     ok(a.enterPicked.value === '地铁' && a.enterPicked.lastSearch === '地铁' && a.enterPicked.gone, 'Enter 选中高亮项（第 0 项）即搜（' + a.enterPicked.lastSearch + '）');
-    ok(a.toolN === 8 && a.ariaOk, '期刊工具条 8 键 aria-label 齐备（' + (a.sample || []).join('/') + '…）');
+    ok(a.toolN === 9 && a.ariaOk, '期刊工具条 9 键 aria-label 齐备（' + (a.sample || []).join('/') + '…——R116 新增朗读钮）');
     if (failed) { console.error(failed + ' 项失败'); app.exit(1); }
     else { console.log('ALL PASSED'); app.exit(0); }
   } catch (e) {

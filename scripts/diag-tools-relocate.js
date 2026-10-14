@@ -79,7 +79,7 @@ app.whenReady().then(async () => {
     ok(info.intersect === 0, '工具条与书页零相交（相交 ' + info.intersect + ' 片）');
     ok(info.minW >= 28 && info.minH >= 28, '按钮命中区 ≥28px（' + info.minW + 'x' + info.minH + '）');
     ok(info.capBg !== 'rgba(0, 0, 0, 0)', '胶囊实体底（' + info.capBg + '）');
-    ok(info.count === 8, '8 键齐全（' + info.count + '）');
+    ok(info.count === 9, '9 键齐全（' + info.count + '——R116 新增 er-speak 朗读）');
     const solid = ['er-sound', 'er-paper', 'er-type', 'er-find', 'er-export', 'er-keys'].every((k) => hits.detail[k] === 8);
     ok(solid, '常驻六键 8/8 真点击全命中（' + JSON.stringify(hits.detail) + '）');
     ok(hits.detail['er-full'] >= 1 && hits.detail['er-close'] >= 1, '全屏/关闭至少命中一次（全屏重排与关闭消亡属预期）');

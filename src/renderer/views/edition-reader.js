@@ -45,13 +45,16 @@ const TURN_PRESETS = [
 
 // 版心随窗口比例自适应：常规 92%（上限 2100 防超宽屏夸张）；沉浸全屏（R36）97%/2400——
 // 全屏态两侧大空带是用户点名的不合理留白
-const pageWidth = (w, fs) => Math.min(fs ? 2400 : 2100, Math.max(1, Math.round(w * (fs ? 0.97 : 0.92))));
+// R113 页边距联动版宽（用户实见「两边边框有点大，在设置里优化」）：页边距档位不只改内衬，
+// 同时驱动版宽比例——窄档版面吃到 96%、标准 94%、宽档 90%；全屏仍 97% 独占
+const PAPER_RATIO = { narrow: 0.96, standard: 0.94, wide: 0.90 };
+const pageWidth = (w, fs, margin = 'standard') => Math.min(fs ? 2400 : 2100, Math.max(1, Math.round(w * (fs ? 0.97 : (PAPER_RATIO[margin] || 0.94)))));
 /* 阅读排版三档（R1）：页边距与密度的唯一真源（JS 版心测量与 CSS 共用） */
 const MARGIN_X = { narrow: 24, standard: 36, wide: 52 };
 const DENSITY = { compact: { gapY: 18, lh: 0.86 }, standard: { gapY: 24, lh: 1 }, airy: { gapY: 36, lh: 1.26 } };
 /* 字号三档（R24）：乘在全局 --article-font-size 上的系数，分页器实测计算样式自动跟随 */
 const FONTSCALE = { small: 0.9, standard: 1, large: 1.14 };
-const hInset = (w, margin = 'standard', fs) => Math.min(w < 620 ? 20 : (MARGIN_X[margin] || 36), (pageWidth(w, fs) - 1) / 2);
+const hInset = (w, margin = 'standard', fs) => Math.min(w < 620 ? 20 : (MARGIN_X[margin] || 36), (pageWidth(w, fs, margin) - 1) / 2);
 const turnInset = (h, fs) => fs ? 8 : Math.min(14, Math.max(0, h - RAIL_H) * 0.03);
 
 /** cubic-bezier(0.28,0.12,0.22,1.0) 求解（MagazineTurnGeometry.eased 二分法原样移植）。 */
@@ -175,7 +178,7 @@ export class EditionReader {
     const w = window.innerWidth, h = window.innerHeight;
     const fs = !!document.fullscreenElement; // 沉浸全屏（R36）：版心扩张 + 上下留白收窄
     const ins = turnInset(h, fs);
-    const paperW = pageWidth(w, fs);
+    const paperW = pageWidth(w, fs, this.typo?.margin);
     const bookH = Math.max(1, h - RAIL_H - ins * 2);
     const hi = hInset(w, this.typo?.margin, fs);
     const contentW = Math.max(1, paperW - hi * 2);
@@ -726,6 +729,7 @@ export class EditionReader {
         <button class="er-sound" title="${escapeHTML(t('翻页音效'))}"></button>
         <button class="er-paper" title="${escapeHTML(t('切换纸张质感'))}"></button>
         <button class="er-type" title="${escapeHTML(t('阅读排版'))}">Aa</button>
+        <button class="er-speak" title="${escapeHTML(t('朗读本文（神经语音；Esc 停止）'))}">${icon('mic')}<span class="er-speak-label">${escapeHTML(t('朗读'))}</span></button>
         <button class="er-find" title="${escapeHTML(t('搜索 (Ctrl+F)'))}">${icon('search')}</button>
         <button class="er-export" title="${escapeHTML(t('导出当前页图片'))}">${icon('export')}</button>
         <button class="er-keys" title="${escapeHTML(t('快捷键 (Shift+/)'))}">${icon('keyboard')}</button>
@@ -756,6 +760,8 @@ export class EditionReader {
       setPaperPref(next);
       paperBtnSync();
     });
+    // R116 期刊神经语音朗读（用户实见「杂志里没有神经语音播报」）：正文分块 → tts:synthesize → Audio 链式播放
+    overlay.querySelector('.er-speak')?.addEventListener('click', () => this._toggleSpeak());
     // 翻页音效开关（偏好持久化）
     this.soundOn = localStorage.getItem('robinread.editionSound') !== '0';
     const soundBtn = overlay.querySelector('.er-sound');
@@ -828,6 +834,7 @@ export class EditionReader {
   }
 
   dismiss() {
+    this._stopSpeak(); // R116：退出期刊先停朗读（Audio 挂在 DOM 外，不随 overlay 卸载）
     // 会话小结（R15）：本期有阅读行为时，退出后在页面级浮出 toast
     const pages = this._sessionPages || 0;
     const entries = this._sessionEntries ? this._sessionEntries.size : 0;
@@ -990,6 +997,7 @@ export class EditionReader {
   async _openArticle(entry) {
     if (!this.overlay || this.turn || this.scrub) return;
     if (this.mode === 'article') return;
+    this._stopSpeak(); // R116：换文先停上一篇朗读
     this._editionState = { pages: this.pages, index: this.index, selected: this.selected };
     this.mode = 'article';
     this.article = { entry, html: '', spreads: [] };
@@ -1018,6 +1026,7 @@ export class EditionReader {
 
   _closeArticle() {
     if (this.mode !== 'article' || !this._editionState) { this.mode = 'edition'; return; }
+    this._stopSpeak(); // R116：回版面先停读（音频不随正文态清理而停）
     const st = this._editionState;
     this._editionState = null;
     this.mode = 'edition';
@@ -1788,9 +1797,11 @@ export class EditionReader {
       else this.typo[key] = val;
       localStorage.setItem('robinread.editionTypography', JSON.stringify(this.typo));
       this._applyTypography();
-      // 重绘面板选中态
+      // 重绘面板选中态（R117：firstCap 布尔→on/off 映射——此前 String(true)==='on' 恒假，
+      // 用户实见「首字下沉按钮点了不高亮」）
       panel.querySelectorAll('.er-type-opts button').forEach((x) => {
-        x.classList.toggle('on', String(this.typo[x.dataset.key]) === x.dataset.val || (x.dataset.key === 'firstCap' && String(this.typo.firstCap) === x.dataset.val));
+        const val = x.dataset.key === 'firstCap' ? (this.typo.firstCap ? 'on' : 'off') : String(this.typo[x.dataset.key]);
+        x.classList.toggle('on', val === x.dataset.val);
       });
     });
     this.overlay.appendChild(panel);
@@ -1798,6 +1809,64 @@ export class EditionReader {
     const br = this.overlay.querySelector('.er-book')?.getBoundingClientRect();
     if (br && br.width > 0) panel.style.right = `${Math.max(12, Math.round(window.innerWidth - br.right + 14))}px`;
     requestAnimationFrame(() => panel.classList.add('on'));
+  }
+
+  /** R116 期刊神经语音朗读：正文分块（≤600 字，段落聚合/长段切句）→ edge 合成 → Audio 链式播放。 */
+  async _toggleSpeak() {
+    if (this._speakAbort) { this._stopSpeak(); return; }
+    if (!this.article?.html) { this._notice(t('先点开一篇文章再朗读')); return; }
+    let paras = [];
+    try {
+      const doc = new DOMParser().parseFromString(this.article.html, 'text/html');
+      paras = Array.from(doc.querySelectorAll('p, h2, h3, blockquote, li'))
+        .map((e) => (e.textContent || '').replace(/\s+/g, ' ').trim()).filter((s) => s.length >= 2);
+    } catch (_) { /* 解析失败按无文处理 */ }
+    if (!paras.length) { this._notice(t('本文没有可朗读的文字')); return; }
+    const chunks = [];
+    let buf = '';
+    for (const p of paras) {
+      for (const piece of p.length > 600 ? p.split(/(?<=[。！？.!?])/).filter(Boolean) : [p]) {
+        if (buf && (buf.length + piece.length) > 600) { chunks.push(buf); buf = piece; }
+        else buf += piece;
+      }
+    }
+    if (buf) chunks.push(buf);
+    const cfg = await window.robin.ttsGetConfig?.().catch(() => null);
+    const engine = cfg?.engine === 'custom' ? 'custom' : 'edge'; // 跟随用户朗读引擎配置（custom 凭据由主进程侧合并）
+    const voice = cfg?.neuralVoice || 'zh-CN-XiaoxiaoNeural';
+    const rate = parseFloat(localStorage.getItem('robinread.tts.rate')) || 1; // 与文章视图朗读共用语速键
+    const token = { stop: false, audio: null };
+    this._speakAbort = token;
+    this._notice(`${t('朗读中')} 1/${chunks.length}`);
+    try {
+      for (let i = 0; i < chunks.length; i += 1) {
+        if (token.stop) break;
+        const base64 = await window.robin.ttsSynthesize({ engine, text: chunks[i], voice, rate });
+        if (token.stop) break;
+        await new Promise((resolve) => {
+          const audio = new Audio(`data:audio/mp3;base64,${base64}`);
+          token.audio = audio;
+          audio.onended = resolve;
+          audio.onerror = resolve;
+          audio.play().catch(resolve);
+        });
+        if (!token.stop && i + 1 < chunks.length) this._notice(`${t('朗读中')} ${i + 2}/${chunks.length}`);
+      }
+      if (!token.stop) this._notice(t('朗读完毕'));
+    } catch (e) {
+      if (!token.stop) this._notice(t('朗读失败：') + (e?.message || t('请检查网络')));
+    } finally {
+      if (this._speakAbort === token) this._speakAbort = null;
+    }
+  }
+
+  _stopSpeak() {
+    const token = this._speakAbort;
+    if (!token) return;
+    token.stop = true;
+    try { token.audio?.pause(); } catch (_) { /* 已停 */ }
+    this._speakAbort = null;
+    this._notice(t('已停止朗读'));
   }
 
   // ────────────────────────────────────────────────
@@ -2596,6 +2665,8 @@ export class EditionReader {
     const rel = x - stageLeft;
     if (ev.target.closest('.er-story')) return; // 卡片自身 click 处理
     if (ev.target.closest('.er-backcover, .er-rail, .er-edge, .er-close')) return;
+    if (ev.target.closest('.er-article img')) return; // 点图=灯箱（canvas click 消费）——不翻页（用户实报：放大同时翻页了）
+    if (this.focusMode && ev.target.closest('.er-article')) return; // 段落聚焦模式：点块=选中（canvas click 消费）
     if (rel < m.paperW / 3) return this._go(this._pageIndex() - 1);
     if (rel > (m.paperW * 2) / 3) return this._go(this._pageIndex() + 1);
     this._select(null);
@@ -2703,6 +2774,7 @@ export class EditionReader {
     if ((e.key === 'l' || e.key === 'L') && !e.ctrlKey && !e.metaKey) { e.preventDefault(); e.stopPropagation(); return this._quickToggle('later'); }
     if (e.key === 'Escape') {
       // 搜索条 → 灯箱 → 划词弹层 → 排版面板 → 快捷键面板 → 文章目录 → 返回版面 → 退出
+      if (this._speakAbort) { e.preventDefault(); e.stopPropagation(); return this._stopSpeak(); } // R116：朗读先停，Esc 不连锁退出
       if (this.overlay.querySelector('.er-findbar')) { e.preventDefault(); e.stopPropagation(); return this._findClose(); }
       const keysPanel = this.overlay.querySelector('.er-keys-panel');
       if (keysPanel) { e.preventDefault(); e.stopPropagation(); keysPanel.remove(); return; }
