@@ -1312,6 +1312,42 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
   border-radius: var(--radius-xs); padding: 1.5px 5px; font-size: 0.86em;
 }
 .reader-article pre code { background: transparent; padding: 0; }
+/* ── R74 正文排版语义件三连 ── */
+/* R74-① kbd 键帽：技术文「按 Ctrl+K」提示此前零视觉（纯文本混排），补键帽胶囊——
+   描边 + 浅底 + 底缘厚边模拟键程，等宽小号字，深浅主题走 note 令牌自动映射 */
+.reader-article kbd {
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 1.75em;
+  margin: 0 1px;
+  padding: 0 5px;
+  border: 1px solid var(--note-border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--note-background);
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  line-height: 1.55;
+  text-align: center;
+  vertical-align: baseline;
+}
+/* R74-② 中文着重号：中文正文 em 的 faux 斜体（伪斜字形糊成一团）改出版级着重点，
+   位置随横排传统置字下；西文文章保留 italic 传统（.cjk-em 由渲染层按文章语言挂，见 reader._render） */
+.reader-article.cjk-em em {
+  font-style: normal;
+  text-emphasis: filled dot color-mix(in srgb, var(--accent) 52%, var(--text-primary));
+  text-emphasis-position: under right;
+}
+/* R74-③ 上下标行高保护：脚注标/公式角标默认 vertical-align 会撑大整行行距（行间距忽宽忽窄），
+   normalize 手法改相对定位，行盒不再被撑高 */
+.reader-article sub, .reader-article sup {
+  font-size: 0.75em;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+.reader-article sup { top: -0.5em; }
+.reader-article sub { bottom: -0.22em; }
 .reader-article ul, .reader-article ol { margin: 1em 0 1.15em; padding-left: 1.7em; }
 .reader-article li { margin-bottom: 0.45em; }
 .reader-article li::marker { color: var(--accent); }

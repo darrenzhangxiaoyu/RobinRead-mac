@@ -826,6 +826,8 @@ export class ReaderView {
     this._restructureArticle();
     // 中文微排版（盘古之白）：空 spacer 不改 textContent，段落标注 / 句子包裹 / 高亮锚点全部不受影响
     this._applyMicroTypography();
+    // R74-② 中文着重号：中文正文 em 去斜体改着重点（西文文章保留 italic 传统，类开关按文章语言）
+    article.classList.toggle('cjk-em', !this._isEnglishArticle());
     // 代码高亮与公式渲染必须在段落标注（data-nj-id）/批注锚点之前完成：
     // 两者都只做「节点内部」的文本拆分与包裹，不改块结构，不会使后续锚点失效
     this._highlightCodeBlocks();
