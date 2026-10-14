@@ -2927,6 +2927,7 @@ const STRINGS = {
   "请检查网络": { zh: "请检查网络", en: "check your network" },
   "导出失败：": { zh: "导出失败：", en: "Export failed: " },
   "请重试": { zh: "请重试", en: "please retry" },
+  "暂停/继续": { zh: "暂停/继续", en: "Pause / Resume" },
 };
 
 module.exports = { STRINGS };

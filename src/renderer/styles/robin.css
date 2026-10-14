@@ -6039,6 +6039,31 @@ body.dark .list-scroll.nj-mag-kraft .nj-mag-card { background: rgba(255, 255, 25
 /* R116 朗读钮随家族（用户实见「和周边按钮不是一个风格」——此前漏入家族选择器，
    落到浏览器默认 sans；现同 serif/墨色/0.55 透明度，图标同 13px 规格） */
 .er-speak svg { width: 13px; height: 13px; margin-right: 5px; }
+/* R119 朗读段落跟随高亮（镜像文章视图 nj-tts-active 语言：左强调线 + 极淡底色） */
+.er-article .er-blk-tts {
+  box-shadow: inset 3px 0 0 var(--accent, #617357);
+  background: color-mix(in srgb, var(--accent, #617357) 8%, transparent);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--dur-slow) ease, box-shadow var(--dur-slow) ease;
+}
+/* R119 朗读控制条（底部居中，notice 之上；纸感胶囊形态与工具条同族） */
+.er-speak-bar {
+  position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); z-index: 120; /* 谱表 120 档：期刊灯箱与工具条族 */
+  display: inline-flex; align-items: center; gap: 10px; padding: 6px 12px;
+  background: rgba(250, 248, 242, 0.94);
+  border: 1px solid rgba(60, 50, 36, 0.14);
+  border-radius: var(--radius-full);
+  box-shadow: 0 4px 14px rgba(40, 36, 28, 0.14);
+  backdrop-filter: blur(10px);
+  font-family: var(--font-sans); font-size: 12.5px; color: var(--erp-ink);
+}
+.er-overlay.er-dark .er-speak-bar { background: rgba(34, 32, 28, 0.92); border-color: rgba(255, 255, 255, 0.1); }
+.er-speak-bar button {
+  appearance: none; border: none; background: transparent; color: var(--erp-ink); opacity: 0.6;
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 2px 6px; border-radius: var(--radius-sm);
+}
+.er-speak-bar button:hover { opacity: 1; background: rgba(43, 39, 33, 0.08); }
+.er-speak-prog { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
 .er-notice {
   position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%); z-index: 85;
   background: rgba(30, 28, 24, 0.78); color: #F3EEE2; font-size: 13px; padding: 10px 18px;

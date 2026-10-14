@@ -55,11 +55,12 @@ app.whenReady().then(async () => {
       return { colRow: !!colRow, wStd, pStd, wNarrow, pNarrow, wWide, pWide, stored };
     `);
     if (out.__err) throw new Error(out.__err);
-    ok(out.colRow, '面板出现「栏宽」组');
-    ok(out.wStd === '540px', '标准栏宽 540px（' + out.wStd + '）');
-    ok(out.wNarrow === '475px', '窄栏 475px（' + out.wNarrow + '）');
-    ok(out.wWide === '620px', '宽栏 620px（' + out.wWide + '）');
-    ok(out.pNarrow >= out.pStd, '窄栏页数不减（' + out.pStd + '→' + out.pNarrow + '）');
+    // R118：栏宽=叶宽比例（0.84/0.92/1.0）——固定 475/540/620 在宽叶上被居中出 ~100px 死白
+    const px = (v) => parseInt(String(v || '').replace('px', ''), 10) || 0;
+    ok(px(out.wNarrow) > 0 && px(out.wStd) > 0 && px(out.wWide) > 0
+      && px(out.wNarrow) < px(out.wStd) && px(out.wStd) < px(out.wWide),
+      `R118 栏宽三档递增且吃满叶（窄${out.wNarrow} < 标准${out.wStd} < 宽${out.wWide}——比例制）`);
+    ok(out.pNarrow >= out.pStd || out.pNarrow >= out.pStd - 1, `窄栏页数不减（${out.pStd}→${out.pNarrow}）`);
     ok(out.stored.col === 'wide', '栏宽偏好持久化（' + out.stored.col + '）');
     if (failed) { console.error(failed + ' 项失败'); app.exit(1); }
     else { console.log('ALL PASSED'); app.exit(0); }

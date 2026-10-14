@@ -56,17 +56,24 @@ app.whenReady().then(async () => {
       btn.click();
       await new Promise((r) => setTimeout(r, 500));
       const mid = (document.querySelector('.er-notice')?.textContent || '').trim();
+      const midBar = document.querySelector('.er-speak-bar');
+      const midState = { bar: !!midBar, prog: midBar?.querySelector('.er-speak-prog')?.textContent || '', hl: document.querySelectorAll('.er-blk-tts').length };
       let done = '';
       for (let i = 0; i < 40; i += 1) {
         if (!er._speakAbort) { done = (document.querySelector('.er-notice')?.textContent || '').trim(); break; }
         await new Promise((r) => setTimeout(r, 300));
       }
-      return { mid, done, cfgDebug: JSON.stringify(cfgDebug)?.slice(0, 120), abortAfterDone: !!er._speakAbort };
+      return { mid, midState, done, cfgDebug: JSON.stringify(cfgDebug)?.slice(0, 120), abortAfterDone: !!er._speakAbort,
+        barGone: !document.querySelector('.er-speak-bar'), hlGone: !document.querySelector('.er-blk-tts') };
     `);
     if (a.__err) throw new Error('speak-run: ' + a.__err);
     ok(!a.noBtn, 'er-speak 工具条在册');
-    ok(/朗读中/.test(a.mid) || /朗读中/.test(a.done), `朗读链推进（mid=${a.mid} done=${a.done}）`);
+    ok(/朗读中/.test(a.midState.prog) || /朗读中/.test(a.mid) || /朗读中/.test(a.done) || /朗读完毕/.test(a.done),
+      `朗读链推进（bar=${a.midState.prog} notice=${a.mid} done=${a.done}）`);
     ok(a.abortAfterDone === false, '完毕后 _speakAbort 归空');
+    ok(a.midState.bar && /朗读中/.test(a.midState.prog), `R119 控制条在场且带进度（${a.midState.prog}）`);
+    ok(a.midState.hl >= 1, `R119 段落跟随高亮在场（${a.midState.hl} 块）`);
+    ok(a.barGone && a.hlGone, 'R119 完毕后控制条与高亮全清');
     ok(global.__lastTtsPayload && global.__lastTtsPayload.engine === 'custom'
       && global.__lastTtsPayload.voice === 'zh-CN-YunxiNeural'
       && Math.abs(Number(global.__lastTtsPayload.rate) - 1.2) < 0.001

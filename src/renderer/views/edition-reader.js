@@ -1085,8 +1085,10 @@ export class EditionReader {
   /** 正文 → 块序列 → 贪心装箱成半叶 → 两叶一对开。单块超高文本按句切分兜底。 */
   /** 文章栏宽（R9）：三档 460/540/620，钳制到半叶宽。 */
   _colW() {
-    const map = { narrow: 475, standard: 540, wide: 620 };
-    return Math.min(map[this.typo?.col] || 540, this._metrics().leafW);
+    // R118：栏宽 = 叶宽比例（原固定 475/540/620 在宽叶上被 margin:auto 居中，叶-栏差全变
+    // 对称死白——用户实见「这块的空白太宽」，窄页边距反而更宽的根因）
+    const map = { narrow: 0.84, standard: 0.92, wide: 1 };
+    return Math.max(1, Math.round(this._metrics().leafW * (map[this.typo?.col] || 0.92)));
   }
 
   async _paginateArticle(entry, html) {
@@ -1812,51 +1814,108 @@ export class EditionReader {
   }
 
   /** R116 期刊神经语音朗读：正文分块（≤600 字，段落聚合/长段切句）→ edge 合成 → Audio 链式播放。 */
+  /** R119 朗读跟随地图：展平当前文章全部块（页号 + 元素 + 文本），元素随翻页重挂、引用稳定。 */
+  _speakMap() {
+    const out = [];
+    (this.pages || []).forEach((p, pi) => {
+      const list = [...(p.article?.left || []), ...(p.article?.right || [])];
+      for (const b of list) {
+        const txt = (b.el?.textContent || '').replace(/\s+/g, ' ').trim();
+        if (txt.length >= 2 && !/^(◆|完)$/.test(txt)) out.push({ page: pi, el: b.el, txt });
+      }
+    });
+    return out;
+  }
+
+  /** R119 朗读控制条（用户实见「要像非杂志阅读那样出现朗读控制组件」）：暂停/继续 + 进度 + 停止。 */
+  _speakBar() {
+    let bar = this.overlay?.querySelector('.er-speak-bar');
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.className = 'er-speak-bar';
+    bar.innerHTML = `<button class="er-speak-toggle" title="${escapeHTML(t('暂停/继续'))}">⏸</button><span class="er-speak-prog"></span><button class="er-speak-stop" title="${escapeHTML(t('停止朗读'))}">✕</button>`;
+    bar.querySelector('.er-speak-toggle').addEventListener('click', () => this._speakTogglePause());
+    bar.querySelector('.er-speak-stop').addEventListener('click', () => this._stopSpeak());
+    this.overlay.appendChild(bar);
+    return bar;
+  }
+
+  _speakTogglePause() {
+    const token = this._speakAbort;
+    if (!token) return;
+    token.paused = !token.paused;
+    try { if (token.paused) token.audio?.pause(); else token.audio?.play().catch(() => {}); } catch (_) { /* 已停 */ }
+    const btn = this.overlay?.querySelector('.er-speak-toggle');
+    if (btn) btn.textContent = token.paused ? '▶' : '⏸';
+  }
+
+  /** R119 段落跟随：当前块高亮 + 不在本对开页时自动翻过去（用户实见「实时看到朗读位置」）。 */
+  _speakHighlight(blocks) {
+    this.overlay?.querySelectorAll('.er-blk-tts').forEach((el) => el.classList.remove('er-blk-tts'));
+    for (const b of blocks) {
+      if (!b.el?.isConnected) continue;
+      b.el.classList.add('er-blk-tts');
+      if (b.page !== this._pageIndex() && !this.turn && !this.scrub) this._go(b.page);
+    }
+  }
+
+  /**
+   * R116/R119 期刊神经语音朗读：段落级分块 + 预取下一块（播放不间歇）+ 段落高亮跟随 +
+   * 控制条（暂停/继续/进度/停止）。引擎/音色/语速跟随用户朗读配置。
+   */
   async _toggleSpeak() {
     if (this._speakAbort) { this._stopSpeak(); return; }
     if (!this.article?.html) { this._notice(t('先点开一篇文章再朗读')); return; }
-    let paras = [];
-    try {
-      const doc = new DOMParser().parseFromString(this.article.html, 'text/html');
-      paras = Array.from(doc.querySelectorAll('p, h2, h3, blockquote, li'))
-        .map((e) => (e.textContent || '').replace(/\s+/g, ' ').trim()).filter((s) => s.length >= 2);
-    } catch (_) { /* 解析失败按无文处理 */ }
-    if (!paras.length) { this._notice(t('本文没有可朗读的文字')); return; }
+    const map = this.mode === 'article' ? this._speakMap() : [];
+    if (!map.length) { this._notice(t('本文没有可朗读的文字')); return; }
+    // 段落级分块：≥40 字独立成块（跟随粒度=段）；碎块向后聚合（≤600 上限兜底）
     const chunks = [];
-    let buf = '';
-    for (const p of paras) {
-      for (const piece of p.length > 600 ? p.split(/(?<=[。！？.!?])/).filter(Boolean) : [p]) {
-        if (buf && (buf.length + piece.length) > 600) { chunks.push(buf); buf = piece; }
-        else buf += piece;
+    for (let i = 0; i < map.length; i += 1) {
+      const last = chunks[chunks.length - 1];
+      if (last && map[i].txt.length < 40 && last.text.length + map[i].txt.length <= 600) {
+        last.text += map[i].txt;
+        last.blocks.push(map[i]);
+        continue;
       }
+      chunks.push({ text: map[i].txt, blocks: [map[i]] });
     }
-    if (buf) chunks.push(buf);
     const cfg = await window.robin.ttsGetConfig?.().catch(() => null);
-    const engine = cfg?.engine === 'custom' ? 'custom' : 'edge'; // 跟随用户朗读引擎配置（custom 凭据由主进程侧合并）
+    const engine = cfg?.engine === 'custom' ? 'custom' : 'edge'; // 跟随用户朗读引擎（custom 凭据由主进程侧合并）
     const voice = cfg?.neuralVoice || 'zh-CN-XiaoxiaoNeural';
     const rate = parseFloat(localStorage.getItem('robinread.tts.rate')) || 1; // 与文章视图朗读共用语速键
-    const token = { stop: false, audio: null };
+    const token = { stop: false, paused: false, audio: null };
     this._speakAbort = token;
-    this._notice(`${t('朗读中')} 1/${chunks.length}`);
+    const bar = this._speakBar();
+    const setProg = (i) => { const s = bar.querySelector('.er-speak-prog'); if (s) s.textContent = `${t('朗读中')} ${i}/${chunks.length}`; };
+    setProg(1);
+    this._speakHighlight(chunks[0].blocks);
+    const synth = (i) => window.robin.ttsSynthesize({ engine, text: chunks[i].text, voice, rate });
+    let prefetch = synth(0);
     try {
       for (let i = 0; i < chunks.length; i += 1) {
         if (token.stop) break;
-        const base64 = await window.robin.ttsSynthesize({ engine, text: chunks[i], voice, rate });
+        const base64 = await prefetch;
         if (token.stop) break;
+        if (i + 1 < chunks.length) prefetch = synth(i + 1);
+        setProg(i + 1);
+        this._speakHighlight(chunks[i].blocks);
         await new Promise((resolve) => {
+          token._resolve = resolve;
           const audio = new Audio(`data:audio/mp3;base64,${base64}`);
           token.audio = audio;
           audio.onended = resolve;
           audio.onerror = resolve;
           audio.play().catch(resolve);
         });
-        if (!token.stop && i + 1 < chunks.length) this._notice(`${t('朗读中')} ${i + 2}/${chunks.length}`);
+        while (token.paused && !token.stop) await new Promise((r) => setTimeout(r, 150));
       }
-      if (!token.stop) this._notice(t('朗读完毕'));
+      if (!token.stop) { this._notice(t('朗读完毕')); this._speakHighlight([]); }
     } catch (e) {
       if (!token.stop) this._notice(t('朗读失败：') + (e?.message || t('请检查网络')));
     } finally {
       if (this._speakAbort === token) this._speakAbort = null;
+      bar.remove();
+      this.overlay?.querySelectorAll('.er-blk-tts').forEach((el) => el.classList.remove('er-blk-tts'));
     }
   }
 
@@ -1865,13 +1924,13 @@ export class EditionReader {
     if (!token) return;
     token.stop = true;
     try { token.audio?.pause(); } catch (_) { /* 已停 */ }
+    try { token._resolve?.(); } catch (_) { /* 已解锁 */ }
     this._speakAbort = null;
+    this.overlay?.querySelector('.er-speak-bar')?.remove();
+    this.overlay?.querySelectorAll('.er-blk-tts').forEach((el) => el.classList.remove('er-blk-tts'));
     this._notice(t('已停止朗读'));
   }
 
-  // ────────────────────────────────────────────────
-  // 划词工具条（R3）：胶囊（复制/解释/翻译/提问）+ 弹层，复用 reader 的 ai:* 通道
-  // ────────────────────────────────────────────────
   _onSelectionChange() {
     if (!this.overlay) return;
     const selection = window.getSelection();
