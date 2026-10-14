@@ -1357,6 +1357,64 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
 .reader-article ul, .reader-article ol { margin: 1em 0 1.15em; padding-left: 1.7em; }
 .reader-article li { margin-bottom: 0.45em; }
 .reader-article li::marker { color: var(--accent); }
+/* ── R76 列表与表格三连 ── */
+/* R76-① 任务列表复真：消毒层把 <input type=checkbox> 转存 .nj-task 只读状态位——
+   此前整颗剥掉，GitHub 式待办清单勾选态全丢变裸文本。深浅主题双档，勾走 accent */
+.reader-article .nj-task {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.92em; height: 0.92em;
+  margin-right: 0.5em;
+  border: 1.5px solid color-mix(in srgb, var(--text-tertiary) 65%, transparent);
+  border-radius: var(--radius-2xs);
+  vertical-align: 0.06em;
+  background: transparent;
+}
+.reader-article .nj-task[data-task="1"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  position: relative;
+}
+.reader-article .nj-task[data-task="1"]::after {
+  content: '';
+  position: absolute;
+  left: 0.22em; top: 0.04em;
+  width: 0.26em; height: 0.5em;
+  border: solid var(--accent-ink, #fff);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(40deg);
+}
+/* 任务行去项目符：勾选框即视觉锚（::marker 置空保持文本列对齐其他列表项） */
+.reader-article li:has(> .nj-task)::marker { content: ''; font-size: 0; }
+.reader-article li:has(> .nj-task) { color: inherit; }
+.reader-article li:has(> .nj-task[data-task="1"]) { color: var(--text-secondary); }
+/* R76-② 表格横滚提示：超宽表格此前无任何可滚动暗示（右侧内容像被裁断）——
+   左右缘渐隐遮（溢出侧才显，滚动到头即退役），JS 侧 _syncTableScrollHints 切换 */
+.reader-article .table-scroll { position: relative; }
+.reader-article .table-scroll.can-right::after,
+.reader-article .table-scroll.can-left::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 26px;
+  pointer-events: none;
+  z-index: 1;
+}
+.reader-article .table-scroll.can-right::after {
+  right: 0;
+  background: linear-gradient(to left, var(--page-background), transparent);
+}
+.reader-article .table-scroll.can-left::before {
+  left: 0;
+  background: linear-gradient(to right, var(--page-background), transparent);
+}
+/* R76-③ 嵌套列表层级语言：逐级缩进收紧 + marker 形态演进（disc→circle→square），
+   多级清单的层级关系一眼可辨（此前各级同形同距糊成一片） */
+.reader-article li > ul, .reader-article li > ol { margin: 0.3em 0 0.4em; padding-left: 1.4em; }
+.reader-article ul ul { list-style-type: circle; }
+.reader-article ul ul ul, .reader-article ul ul ul ul { list-style-type: square; }
+.reader-article ol ol { list-style-type: lower-alpha; }
+.reader-article ol ol ol { list-style-type: lower-roman; }
 .reader-article hr { border: none; border-top: 1px solid var(--separator); margin: 2.2em auto; width: 62%; }
 .reader-article table { border-collapse: collapse; margin: 1.3em 0; width: 100%; font-size: 0.92em; }
 .reader-article th, .reader-article td { border: 1px solid var(--separator); padding: 8px 12px; text-align: left; }

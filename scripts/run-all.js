@@ -96,6 +96,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r73-consistency.js', runner: 'electron', desc: 'R73 收官一致性三连：z-index谱表文档化+值域固化/焦点环选区滚动条三件套accent终检/reduced-motion全量断言（离线）' },
   { file: 'scripts/diag-r74-details.js', runner: 'electron', desc: 'R74 正文排版语义件三连：kbd键帽/中文em着重号(cjk-em语言感知)/sub·sup行高保护（离线）' },
   { file: 'scripts/diag-r75-details.js', runner: 'electron', desc: 'R75 链接与文内锚点三连：#脚注导航修复(消毒层id转存+fragment保真+滚动闪高亮)/外链域名悬停/图链让位灯箱修双触发（离线）' },
+  { file: 'scripts/diag-r76-details.js', runner: 'electron', desc: 'R76 列表与表格三连：任务列表复真(input→nj-task勾选态保真)/表格横滚左右缘渐隐遮/嵌套列表marker形态演进（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

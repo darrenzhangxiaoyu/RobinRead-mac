@@ -1407,7 +1407,22 @@ export class ReaderView {
       wrap.className = 'table-scroll';
       table.replaceWith(wrap);
       wrap.appendChild(table);
+      // R76-② 横滚提示：溢出侧渐隐遮（can-right/can-left），滚动到头即退役
+      wrap.addEventListener('scroll', () => this._syncOneTableScrollHint(wrap), { passive: true });
     });
+    this._syncTableScrollHints();
+  }
+
+  /** R76-②：全量表格横滚提示同步（渲染后调用；字体/图片加载后宽度变化由 resize 兜底）。 */
+  _syncTableScrollHints() {
+    this.body?.querySelectorAll('.table-scroll').forEach((wrap) => this._syncOneTableScrollHint(wrap));
+  }
+
+  _syncOneTableScrollHint(wrap) {
+    const overflow = wrap.scrollWidth - wrap.clientWidth;
+    if (overflow <= 1) { wrap.classList.remove('can-right', 'can-left'); return; }
+    wrap.classList.toggle('can-right', wrap.scrollLeft + wrap.clientWidth < wrap.scrollWidth - 1);
+    wrap.classList.toggle('can-left', wrap.scrollLeft > 1);
   }
 
   /**

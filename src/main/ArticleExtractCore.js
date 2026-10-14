@@ -168,6 +168,14 @@ function sanitizedHTML(html, baseURL = null) {
     cursor = match.index + fullTag.length;
 
     const name = rawName.toLowerCase();
+    // R76-① 任务列表复真：GitHub/博客任务清单的 <input type=checkbox> 不在标签白名单，
+    // 整颗剥掉后勾选态丢失（待办全变裸文本）。此处转存为只读状态 span（一体 token：
+    // 开闭标签同发，无悬挂结构；渲染端 .nj-task 呈现 ☑/☐，li.task-list-item 去 marker）
+    if (name === 'input' && /type\s*=\s*["']?checkbox["']?/i.test(rawAttributes)) {
+      const checked = /(?:^|\s)checked(?:\s|$|\/)/i.test(` ${rawAttributes} `) ? '1' : '0';
+      result += `<span class="nj-task" data-task="${checked}"></span>`;
+      continue;
+    }
     if (!ALLOWED_TAGS.has(name)) continue;
     const isClosingTag = fullTag.slice(1).trim().startsWith('/');
     if (isClosingTag) {
