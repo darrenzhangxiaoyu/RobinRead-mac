@@ -1510,6 +1510,45 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
   user-select: none;
 }
 .nj-article-end::before { content: '◆'; }
+/* R82-① 完读时刻绽放：终止符首次滚入视口 scale 0.4→1 + 45°→0 旋转归位——
+   「读完了」的仪式回应；bloom-pending 仅在动画可用时挂（reduced/无 IO 恒可见） */
+@keyframes njEndBloom {
+  from { opacity: 0; transform: scale(0.4) rotate(45deg); }
+  to { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nj-article-end.bloom-pending { opacity: 0; }
+  .nj-article-end.bloomed { animation: njEndBloom var(--dur-slow) var(--ease-spring) both; }
+}
+/* R82-② 继续读卡片区入场：行卡 0/60/120ms 错峰上浮（与正文三拍同语言） */
+@media (prefers-reduced-motion: no-preference) {
+  .nj-continue-reading .nj-cr-row { animation: njRise var(--dur-mid) var(--ease-out) both; }
+  .nj-continue-reading .nj-cr-row:nth-of-type(2) { animation-delay: 60ms; }
+  .nj-continue-reading .nj-cr-row:nth-of-type(3) { animation-delay: 120ms; }
+}
+/* R82-③ 灯箱图注条：大图观看时 alt 图注底部居中浮现（纸片胶囊，延迟入场不抢焦点） */
+.nj-lightbox-caption {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  max-width: min(72vw, 640px);
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  background: rgba(20, 17, 12, 0.72);
+  color: #f0ece2;
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  animation: njCaptionIn var(--dur-mid) var(--ease-out) 0.15s both;
+}
+@keyframes njCaptionIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 
 .reader-article table { border-collapse: collapse; margin: 1.3em 0; width: 100%; font-size: 0.92em; }
 .reader-article th, .reader-article td { border: 1px solid var(--separator); padding: 8px 12px; text-align: left; }

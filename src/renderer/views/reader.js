@@ -850,6 +850,23 @@ export class ReaderView {
     endMark.className = 'nj-article-end';
     endMark.setAttribute('aria-hidden', 'true');
     this.body.appendChild(endMark);
+    // R82-① 完读时刻：终止符首次滚入视口时绽放（一次性；reduced/无 IO 能力直达终态不隐藏）
+    this._endObserver?.disconnect();
+    if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      endMark.classList.add('bloom-pending');
+      this._endObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.remove('bloom-pending');
+            entry.target.classList.add('bloomed');
+            this._endObserver.disconnect();
+          }
+        }
+      }, { root: this.scrollEl, threshold: 0.6 });
+      this._endObserver.observe(endMark);
+    } else {
+      endMark.classList.add('bloomed');
+    }
 
     // F33：重排后若处于译文模式（原文精读重排等不换文的重建），按缓存译文重建译文容器
     if (this._fullTranslationMode === 'translated' && this._fullTranslation?.html) {
@@ -4226,6 +4243,7 @@ export class ReaderView {
     lightbox.innerHTML = `
       <div class="nj-lightbox-backdrop"></div>
       <img class="nj-lightbox-img" src="${attr(src)}" alt="${attr(alt)}"/>
+      ${alt ? `<div class="nj-lightbox-caption">${attr(alt)}</div>` : ''}
       <span class="nj-lightbox-zoom" title="${attr(t('滚轮缩放 · 拖拽平移 · 双击复位'))}"></span>
       <div class="nj-lightbox-thumbs"></div>
       ${items ? '<button class="nj-lightbox-nav nj-lightbox-prev" title="\u2190">\u2190</button><button class="nj-lightbox-nav nj-lightbox-next" title="\u2192">\u2192</button><span class="nj-lightbox-count"></span>' : ''}
