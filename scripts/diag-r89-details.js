@@ -4,7 +4,7 @@
  *
  * 覆盖：
  *  1 R89 任意深度文字通道：:where(p,ul,ol,dl,blockquote) + table/pre/.table-scroll 子树豁免
- *    ——直接子级与嵌套（div 包裹 / fold 内）同受度量；表格/代码块全幅出血
+ *    ——直接子级与嵌套（div 包裹 / fold 内）同受度量；表格同轴进通道（R101 全要素同轴）
  *  2 R90 嵌套缩放地板：table max(0.92em,13px) / pre max(0.85em,12px) / code max(0.86em,12px)
  *    ——14px 基准下 table>td>code 链不再跌穿 12px（用户实见 11.08px 根治锚）
  *  3 R92/R93 行宽-字号 em 联动：度量随 --article-font-size 等比伸缩（页宽预设只控出血件）
@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
       const emN = b.emFactor * b.font;
       ok(Math.abs(b.directMW - emN) <= 2 && Math.abs(b.nestedMW - emN) <= 2 && Math.abs(b.quoteMW - emN) <= 2,
         `1 任意深度 ${b.emFactor}em 通道（cjk=${b.cjk} 直${b.directMW}/嵌${b.nestedMW}/引${b.quoteMW} vs ${emN.toFixed(1)}@${b.font}px）`);
-      ok(b.tableW > b.directW + 20, `1 表格全幅出血（tableW${b.tableW} > 通道${b.directW}）`);
+      ok(Math.abs(b.tableW - b.directW) <= 3, `1 表格同轴进通道（R101 合同反转：tableW${b.tableW} ≈ 通道${b.directW}——用户实见「一会宽一会窄」定案全要素同轴）`);
       ok(b.tableFont >= 13, `2 表格地板 13px（实测 ${b.tableFont}）`);
       ok(b.tablePFont >= 12, `2 表内段落地板 12px（实测 ${b.tablePFont}）`);
       // 缩放联动也在 13px 基准上做（帽已绑定，等比可观测）

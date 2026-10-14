@@ -48,6 +48,14 @@ app.whenReady().then(async () => {
     ok(css.includes('.reader-article th, .reader-article td {\n  border: none;')
       && css.includes('border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);'),
       '4 普通数据表横线律在册（竖线退场）');
+    ok(css.includes('padding-right: 14px;') && /nj-d-add td:last-child \{ box-shadow: inset 2px 0 0 rgba\(46, 160, 67, 0\.55\); \}/.test(css)
+      && /nj-d-del td:last-child \{ box-shadow: inset 2px 0 0 rgba\(248, 81, 73, 0\.50\); \}/.test(css),
+      '5 R102 行号槽呼吸（右距 14px + 线色软化）+ ±行左缘语义线在册');
+    ok(/\.reader-article pre \{[\s\S]*?scrollbar-width: thin;[\s\S]*?scrollbar-color:/.test(css),
+      '5 R103 pre 细滚动条在册（横滚条不再切底角——特写像素证据）');
+    ok(/blockquote \{[\s\S]*?padding: 12px 12px 12px 44px;/.test(css)
+      && /nj-article-end \{[\s\S]*?margin: 2\.8em auto 0\.8em;[\s\S]*?font-size: 0\.66em;/.test(css),
+      '5 R105/R106 引用块引号缓冲 + 完读呼吸感在册');
 
     // ── UI 行为 ──
     const { AppStore } = require('../src/main/AppStore');

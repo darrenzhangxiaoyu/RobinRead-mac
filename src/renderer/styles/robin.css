@@ -1173,7 +1173,8 @@ body.rp-focus .reader-article .robin-summary-card { opacity: 0.55; transition: o
 .robin-header-divider {
   border: none; height: 1px;
   background: linear-gradient(to right, rgba(72, 65, 52, 0.05), var(--note-border), rgba(72, 65, 52, 0.05));
-  margin: 12px 0 16px; /* R94-② 标题→正文收紧：此前 20/26 + 版心顶槽 32 累计 100px+ 空洞 */
+  margin: 12px auto 16px; /* R94-② 标题→正文收紧 + R104 auto：分隔线与正文通道同缘居中（头区向正文通道的视觉穿线） */
+  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
 }
 
 /* 摘要卡片（summaryCardHTML 1:1） */
@@ -1334,6 +1335,9 @@ body[data-reader-para="indent"] .robin-body > p:first-of-type { font-size: inher
   overflow-x: auto;
   font-family: var(--font-mono); /* R66：pre 本体即等宽内容（此前依赖内部 code 才落到等宽栈） */
   font-size: max(0.85em, 12px); line-height: 1.62;
+  /* R103：细滚动条 + 透明轨道——横滚条不再切掉底部圆角（截图像素证据） */
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-tertiary) 35%, transparent) transparent;
 }
 .reader-article pre[data-lang] { padding-top: 36px; }
 .reader-article pre[data-lang]::before {
@@ -1536,9 +1540,9 @@ body.dark .reader-article pre[data-nj-patch] .hljs-deletion { background: rgba(2
 /* R77-③ 文末终止符：小菱形居中——「读完了」的安静信号（文末继续读卡片前的呼吸位） */
 
 .nj-article-end {
-  margin: 2.2em auto 0.6em;
+  margin: 2.8em auto 0.8em; /* R106：完读呼吸感加大（读完整篇的仪式时刻） */
   text-align: center;
-  font-size: 0.6em;
+  font-size: 0.66em;
   line-height: 1;
   color: var(--text-tertiary);
   user-select: none;
@@ -1619,11 +1623,15 @@ body.dark .reader-article pre[data-nj-patch] .hljs-deletion { background: rgba(2
   width: 1%; min-width: 3.4em; white-space: nowrap;
   text-align: right; color: var(--text-tertiary);
   background: color-mix(in srgb, var(--note-background) 55%, transparent);
-  border-right: 1px solid color-mix(in srgb, var(--separator) 70%, transparent) !important;
+  border-right: 1px solid color-mix(in srgb, var(--separator) 55%, transparent) !important; /* R102：线色软化 + 右距加宽——行号与代码的过渡呼吸 */
+  padding-right: 14px;
   user-select: none;
 }
 .reader-article table.nj-diff-table tr.nj-d-add td { background: rgba(46, 160, 67, 0.10); }
 .reader-article table.nj-diff-table tr.nj-d-del td { background: rgba(248, 81, 73, 0.10); }
+/* R102：±行左缘 2px 语义色线（GitHub 式 gutter 提示——扫读时增删位置一眼可辨） */
+.reader-article table.nj-diff-table tr.nj-d-add td:last-child { box-shadow: inset 2px 0 0 rgba(46, 160, 67, 0.55); }
+.reader-article table.nj-diff-table tr.nj-d-del td:last-child { box-shadow: inset 2px 0 0 rgba(248, 81, 73, 0.50); }
 .reader-article table.nj-diff-table tr.nj-d-hunk td { background: color-mix(in srgb, var(--note-background) 80%, transparent); color: var(--text-secondary); }
 .reader-article table.nj-diff-table tr.nj-d-add td.nj-ln,
 .reader-article table.nj-diff-table tr.nj-d-del td.nj-ln { background: color-mix(in srgb, var(--note-background) 55%, transparent); } /* 行号槽保持中性 */
@@ -1869,6 +1877,8 @@ body.dark .reader-article table.nj-diff-table tr.nj-d-del td { background: rgba(
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* R99-② 起点静默：开卷未滚时端点气泡显「0%」是噪音（安装版视觉走查实见）——0% 档气泡退场 */
+.reading-progress[data-pct="0%"]::after { content: none; }
 
 /* 继续阅读卡（今天视野顶部） */
 .nj-resume-card {
@@ -3785,11 +3795,11 @@ body.dark .nj-note-marker { color: #d3a952; }
 }
 /* 首段不缩进，后续段间距更透气；字距取「基线 0.01em 与用户偏好 --reader-letter-spacing」的大者（U1-U5 审查 P1-3：不得覆盖 wide/loose 档） */
 .reader-article p { margin: 0 0 1.35em; letter-spacing: max(0.01em, var(--reader-letter-spacing, 0.006em)); }
-/* 标题：更稳的字距与留白 */
+/* 标题：更稳的字距与留白（R100 收紧：上方 1.4em 贴近段距 1.35em 的行进节奏、下方 0.45em 与所属小节紧扣——用户实见「标题与段落间距太大显乱」） */
 .reader-article h1, .reader-article h2, .reader-article h3,
 .reader-article h4, .reader-article h5, .reader-article h6 {
   letter-spacing: max(0.015em, var(--reader-letter-spacing, 0.006em));
-  margin: 1.9em 0 0.7em;
+  margin: 1.4em 0 0.45em;
 }
 /* U5-②：h2/h3 主题色小节标记（accent 短横线；仅正文内层级，h1 刊头不受影响）。
    R1 审查修正：折叠计数在身的 h2 让位（::before 同伪元素——折叠态胶囊接管，展开还原短横线） */
@@ -3809,10 +3819,10 @@ body.dark .nj-note-marker { color: #d3a952; }
   border-color: color-mix(in srgb, var(--note-border) 60%, transparent);
 }
 .reader-article figcaption { margin-top: 0.7em; }
-/* 引用块：留白节奏（实条/微染/引号见基础块 U5-③） */
+/* 引用块：留白节奏（实条/微染/引号见基础块 U5-③）；R105 引号与正文的缓冲加大 */
 .reader-article blockquote {
   margin: 1.6em 0;
-  padding: 10px 8px 10px 40px;
+  padding: 12px 12px 12px 44px;
   border-left-width: 3px;
 }
 /* R79-③ → R89/R95 栏目级度量（置于 U5 后置精修段之后防 margin 简写覆盖）：行长是阅读疲劳的
@@ -3834,20 +3844,43 @@ body.dark .nj-note-marker { color: #d3a952; }
    上行 0,3,0 会盖掉 lead 基座的折算，这里以同阶+元素位赢回 */
 .robin-body > p:first-of-type { font-size: 1.07em; max-width: calc(48em / 1.07); }
 .reader-article.cjk-em .robin-body > p:first-of-type { max-width: calc(54em / 1.07); font-size: 1.07em; }
-/* R95 图文同轴：正文图/代码块与文字通道完全等宽（48/54em），杂志级图文同轴秩序——
+/* R95 图文同轴 → R101 全要素同轴（用户实见「标题/代码块/表格比正文宽，文章一会宽一会窄特别难受」）：
+   正文图/代码块（含 patch/meta）/表格/标题与文字通道完全等宽（48/54em），杂志级同轴秩序——
    信息图需要看细节点击进灯箱（全幅+缩放）；唯一例外是首图 hero（R84 开卷仪式位）全幅
-   出血。表格/diff 表因行号列与长行保持全幅。
+   出血。宽表在 .table-scroll 内横滚、patch 块 R94 软换行——收进通道不截断内容。
    尺寸链用 --article-font-size 而非局部 em（pre/figcaption 局部字号更小，em 会缩水）。 */
 .robin-body figure,
-.robin-body > pre,
-.robin-body pre:not([data-nj-patch]):not(.nj-commit-meta) {
+.robin-body pre {
   max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
   margin-left: auto;
   margin-right: auto;
 }
 .reader-article.cjk-em .robin-body figure,
-.reader-article.cjk-em .robin-body > pre,
-.reader-article.cjk-em .robin-body pre:not([data-nj-patch]):not(.nj-commit-meta) {
+.reader-article.cjk-em .robin-body pre {
+  max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
+}
+/* R101 表格同轴：表格/diff 表与文字通道等宽（此前全幅——行号列与长行由内滚/软换行兜底） */
+.robin-body table,
+.robin-body .table-scroll {
+  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
+  margin-left: auto;
+  margin-right: auto;
+}
+.reader-article.cjk-em .robin-body table,
+.reader-article.cjk-em .robin-body .table-scroll {
+  max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
+}
+/* R101 标题同轴：小节标题不再比正文宽（横向与所属段落同缘——用户实见「小标题横向太大」）。
+   em 会随标题自身字号放大，必须走 --article-font-size 像素尺寸链与正文 48em 精确同宽 */
+.robin-body h1, .robin-body h2, .robin-body h3,
+.robin-body h4, .robin-body h5, .robin-body h6 {
+  max-width: min(100%, calc(var(--article-font-size, 17px) * 48));
+  margin-left: auto;
+  margin-right: auto;
+}
+.reader-article.cjk-em .robin-body h1, .reader-article.cjk-em .robin-body h2,
+.reader-article.cjk-em .robin-body h3, .reader-article.cjk-em .robin-body h4,
+.reader-article.cjk-em .robin-body h5, .reader-article.cjk-em .robin-body h6 {
   max-width: min(100%, calc(var(--article-font-size, 17px) * 54));
 }
 /* R95b 裸图同轴：中文源大量 <p><img> 或裸 <img>（无 figure 包裹），基础 img 规则的
@@ -5114,7 +5147,7 @@ body.dark .favicon-badge { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--
   padding: 2px 9px; border: 1px solid var(--note-border);
   border-radius: var(--radius-full); font-size: 0.92em; color: var(--text-secondary);
 }
-.reader-article .robin-header-divider, .reader-article hr.robin-header-divider { height: 0; border: none; border-top: 3px double var(--note-border); background: none; margin: 12px 0 16px; /* R94-②/R97：刊头分隔线收进（原被 .reader-article hr 的 2.6em 版面律盖住——实算 44px 空洞源之一） */ }
+.reader-article .robin-header-divider, .reader-article hr.robin-header-divider { height: 0; border: none; border-top: 3px double var(--note-border); background: none; width: auto; margin: 12px auto 16px; max-width: min(100%, calc(var(--article-font-size, 17px) * 48)); /* R94-②/R97 收进 + R104 与正文通道同缘（width:auto 顶开基础 hr 的 62% 帽——divider 审计实测 546px 成因） */ }
 
 /* ── R16 知识中心卡片统一 + 连击徽章 ── */
 .kb-card { padding: 14px 16px; margin-bottom: 10px; }

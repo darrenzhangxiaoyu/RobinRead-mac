@@ -35,11 +35,13 @@ app.whenReady().then(async () => {
     ok(/\.nj-header-more-pop \{[\s\S]*?position: absolute;[\s\S]*?display: none;[\s\S]*?\.nj-header-more-pop\.open \{ display: flex; \}/s.test(css),
       '1 浮层 CSS（绝对定位 + open 开合）在册');
     ok(readerSrc.includes('.slice(0, 3); // R97-①'), '1 标签 chips 上限 3 在册');
-    ok(/\.robin-header-divider \{[\s\S]*?margin: 12px 0 16px;/s.test(css), '2 divider 收紧 12/16 在册');
+    ok(/\.robin-header-divider \{[\s\S]*?margin: 12px auto 16px;/s.test(css)
+      && /\.reader-article \.robin-header-divider,[\s\S]*?margin: 12px auto 16px;[\s\S]*?--article-font-size, 17px\) \* 48/.test(css),
+      '2 divider 收紧 12/16 + R104 与正文通道同缘（auto + 48 链帽）在册');
     ok(/\.reader-article \{[\s\S]*?padding: 22px var\(--article-gutter\) 0;/s.test(css), '2 版心顶槽 22px 在册');
     ok(/\.reader-article p \{ margin: 0 0 1\.35em;/.test(css)
-      && /\.reader-article h1, \.reader-article h2, \.reader-article h3,[\s\S]*?margin: 1\.9em 0 0\.7em;/.test(css),
-      '3 段落节奏基线零回归（1.35em / 1.9em 0.7em）');
+      && /\.reader-article h1, \.reader-article h2, \.reader-article h3,[\s\S]*?margin: 1\.4em 0 0\.45em;/.test(css),
+      '3 段落节奏基线（1.35em 段距 + R100 标题 1.4em/0.45em 收紧）');
 
     // ── UI 行为 ──
     const { AppStore } = require('../src/main/AppStore');

@@ -113,6 +113,7 @@ const OFFLINE = [
   { file: 'scripts/diag-r91-details.js', runner: 'electron', desc: 'R91/R94 diff形态治理：GitHub diff表语义化(±行底色/@@分段/行号槽)+裸pre patch识别hljs着色软换行+commit元信息卡+数据表横线律（离线）' },
   { file: 'scripts/diag-r97-details.js', runner: 'electron', desc: 'R94-②/R95/R97 头部秩序：动作分层核心2键+更多浮层(外点/Esc关)+chips≤3+标题-正文空洞收紧(divider12/16+顶槽22)+段落节奏基线（离线）' },
   { file: 'scripts/diag-r96-details.js', runner: 'electron', desc: 'R96 正文边缘净化：头部头像/阅读原文/关联链接农场清除(实文≥50字停扫)+尾部链接农场清除+正文保全（离线）' },
+  { file: 'scripts/diag-r99-details.js', runner: 'electron', desc: 'R99 commit页头噪音簇子元素清扫(Browse/SHA链接+avatar头像+作者碎片, diff表门控零波及)+进度线0%气泡静默（离线）' },
   { file: 'scripts/diag-auditfix-main.js', runner: 'electron', desc: '2026-10 审查修复·主进程：更新校验/缓存命中/取消链/VACUUM映射/写盘token（离线）' },
   { file: 'scripts/diag-auditfix-render.js', runner: 'electron', desc: '2026-10 审查修复·渲染层：监听器退订/灯箱/竞态/键盘单触发/搜索闭环（离线）' },
   { file: 'scripts/diag-auditfix-ui.js', runner: 'electron', desc: '2026-10 审查修复·视觉：进度条/缓动/暗色/accent-ink/衬线栈/透明阶梯（离线）' },

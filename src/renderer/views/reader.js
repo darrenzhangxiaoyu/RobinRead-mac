@@ -851,6 +851,7 @@ export class ReaderView {
     // 两者都只做「节点内部」的文本拆分与包裹，不改块结构，不会使后续锚点失效
     this._highlightCodeBlocks();
     this._classifyDiffTables(); // R91-②：GitHub diff 表语义化（±行着色/行号列弱化）——量宽与装饰前完成
+    this._stripCommitHeadNoise(); // R99-①：commit 页头噪音簇（Browse 链接群/头像/作者碎片）子元素粒度清扫
     this._syncTableScrollHints(); // R78-③：代码块横滚提示（高亮换壳后再量宽）
     this._renderMath();
     this._annotateParagraphs();
@@ -1850,6 +1851,9 @@ export class ReaderView {
       if (/copy full sha/i.test(t) || /^\d+\s+parents?\b/m.test(t)) {
         pre.dataset.njMetaDone = '1';
         pre.classList.add('nj-commit-meta');
+        // R99-⑥：剥掉随 SHA pre 拍平进来的按钮文案（「Copy full SHA for X」/尾随「copy」）——非元信息
+        const lines = t.split('\n').map((l) => l.replace(/\s*copy full sha.*$/i, '').replace(/\s+copy\s*$/i, '').trimEnd()).filter((l) => l.trim());
+        if (lines.length) pre.textContent = lines.join('\n');
       }
     }
   }
@@ -1899,6 +1903,82 @@ export class ReaderView {
       if (!last || last.classList.contains('nj-article-end')) break;
       if (!isJunk(last)) break;
       this.body.removeChild(last);
+    }
+  }
+
+  /**
+   * R99-① commit 页头噪音簇清扫：GitHub commits 源整页头（Browse files/仓库链接×N/
+   * 头像/作者碎片/「Repository navigation」标题）经消毒层拍平进一个容器 div——块级
+   * R96 判据对 mega-div 整体失明（安装版视觉走查实见：17 链接+头像全漏网）。此处按
+   * 子元素粒度清；仅当正文已判定 commit 页（存在 diff 表/commit 卡）才启用，普通文章零波及。
+   */
+  _stripCommitHeadNoise() {
+    if (!this.body) return;
+    if (!this.body.querySelector('.nj-diff-table, .nj-commit-meta')) return;
+    // ① GitHub 头像（avatar CDN）：宿主行几乎无字连行清，嵌在实文里只清图
+    for (const img of Array.from(this.body.querySelectorAll('img'))) {
+      if (!/avatars\d*\.githubusercontent\.com|github\.com\/avatars\//.test(img.getAttribute('src') || '')) continue;
+      const host = img.closest('a, p, td');
+      if (host && (host.textContent || '').trim().length < 24 && !host.querySelector('.nj-diff-table')) host.remove();
+      else img.remove();
+    }
+    // ② 页头导航链接：Browse 族/View commit/Commit SHA 前缀 + 单词与纯 hex SHA 精确族；空锚一并清（带标注锚的除外）
+    const isNavLink = (label) =>
+      /^(browse\s+files|browse\s+the\s+repository|view\s+commit|commit\s+[0-9a-f]{7,40})/i.test(label)
+      || /^(raw|patch|permalink|history|blame|copy\s+(full\s+)?sha|[0-9a-f]{7,40})$/i.test(label);
+    for (const a of Array.from(this.body.querySelectorAll('a'))) {
+      if (a.closest('.nj-diff-table, .nj-commit-meta')) continue;
+      const label = (a.textContent || '').trim();
+      if (!isNavLink(label)) {
+        if (label || a.querySelector('img, svg') || a.hasAttribute('data-nj-anchor')) continue; // 有字/有图/标注锚的空链不清
+      }
+      const host = a.closest('p, td');
+      a.remove();
+      if (host && !(host.textContent || '').trim() && !host.querySelector('img, table, pre, .nj-diff-table')) host.remove();
+    }
+    // ③ GitHub 移动版页头小标题
+    for (const h of Array.from(this.body.querySelectorAll('h3, h4, h5'))) {
+      if (/^(repository\s+)?navigation$/i.test((h.textContent || '').trim())) h.remove();
+    }
+    // ④ 头区作者碎片：每容器首个内容锚（长文/表/码/图）之前，≥2 连排超短文本块按碎片簇清
+    //   （单块短文保留——短 commit 信息不是噪音；标题重置连排但不作锚）
+    for (const box of [this.body, ...this.body.querySelectorAll('div, section, article')]) {
+      let run = [];
+      const flush = () => {
+        if (run.length >= 2 && run.reduce((s, el) => s + (el.textContent || '').trim().length, 0) < 120) run.forEach((el) => el.remove());
+        run = [];
+      };
+      for (const k of Array.from(box.children)) {
+        if (/^H[1-4]$/.test(k.tagName) || k.classList.contains('nj-article-end')) { flush(); continue; }
+        const text = (k.textContent || '').trim();
+        if (k.querySelector('table, pre, img, video, audio, iframe, .nj-diff-table') || text.length >= 50) { flush(); break; } // 内容锚：头区到此为止
+        if (k.querySelectorAll('a').length <= 1 && text.length <= 25) run.push(k);
+        else flush();
+      }
+      flush();
+    }
+    // ⑤ GitHub diffstat 小部件（"10 file s changed+ 178- 66 … N additions & M deletions"）：
+    //    排在 commit message 长段（内容锚）之后，④ 头区扫描够不着——形态签名专指 diffstat
+    for (const el of Array.from(this.body.querySelectorAll('p, div'))) {
+      if (el.closest('.nj-diff-table, .nj-commit-meta')) continue;
+      const flat = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (flat.length > 120 || el.querySelector('a, img, table, pre, video, audio, iframe')) continue;
+      if (/\d+\s+additions?\s*&\s*\d+\s+deletions?/i.test(flat)
+        || /^\d+\s+file\s*s?\s+changed$/i.test(flat)
+        || (/^\d+\s+file/i.test(flat) && /\d+\s*[+−-]\s*\d+/.test(flat))) el.remove();
+    }
+    // ⑥ 拍平的按钮文案纯文本残迹（消毒层剥 button/details 留文字——真源截图实见
+    //    「…historyBrowse files」粘连成首段；file tree 开合双文案同时在场=控件残迹）
+    for (const el of Array.from(this.body.querySelectorAll('p, div, span, summary, td'))) {
+      if (el.closest('.nj-diff-table, .nj-commit-meta, pre')) continue;
+      const flat = (el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!flat || flat.length > 160 || el.querySelector('a[href], img, table, pre, video, audio, iframe')) continue;
+      const isUiText = /^(browse\s+files|browse\s+the\s+repository)/i.test(flat)
+        || (/expand\s+file\s+tree/i.test(flat) && /collapse\s+file\s+tree/i.test(flat))
+        || /^(expand|collapse)\s+file\s+tree$/i.test(flat)
+        || /^open\s+diff\s+view\s+settings$/i.test(flat)
+        || /^copy\s+full\s+sha\b/i.test(flat);
+      if (isUiText) el.remove();
     }
   }
 

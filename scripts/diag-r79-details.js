@@ -35,6 +35,12 @@ app.whenReady().then(async () => {
     ok(/\.robin-body :where\(p, ul, ol, dl, blockquote\):not\(:is\(table, pre, \.table-scroll\) \*\) \{[\s\S]*?max-width: 48em;[\s\S]*?margin-right: auto;/.test(css)
       && /\.reader-article\.cjk-em \.robin-body :where[\s\S]*?max-width: 54em;/.test(css),
       '3 行长护栏规则在册（R89 任意深度五类文本块 + auto 居中；R95 定案 48em/中文 54em）');
+    ok(/R101 全要素同轴/.test(css)
+      && /\.robin-body figure,\s*\.robin-body pre \{[\s\S]*?--article-font-size, 17px\) \* 48/.test(css)
+      && /\.robin-body table,\s*\.robin-body \.table-scroll \{[\s\S]*?--article-font-size, 17px\) \* 48/.test(css)
+      && /\.robin-body h1, \.robin-body h2, \.robin-body h3,[\s\S]*?--article-font-size, 17px\) \* 48/.test(css),
+      '3 R101 全要素同轴规则在册（pre 含 patch/表格/标题同进文字通道——用户实见「一会宽一会窄」）');
+    ok(/R100[\s\S]{0,400}margin: 1\.4em 0 0\.45em;/.test(css), '3 R100 标题纵向间距收紧在册（1.4em/0.45em）');
 
     // ── UI 实证（直接挂载，r74 同款轻量法）──
     const win = new BrowserWindow({
@@ -56,6 +62,8 @@ app.whenReady().then(async () => {
         '<h3>子节</h3>' +
         '<figure><img src="x" width="600" height="400"></figure>' +
         '<ul><li>列表项</li></ul>' +
+        '<pre id="co-pre">const coaxis = true;</pre>' +
+        '<table id="co-tbl"><tbody><tr><td>a</td><td>b</td></tr></tbody></table>' +
         '</div>';
       document.body.appendChild(art);
       const cs = (el) => getComputedStyle(el);
@@ -75,6 +83,15 @@ app.whenReady().then(async () => {
       out.pCentered = Math.abs((art.getBoundingClientRect().left + (cw - pw) / 2) - bodyP.getBoundingClientRect().left) < 2;
       const fig = art.querySelector('figure');
       out.figCoAxis = Math.abs(fig.getBoundingClientRect().width - pw) <= 2;
+      // R101 全要素同轴：标题/pre/表格与正文段落同宽（用户实见「一会宽一会窄」）
+      out.h2CoAxis = Math.abs(art.querySelector('h2').getBoundingClientRect().width - pw) <= 2;
+      out.h3CoAxis = Math.abs(art.querySelector('h3').getBoundingClientRect().width - pw) <= 2;
+      out.preCoAxis = Math.abs(art.querySelector('#co-pre').getBoundingClientRect().width - pw) <= 2;
+      out.tblCoAxis = Math.abs(art.querySelector('#co-tbl').getBoundingClientRect().width - pw) <= 2;
+      // R100 标题纵向间距（比值断言——1.4em/0.45em 相对标题自身字号）
+      const h2fs = parseFloat(cs(h2).fontSize);
+      out.h2TopRatio = parseFloat(cs(h2).marginTop) / h2fs;
+      out.h2BottomRatio = parseFloat(cs(h2).marginBottom) / h2fs;
       // 缩进式让位
       document.body.dataset.readerPara = 'indent';
       out.leadIndentYield = cs(lead).fontSize === cs(bodyP).fontSize;
@@ -90,6 +107,10 @@ app.whenReady().then(async () => {
       ok(b.h3Underline, '2 h3 保留发丝下划线（子级区分）');
       ok(b.pCapped && b.pCentered, `3 文本块 ≤48em 居中通道（width=${b.pCapped ? '≤48em' : '超限'} 居中${b.pCentered ? '✓' : '✗'}）`);
       ok(b.figCoAxis, '3 图文同轴等宽（R95 用户定案：图与文字通道一致）');
+      ok(b.h2CoAxis && b.h3CoAxis && b.preCoAxis && b.tblCoAxis,
+        `4 R101 全要素同轴（h2${b.h2CoAxis ? '✓' : '✗'} h3${b.h3CoAxis ? '✓' : '✗'} pre${b.preCoAxis ? '✓' : '✗'} table${b.tblCoAxis ? '✓' : '✗'} 与正文同宽）`);
+      ok(Math.abs(b.h2TopRatio - 1.4) < 0.03 && Math.abs(b.h2BottomRatio - 0.45) < 0.03,
+        `4 R100 标题纵向间距收紧（top ${b.h2TopRatio.toFixed(2)}em / bottom ${b.h2BottomRatio.toFixed(2)}em）`);
     }
 
     win.destroy();
