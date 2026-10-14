@@ -1415,7 +1415,41 @@ body.dark .robin-summary-card { background: var(--surface-1); } /* U6：暗色�
 .reader-article ul ul ul, .reader-article ul ul ul ul { list-style-type: square; }
 .reader-article ol ol { list-style-type: lower-alpha; }
 .reader-article ol ol ol { list-style-type: lower-roman; }
-.reader-article hr { border: none; border-top: 1px solid var(--separator); margin: 2.2em auto; width: 62%; }
+/* ── R77 图文节奏三连 ── */
+/* R77-① 图片加载完成淡入：opacity 过渡替代「啪」地闪现（cached 直达/失败态恒可见；
+   reduced-motion 全局收敛块把 transition 压到 0.01ms 自动即时） */
+.reader-article img.nj-img { transition: opacity var(--dur-mid) var(--ease-out); }
+.reader-article img.nj-img:not(.nj-img-loaded):not(.nj-img-failed) { opacity: 0; }
+.reader-article img.nj-img-loaded, .reader-article img.nj-img-failed { opacity: 1; }
+/* R77-② hr 出版化：62% 细线 → 双侧发丝线 + 中央小菱形（场景分隔的仪式感，accent 派生） */
+.reader-article hr {
+  border: none;
+  height: 0.9em;
+  margin: 2.6em auto;
+  width: 62%;
+  background:
+    linear-gradient(var(--separator), var(--separator)) left center / 36% 1px no-repeat,
+    linear-gradient(var(--separator), var(--separator)) right center / 36% 1px no-repeat;
+}
+.reader-article hr::after {
+  content: '◆';
+  display: block;
+  text-align: center;
+  font-size: 0.52em;
+  line-height: 1.73; /* 0.52em × 1.73 ≈ 0.9em：菱形几何中心对齐双侧线 */
+  color: color-mix(in srgb, var(--accent) 58%, transparent);
+}
+/* R77-③ 文末终止符：小菱形居中——「读完了」的安静信号（文末继续读卡片前的呼吸位） */
+.nj-article-end {
+  margin: 2.2em auto 0.6em;
+  text-align: center;
+  font-size: 0.6em;
+  line-height: 1;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+.nj-article-end::before { content: '◆'; }
+
 .reader-article table { border-collapse: collapse; margin: 1.3em 0; width: 100%; font-size: 0.92em; }
 .reader-article th, .reader-article td { border: 1px solid var(--separator); padding: 8px 12px; text-align: left; }
 .reader-article th { background: var(--note-background); font-weight: 600; }

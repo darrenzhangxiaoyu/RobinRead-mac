@@ -842,6 +842,11 @@ export class ReaderView {
     this._interceptLinks();
     this._bindImages();
     this._renderUserScriptActions(); // F32：脚本声明的按钮渲染为正文底部（点击→同一沙箱执行）
+    // R77-③ 文末终止符：读完的明确信号（无 data-nj-id——朗读/翻译/批注单元全部不收录）
+    const endMark = document.createElement('div');
+    endMark.className = 'nj-article-end';
+    endMark.setAttribute('aria-hidden', 'true');
+    this.body.appendChild(endMark);
 
     // F33：重排后若处于译文模式（原文精读重排等不换文的重建），按缓存译文重建译文容器
     if (this._fullTranslationMode === 'translated' && this._fullTranslation?.html) {
@@ -2077,10 +2082,13 @@ export class ReaderView {
       }
     }
     // 加载状态：加载中 shimmer 占位 / 失败优雅兜底（不再显示浏览器破图图标）
+    // R77-① 加载完成淡入：opacity 0→1 过渡替代「啪」地出现（cached 直达、失败态恒可见）
     const markState = () => {
       if (img.complete) {
-        if (img.naturalWidth > 0) img.classList.remove('nj-img-loading', 'nj-img-failed');
-        else img.classList.add('nj-img-failed');
+        if (img.naturalWidth > 0) {
+          img.classList.remove('nj-img-loading', 'nj-img-failed');
+          img.classList.add('nj-img-loaded');
+        } else img.classList.add('nj-img-failed');
       } else {
         img.classList.add('nj-img-loading');
       }
@@ -2090,6 +2098,7 @@ export class ReaderView {
       img.closest('.nj-img-failed-wrap')?.replaceWith(img);
       if (img.dataset.altBackup != null) { img.alt = img.dataset.altBackup; delete img.dataset.altBackup; }
       img.classList.remove('nj-img-loading', 'nj-img-retrying', 'nj-img-failed');
+      img.classList.add('nj-img-loaded'); // R77-①：一次性淡入（常驻类，重复 load 幂等）
       // U34 边注：图片加载后锚段全体下移——重排边注列（批 3 审查 P2-3）
       document.dispatchEvent(new CustomEvent('robinread:margin-notes-changed'));
       this._syncImgBatchRetry(); // R70-②：恢复一张后批量条可能整条退役
