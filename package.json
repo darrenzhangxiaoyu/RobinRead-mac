@@ -71,7 +71,8 @@
   },
   "devDependencies": {
     "electron": "^37.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "esbuild": "^0.28.2"
   },
   "dependencies": {
     "@mozilla/readability": "^0.6.0",

@@ -631,8 +631,8 @@ export class EditionReader {
             ps = editorial.ps;
           }
           if (!ps.length) {
-            const left = pack(remaining, leafW, useH, usesLead, true);
-            const right = pack(remaining.slice(left.ps.length), leafW, useH, false, true);
+            let left = pack(remaining, leafW, useH, usesLead, true);
+            let right = pack(remaining.slice(left.ps.length), leafW, useH, false, true);
             const total = left.ps.length + right.ps.length;
             const originalLeft = left.ps.length;
             if (originalLeft > 1) {
