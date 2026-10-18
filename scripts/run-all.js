@@ -197,7 +197,10 @@ for (const probe of suite) {
   const runner = probe.runner === 'node' ? 'node' : 'npx';
   const args = probe.runner === 'node'
     ? [probe.file]
-    : ['electron', probe.file];
+    // electron 探针统一经 _probe-bootstrap 启动：CI 镜像默认开启系统「减弱动态效果」，
+    // 引导内在每个 BrowserWindow 创建时把 prefers-reduced-motion 钉回 no-preference，
+    // 消除动画类探针的批量误报（只影响探针进程，不动宿主系统设置）
+    : ['electron', path.join(__dirname, '_probe-bootstrap.js'), probe.file];
   process.stdout.write(`\n===== ${probe.desc} (${probe.file}) =====\n`);
   const probeStart = Date.now();
   try { fs.rmSync(SKIP_MARKER, { force: true }); } catch (_) { /* 无旧标记即可 */ }
