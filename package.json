@@ -2,14 +2,15 @@
   "name": "robinread",
   "productName": "RobinRead",
   "version": "2.16.5",
-  "description": "Reading First, AI Second — 知更 · 现代纸感 RSS 阅读器（Windows 版）",
+  "description": "Reading First, AI Second — 知更 · 现代纸感 RSS 阅读器（Windows / macOS 版）",
   "main": "src/main/main.js",
   "type": "commonjs",
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
     "dist": "electron-builder --win nsis portable",
-    "dist:portable": "electron-builder --win portable"
+    "dist:portable": "electron-builder --win portable",
+    "dist:mac": "electron-builder --mac dmg zip"
   },
   "build": {
     "appId": "com.robinread.app",
@@ -28,6 +29,36 @@
         "portable"
       ],
       "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.news",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "artifactName": "RobinRead-${version}-mac.dmg",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 130,
+          "y": 190,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 190,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

@@ -11,6 +11,7 @@
   [![Release](https://img.shields.io/github/v/release/suzike/RobinRead?style=flat-square&label=%E7%A8%B3%E5%AE%9A%E7%89%88&color=a3573d)](https://github.com/suzike/RobinRead/releases/latest)
   [![License](https://img.shields.io/github/license/suzike/RobinRead?style=flat-square&color=617357)](LICENSE)
   [![Platform](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078d4?style=flat-square&logo=windows)](https://github.com/suzike/RobinRead/releases/latest)
+  [![Platform-macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%2F%20Intel-000000?style=flat-square&logo=apple)](../../releases/latest)
   [![Electron](https://img.shields.io/badge/Electron-37-47848f?style=flat-square&logo=electron&logoColor=white)](https://www.electronjs.org/)
   [![Website](https://img.shields.io/badge/%E5%AE%98%E7%BD%91-%E5%9C%A8%E7%BA%BF%E4%BB%8B%E7%BB%8D-b0764f?style=flat-square)](https://ronbinread-d9gmsqi2vc0a18f04-1401273698.tcloudbaseapp.com/)
 
@@ -110,18 +111,33 @@
 
 ## 📥 下载安装
 
-前往 [**Releases**](https://github.com/suzike/RobinRead/releases/latest) 下载：
+> 本仓库为 **macOS 版**（由 [suzike/RobinRead](https://github.com/suzike/RobinRead) Windows 版移植，改动见下文「macOS 移植说明」）。Windows 安装包请前往上游仓库的 [**Releases**](https://github.com/suzike/RobinRead/releases/latest)。
+
+前往 [**Releases**](https://github.com/darrenzhangxiaoyu/RobinRead-mac/releases/latest) 下载：
 
 | 文件 | 说明 |
 | --- | --- |
-| `RobinRead-x.y.z-setup.exe` | 安装版，支持自定义安装目录 |
-| `RobinRead-x.y.z-portable.exe` | 便携版，解压即用，不写注册表 |
+| `RobinRead-x.y.z-mac.dmg` | 标准安装镜像，拖入「应用程序」即可 |
+| `RobinRead-x.y.z-arm64-mac.zip` | 便携压缩包（Apple Silicon） |
 
-也可以在[官方网站](https://ronbinread-d9gmsqi2vc0a18f04-1401273698.tcloudbaseapp.com/)下载（附 SHA-256 校验值）。
+也可以在[官方网站](https://ronbinread-d9gmsqi2vc0a18f04-1401273698.tcloudbaseapp.com/)下载 Windows 版（附 SHA-256 校验值）。
 
 > 全部功能免费开放：订阅源数量与 AI 调用均不限量，无需登录即可使用完整功能（账号体系保留，登录后可同步激活记录）。
 
-系统要求：Windows 10 / 11（x64）。
+系统要求：macOS 13 Ventura 或更高版本（Apple Silicon / Intel 通用， release 由 CI 分架构构建）。
+
+> ⚠️ 未公证的构建首次打开：在「应用程序」里右键 →「打开」，或前往 系统设置 → 隐私与安全性 →「仍要打开」。CI 发布推荐使用 Developer ID 签名 + 公证。
+
+## 🍎 macOS 移植说明
+
+相对上游 Windows 版的改动：
+
+- **构建**：`package.json` 新增 `mac`（dmg + zip）构建目标与 `assets/icon.icns` 图标，`npm run dist:mac` 一键打包。
+- **凭据存储**：API Key / 密码等沿用 Electron `safeStorage`，Windows 走 DPAPI，macOS 自动切换为钥匙串（Keychain），代码无需分叉。
+- **托盘与窗口**：托盘图标在 macOS 下自动改用 PNG；菜单栏自带 macOS 应用菜单（`appMenu`），`window-all-closed` 保持 macOS 惯例不退出。
+- **应用内更新**：更新器按平台解析资产——Windows 下载 `setup.exe` 静默重装，macOS 下载 `dmg` 并挂载安装（sha256 完整性校验逻辑两端共用）。
+- **开机自启**：macOS 通过 `app.setLoginItemSettings`（SMAppService）实现，与 Windows 注册表方式互不影响。
+- **CI**：`.github/workflows/ci.yml` 新增 macOS 作业（语法检查 + 离线探针套件），保证移植不回退。
 
 ## 🛠 从源码运行
 

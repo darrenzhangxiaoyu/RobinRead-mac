@@ -29,3 +29,51 @@ jobs:
           npx esbuild src/renderer/views/sidebar.js --bundle --outfile=/dev/null --format=esm
       - name: Offline probe suite
         run: node scripts/run-all.js --ci
+
+  macos-offline-suite:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Syntax checks (main + preload + renderer entries)
+        shell: bash
+        run: |
+          for f in src/main/*.js src/main/Persistence/*.js src/main/Account/*.js src/main/workers/*.js src/main/preload.js; do
+            node --check "$f"
+          done
+          npx esbuild src/renderer/app.js --bundle --outfile=/dev/null --format=esm
+          npx esbuild src/renderer/views/reader.js --bundle --outfile=/dev/null --format=esm
+          npx esbuild src/renderer/views/list.js --bundle --outfile=/dev/null --format=esm
+          npx esbuild src/renderer/views/sidebar.js --bundle --outfile=/dev/null --format=esm
+      - name: Offline probe suite (macOS)
+        run: node scripts/run-all.js --ci
+
+  macos-build:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build macOS artifacts (unsigned)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder --mac dmg zip
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: robinread-macos
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error

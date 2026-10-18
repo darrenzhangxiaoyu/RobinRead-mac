@@ -107,7 +107,13 @@ function createMainWindow(store) {
 }
 
 function resolveIcon() {
+  // macOS 托盘/窗口用 PNG（icon.ico 在 darwin 上不可用），Windows 优先 ico
+  const macCandidates = process.platform === 'darwin'
+    ? [path.join(process.resourcesPath || '', 'icon.png'),
+       path.join(__dirname, '..', '..', 'assets', 'icon.png')]
+    : [];
   const candidates = [
+    ...macCandidates,
     path.join(process.resourcesPath || '', 'icon.ico'),
     path.join(__dirname, '..', '..', 'assets', 'icon.ico'),
     path.join(__dirname, '..', '..', 'assets', 'icon.png'),
@@ -1193,7 +1199,8 @@ function registerIPCHandlers(store, window) {
   handle('update:ignoreVersion', (version) => {
     store.preferences.set('RobinRead.ignoredVersion', version);
   });
-  // 应用内更新：下载 GitHub release 的 setup.exe（进度推 update:progress），随后 /S 静默重装
+  // 应用内更新：下载 GitHub release 的平台安装包（进度推 update:progress）
+  // Windows 下载 setup.exe 后 /S 静默重装；macOS 下载 dmg/zip 后挂载安装
   // P0-1：release 带 sha256（asset 级或 release 级）时下载后强制完整性校验
   handle('update:download', async () => {
     updater = updater || new UpdaterService(app.getPath('userData'));
@@ -1201,7 +1208,9 @@ function registerIPCHandlers(store, window) {
     const assetURL = updater.resolveSetupAssetURL(result?.release);
     if (!assetURL) throw new Error('更新源未提供安装包直链，请到 GitHub Releases 页下载');
     const tag = String(result.release.tagName || '').replace(/^v/i, '');
-    const fileName = `RobinRead-${tag}-setup.exe`;
+    const fileName = process.platform === 'darwin'
+      ? `RobinRead-${tag}-mac.dmg`
+      : `RobinRead-${tag}-setup.exe`;
     const expectedSHA256 = updater.resolveSetupAssetSHA256(result?.release, fileName);
     const push = (p) => { try { if (!window.isDestroyed()) window.webContents.send('update:progress', p); } catch (_) { /* 窗口已关 */ } };
     return await updater.download(assetURL, fileName, push, (url, opts) => net.fetch(url, opts), expectedSHA256);

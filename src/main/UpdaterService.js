@@ -2,11 +2,12 @@
 /**
  * UpdaterService.js — 应用内在线更新（下载安装包 → 完整性校验 → 静默安装 → 重启）
  *
- * 流程：检查更新（UpdateCheckService 双源）→ 拿 GitHub release 的 setup.exe 资产直链
+ * 流程：检查更新（UpdateCheckService 双源）→ 拿 GitHub release 的平台安装包资产直链
  *      → net.fetch 流式下载到 userData/updates/（进度经 onProgress 回调推送渲染层）
  *      → release 提供 sha256 时做完整性校验（不匹配即删包拒绝安装；缺失时日志标注后放行）
- *      → 渲染层确认后 install()：以 /S 静默重装到当前安装目录 → 应用退出，安装器接管。
- * 仅 Windows NSIS 安装版；便携版降级为打开 Release 页。
+ *      → 渲染层确认后 install()：
+ *          Windows：以 /S 静默重装到当前安装目录 → 应用退出，安装器接管；
+ *          macOS：挂载 dmg / 打开 zip（zip 便携版降级为打开所在目录或 Release 页）。
  */
 const path = require('node:path');
 const fs = require('node:fs');
@@ -45,10 +46,26 @@ class UpdaterService {
     this._reader = null;  // Web ReadableStream 形态的响应体
   }
 
-  /** 从 release 信息里解析 Windows 安装包直链（GitHub assets；官网源无 assets → null）。 */
+  /**
+   * 当前平台的安装包资产匹配器。
+   * Windows：NSIS setup.exe；macOS：优先 dmg（可挂载安装），其次 zip。
+   */
+  platformAssetPattern() {
+    if (process.platform === 'darwin') return /\.(dmg|zip)$/i;
+    return /-setup\.exe$/i;
+  }
+
+  /** 从 release 信息里解析当前平台安装包直链（GitHub assets；官网源无 assets → null）。 */
   resolveSetupAssetURL(release) {
     const assets = Array.isArray(release?.assets) ? release.assets : [];
-    const setup = assets.find((a) => /-setup\.exe$/i.test(a.name || '')) || null;
+    const pattern = this.platformAssetPattern();
+    // macOS 优先 dmg
+    const preferred = process.platform === 'darwin'
+      ? (assets.find((a) => /\.dmg$/i.test(a.name || '')) || null)
+      : null;
+    const setup = preferred
+      || assets.find((a) => pattern.test(a.name || ''))
+      || null;
     return setup ? (setup.browser_download_url || setup.url || null) : null;
   }
 
@@ -62,7 +79,7 @@ class UpdaterService {
     const assets = Array.isArray(release?.assets) ? release.assets : [];
     const wanted = String(assetName || '').toLowerCase();
     const asset = assets.find((a) => String(a.name || '').toLowerCase() === wanted && wanted)
-      || assets.find((a) => /-setup\.exe$/i.test(a.name || '')) || null;
+      || assets.find((a) => this.platformAssetPattern().test(a.name || '')) || null;
     const fromAsset = normalizeSHA256(asset?.sha256)
       || normalizeSHA256(asset?.digest?.sha256)
       || normalizeSHA256(asset?.digest_sha256)
@@ -193,9 +210,19 @@ class UpdaterService {
     return true;
   }
 
-  /** 静默安装：NSIS /S 重装到当前安装目录后退出应用。 */
+  /**
+   * 安装更新。Windows：NSIS /S 静默重装到当前安装目录后退出应用。
+   * macOS：挂载下载的 dmg（zip 则直接打开所在目录），用户拖入 Applications 后自行重启。
+   */
   install() {
     if (!this.file || !fs.existsSync(this.file)) throw new Error('安装包不存在，请先下载');
+    if (process.platform === 'darwin') {
+      const { shell } = require('electron');
+      // dmg 直接挂载安装器；zip 打开访达让用户解压替换
+      shell.openPath(this.file).catch(() => {});
+      setTimeout(() => { try { require('electron').app.quit(); } catch (_) { process.exit(0); } }, 1500);
+      return { launched: true, installDir: null };
+    }
     const installDir = path.dirname(process.execPath); // 安装版 exe 所在目录
     const child = spawn(this.file, ['/S', `/D=${installDir}`], { detached: true, stdio: 'ignore' });
     child.unref();

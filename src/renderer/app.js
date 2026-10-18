@@ -154,6 +154,8 @@ async function bootstrap() {
     onOpenArchive: () => openArchiveHall(), // F34 网页存档馆：永久本地快照 + MHTML 导出
     onOpenRevisit: () => openRevisitView(), // F37 深读重访：到期长文回顾卡温和浮出
     onOpenAccount: () => views.account?.openCenter({ feedCount: () => countAllFeeds() }),
+    // 空态「添加订阅」按钮（还没有订阅时侧栏底部空态卡）：与菜单 CmdOrCtrl+N / 首启引导同一入口
+    onOpenAddFeed: () => showAddFeed(collectFolders(), reloadAll),
     onOpenUpdate: (url) => window.robin.openLink(url),
     onIgnoreVersion: (version) => window.robin.ignoreVersion(version),
   });

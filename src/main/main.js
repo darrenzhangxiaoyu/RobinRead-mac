@@ -130,8 +130,10 @@ if (!IS_PROBE) {
     console.warn('[RobinRead] 备份恢复应用失败（将在下次启动重试）：', err.message);
   }
 
-  // Windows 系统通知需要 AppUserModelId（与 electron-builder appId 一致）
-  app.setAppUserModelId('com.robinread.app');
+  // Windows 系统通知需要 AppUserModelId（与 electron-builder appId 一致）；macOS 无需设置
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.robinread.app');
+  }
 
   // 单实例锁（避免多开导致 SQLite 写竞争）
   const gotLock = app.requestSingleInstanceLock();
@@ -339,7 +341,7 @@ if (!IS_PROBE) {
       const { resolveIcon } = require('./ipc');
       const iconPath = resolveIcon();
       if (!iconPath) {
-        console.warn('[RobinRead] 未找到托盘图标（assets/icon.ico），跳过托盘创建');
+        console.warn('[RobinRead] 未找到托盘图标（assets/icon.png 或 icon.ico），跳过托盘创建');
         return;
       }
       tray = new Tray(iconPath);
