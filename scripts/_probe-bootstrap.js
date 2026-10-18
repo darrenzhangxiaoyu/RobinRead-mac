@@ -14,6 +14,13 @@
 const path = require('node:path');
 const { app } = require('electron');
 
+// CI 运行器无真实显示输出：窗口被判定「被遮挡」→ Chromium 冻结动画、延迟图片解码、
+// 节流定时器，探针因此读到 animation 1e-05s / 图片 0px / 布局不刷新等系统性误报。
+// 这三个开关是 Electron/Chromium 无头 CI 的标准做法（只影响探针进程）。
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+
 app.on('browser-window-created', (_event, win) => {
   try {
     win.webContents.setEmulatedMedia({
